@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Telegram</title>
+  <circle cx="128" cy="128" r="120" fill="#2AABEE"/>
+  <!-- Paper plane (vector, clean & scalable) -->
+  <path d="M 56 126
+           L 206 66
+           L 170 210
+           L 121 156
+           L 96 180
+           L 96 146
+           Z"
+        fill="#FFFFFF"/>
+  <!-- Inner fold for depth -->
+  <path d="M 121 156
+           L 170 210
+           L 156 140
+           Z"
+        fill="#BFD9EA" opacity="0.7"/>
+  <path d="M 96 146
+           L 206 66
+           L 121 156
+           Z"
+        fill="#EAF5FF" opacity="0.65"/>
+</svg>

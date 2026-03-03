@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>X</title>
+  <circle cx="128" cy="128" r="120" fill="#000000"/>
+  <!-- Geometric X built from two rectangles for crisp rendering -->
+  <g fill="#FFFFFF">
+    <rect x="43" y="115" width="170" height="26" transform="rotate(45 128 128)"/>
+    <rect x="43" y="115" width="170" height="26" transform="rotate(-45 128 128)"/>
+  </g>
+</svg>

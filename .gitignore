@@ -1,0 +1,26 @@
+# Build artifacts
+build/
+*.o
+*.obj
+*.exe
+*.a
+*.lib
+*.dll
+*.log
+
+# Qt Creator and qmake artifacts
+*.user
+*.user.*
+*.pro.user
+*.pro.user.*
+*.qmlc
+*.qmltypes
+*.qrc.dep
+
+# IDE metadata
+*.idea/
+*.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

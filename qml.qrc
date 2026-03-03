@@ -1,0 +1,41 @@
+<RCC>
+    <qresource prefix="/qml">
+        <file>qml/Main.qml</file>
+        <file>qml/Header.qml</file>
+        <file>qml/Footer.qml</file>
+        <file>qml/Tile.qml</file>        
+		<file>qml/pages/TilePageBase.qml</file>
+        <file>qml/pages/TileAPI.qml</file>
+        <file>qml/pages/TileAtomicSwaps.qml</file>
+        <file>qml/pages/TileBook.qml</file>
+        <file>qml/pages/TileBountie.qml</file>
+        <file>qml/pages/TileCockatoo.qml</file>
+        <file>qml/pages/TileContracts.qml</file>
+        <file>qml/pages/TileDevelopment.qml</file>
+        <file>qml/pages/TileEmission.qml</file>
+        <file>qml/pages/TileExchange.qml</file>
+        <file>qml/pages/TileExplorer.qml</file>
+        <file>qml/pages/TileGovernance.qml</file>
+        <file>qml/pages/TileGrinffindor.qml</file>
+        <file>qml/pages/TileGrinNode.qml</file>
+        <file>qml/pages/TileGryffindor.qml</file>
+        <file>qml/pages/TileHardwareWallet.qml</file>
+        <file>qml/pages/TileIgnotus.qml</file>
+        <file>qml/pages/TileInflation.qml</file>
+        <file>qml/pages/TileLogin.qml</file>
+        <file>qml/pages/TileMainnetFaucet.qml</file>
+        <file>qml/pages/TileMining.qml</file>
+        <file>qml/pages/TileMixer.qml</file>
+        <file>qml/pages/TileMultisig.qml</file>
+        <file>qml/pages/TileMultisigCoin.qml</file>
+        <file>qml/pages/TileMwBook.qml</file>
+        <file>qml/pages/TileMwixnet.qml</file>
+        <file>qml/pages/TilePool.qml</file>
+        <file>qml/pages/TileServer.qml</file>
+        <file>qml/pages/TileSettings.qml</file>
+        <file>qml/pages/TileShop.qml</file>
+        <file>qml/pages/TileSupport.qml</file>
+        <file>qml/pages/TileSwap.qml</file>
+        <file>qml/pages/TileTestnetFaucet.qml</file>
+    </qresource>
+</RCC>
