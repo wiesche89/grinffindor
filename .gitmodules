@@ -1,0 +1,6 @@
+[submodule "src/submodules/grin-common-api"]
+	path = src/submodules/grin-common-api
+	url = https://github.com/wiesche89/grin-common-api.git
+[submodule "src/submodules/grin-node-api"]
+	path = src/submodules/grin-node-api
+	url = https://github.com/wiesche89/grin-node-api.git

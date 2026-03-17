@@ -1,10 +1,13 @@
 <RCC>
     <qresource prefix="/qml">
         <file>qml/Main.qml</file>
+        <file>qml/I18n.qml</file>
         <file>qml/Header.qml</file>
         <file>qml/Footer.qml</file>
-        <file>qml/Tile.qml</file>        
-		<file>qml/pages/TilePageBase.qml</file>
+        <file>qml/Tile.qml</file>
+        <file>qml/translation/en.json</file>
+        <file>qml/translation/de.json</file>
+        <file>qml/pages/TilePageBase.qml</file>
         <file>qml/pages/TileAPI.qml</file>
         <file>qml/pages/TileAtomicSwaps.qml</file>
         <file>qml/pages/TileBook.qml</file>

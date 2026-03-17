@@ -4,11 +4,12 @@ import QtQuick.Controls 2.15
 Item {
     id: root
     property string pageTitle: ""
+    property url backgroundSource: "qrc:/res/media/images/image_wallpaper_tile.png"
+    property var i18n: null
     signal backRequested()
     anchors.fill: parent
 
     Image {
-        id: background
         anchors.fill: parent
         source: "qrc:/res/media/images/image_wallpaper_tile.png"
         fillMode: Image.PreserveAspectCrop
@@ -24,14 +25,11 @@ Item {
     }
 
     Button {
-        id: backButton
-        text: qsTr("Zurück")
-        anchors {
-            left: parent.left
-            top: parent.top
-            leftMargin: 18
-            topMargin: 18
-        }
+        text: i18n ? i18n.tf("back", "Back") : "Back"
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.leftMargin: 18
+        anchors.topMargin: 18
         onClicked: root.backRequested()
         z: 2
     }
@@ -53,7 +51,7 @@ Item {
         }
 
         Label {
-            text: qsTr("Hier bleibt Platz für zusätzliche Informationen zum Thema %1.").arg(root.pageTitle)
+            text: (i18n ? i18n.tf("tile_page_placeholder", "There is room here for additional information about %1.") : "There is room here for additional information about %1.").arg(root.pageTitle)
             font.pixelSize: 16
             color: "#dfe3ff"
             horizontalAlignment: Text.AlignHCenter

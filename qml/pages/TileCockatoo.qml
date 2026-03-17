@@ -3,4 +3,5 @@ import QtQuick.Controls 2.15
 
 TilePageBase {
     pageTitle: qsTr("COCKATOO")
+    backgroundSource: "qrc:/res/media/tiles/tile_cockatoo.PNG"
 }
