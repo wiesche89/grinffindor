@@ -1,0 +1,16 @@
+services:
+  grinffindor-web:
+    build:
+      context: .
+      args:
+        PREBUILT_DIR: build/WebAssembly_Qt_6_10_1_single_threaded-Release
+    image: wiesche89/grinffindor:0.1.0
+    container_name: grinffindor
+    restart: unless-stopped
+    ports:
+      - "8084:80"
+    environment:
+      TZ: "Europe/Berlin"
+      APP_INDEX: "grinffindor.html"
+    volumes:
+      - ./nginx-logs:/var/log/nginx

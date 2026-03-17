@@ -7,10 +7,12 @@ import QtCore
 
 ApplicationWindow {
     id: root
-    width: 960
-    height: 640
+    readonly property bool isWasm: Qt.platform.os === "wasm"
+    width: isWasm ? Screen.width : 960
+    height: isWasm ? Screen.height : 640
     visible: true
-    visibility: Window.Maximized
+    visibility: isWasm ? Window.Windowed : Window.Maximized
+    flags: isWasm ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: i18n ? i18n.tf("app_title", "Grinffindor") : "Grinffindor"
     property string activeTilePage: ""
 
@@ -107,7 +109,13 @@ ApplicationWindow {
 
     ListModel { id: tileModel }
 
-    Component.onCompleted: populateTiles()
+    Component.onCompleted: {
+        if (isWasm) {
+            root.x = 0
+            root.y = 0
+        }
+        populateTiles()
+    }
 
     Connections {
         target: i18n
