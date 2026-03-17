@@ -26,6 +26,91 @@ docker compose up --build -d
 
 4. Open `http://localhost:8084`.
 
+## Docker Hub Image Build
+Before building the container image, create the Qt WebAssembly output locally.
+
+1. Build the project with the Qt WebAssembly single-threaded kit.
+2. Ensure the generated output exists at `build/WebAssembly_Qt_6_10_1_single_threaded-Release`.
+3. Log in to Docker Hub:
+
+```sh
+docker login
+```
+
+4. Build and push the multi-architecture image:
+
+```sh
+docker buildx build --no-cache --platform linux/amd64,linux/arm64 \
+  -t wiesche89/grinffindor:0.1.0 \
+  -f Dockerfile \
+  . \
+  --push
+```
+
+Notes:
+- Adjust the tag, for example `0.1.1`, for new releases.
+- The image contains the prebuilt WASM assets and is ready to run behind `nginx`.
+
+## VM Installation on Proxmox
+The recommended target is a small Debian or Ubuntu VM on Proxmox.
+
+### 1. Prepare the VM
+- Create a Debian 12 or Ubuntu 24.04 VM.
+- Give it a static IP or DHCP reservation.
+- Open port `80` or your chosen published port in your firewall.
+
+### 2. Install Docker Engine
+Example for Debian:
+
+```sh
+apt update && apt upgrade -y
+apt install -y ca-certificates curl git
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+apt update
+apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+```
+
+### 3. Deploy the Container
+Clone the repository or copy only the compose file to the VM.
+
+If you want to run the already published Docker Hub image, use a compose file that points to the image tag and does not require a local build.
+
+Example:
+
+```yaml
+services:
+  grinffindor-web:
+    image: wiesche89/grinffindor:0.1.0
+    container_name: grinffindor
+    restart: unless-stopped
+    ports:
+      - "8084:80"
+    environment:
+      TZ: "Europe/Berlin"
+      APP_INDEX: "grinffindor.html"
+    volumes:
+      - ./nginx-logs:/var/log/nginx
+```
+
+Start it with:
+
+```sh
+docker compose up -d
+```
+
+### 4. Verify the Deployment
+- Open `http://<vm-ip>:8084/grinffindor.html`
+- Check container status:
+
+```sh
+docker compose ps
+docker compose logs --tail=100
+```
+
 ## Docker Notes
 - `nginx` serves the static WASM files and applies the required COOP/COEP headers.
 - `qml/translation` is copied into the container so JSON language files remain available.

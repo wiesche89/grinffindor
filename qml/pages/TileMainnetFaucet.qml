@@ -140,6 +140,18 @@ Item {
                         font.pixelSize: 15
                         wrapMode: Text.WordWrap
                     }
+
+                    Text {
+                        width: parent.width
+                        text: "<a href=\"" + (i18n ? i18n.tf("mainnet_bot_link_url", "https://t.me/grin_mw_bot") : "https://t.me/grin_mw_bot") + "\">"
+                              + (i18n ? i18n.tf("mainnet_bot_link_label", "Open Mainnet Bot on Telegram") : "Open Mainnet Bot on Telegram")
+                              + "</a>"
+                        color: "#dfe5ff"
+                        font.pixelSize: 16
+                        linkColor: "#dfe5ff"
+                        wrapMode: Text.WordWrap
+                        onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                    }
                 }
             }
 

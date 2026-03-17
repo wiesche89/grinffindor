@@ -140,6 +140,30 @@ Item {
                         font.pixelSize: 15
                         wrapMode: Text.WordWrap
                     }
+
+                    Text {
+                        width: parent.width
+                        text: "<a href=\"" + (i18n ? i18n.tf("testnet_bot_link_url", "https://t.me/grin_mw_test_bot") : "https://t.me/grin_mw_test_bot") + "\">"
+                              + (i18n ? i18n.tf("testnet_bot_link_label", "Open Testnet Bot on Telegram") : "Open Testnet Bot on Telegram")
+                              + "</a>"
+                        color: "#dfe5ff"
+                        font.pixelSize: 16
+                        linkColor: "#dfe5ff"
+                        wrapMode: Text.WordWrap
+                        onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "<a href=\"" + (i18n ? i18n.tf("testnet_bot_group_url", "https://t.me/Grin_Tipping_Bot_Testnet") : "https://t.me/Grin_Tipping_Bot_Testnet") + "\">"
+                              + (i18n ? i18n.tf("testnet_bot_group_label", "Open Testnet Tipping Group") : "Open Testnet Tipping Group")
+                              + "</a>"
+                        color: "#cfd6ff"
+                        font.pixelSize: 15
+                        linkColor: "#cfd6ff"
+                        wrapMode: Text.WordWrap
+                        onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                    }
                 }
             }
 
