@@ -20,5 +20,7 @@ include(src/submodules/grin-node-api/grin-node-api.pri)
 wasm {
     # The default 50 MB initial memory is too small for the current
     # resource-heavy QML/UI bundle during wasm link time.
+    RESOURCES -= res.qrc
+    RESOURCES += res-wasm.qrc
     QMAKE_LFLAGS += -Wl,--initial-memory=134217728
 }
