@@ -11,6 +11,8 @@ Item {
 
     readonly property bool compact: width < 760
     readonly property bool singleColumn: width < 980
+    readonly property bool handset: width < 520
+    readonly property int pageGutter: compact ? 16 : 28
     readonly property color glassPanel: "#d9101722"
     readonly property color glassPanelSoft: "#cc131c28"
     readonly property color glassBorder: "#1fd8e1f0"
@@ -79,26 +81,26 @@ Item {
         }
     }
 
-            Rectangle {
+    Rectangle {
                 id: topBar
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 76
+        height: compact ? 64 : 76
         color: "#d80b1018"
         border.color: glassBorder
         z: 10
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 22
-            anchors.rightMargin: 22
+            anchors.leftMargin: pageGutter
+            anchors.rightMargin: pageGutter
             spacing: 14
 
             Rectangle {
                 id: backButton
-                implicitWidth: 108
-                implicitHeight: 42
+                implicitWidth: compact ? 88 : 108
+                implicitHeight: compact ? 38 : 42
                 radius: 14
                 color: backMouse.containsMouse ? "#14ffffff" : "#0dffffff"
                 border.color: glassBorder
@@ -147,10 +149,10 @@ Item {
 
         Column {
             id: contentColumn
-            width: Math.min(flick.width * 0.84, 1120)
+            width: Math.min(flick.width - (compact ? 20 : 48), 1120)
             x: Math.round((flick.width - width) / 2)
-            y: 28
-            spacing: 28
+            y: compact ? 16 : 28
+            spacing: compact ? 20 : 28
 
             Rectangle {
                 width: parent.width
@@ -172,10 +174,10 @@ Item {
                 GridLayout {
                     id: heroLayout
                     anchors.fill: parent
-                    anchors.margins: 30
+                    anchors.margins: compact ? 18 : 30
                     columns: root.singleColumn ? 1 : 2
-                    columnSpacing: 28
-                    rowSpacing: 22
+                    columnSpacing: compact ? 18 : 28
+                    rowSpacing: compact ? 16 : 22
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -217,7 +219,9 @@ Item {
                             wrapMode: Text.WordWrap
                         }
 
-                        RowLayout {
+                        Flow {
+                            Layout.fillWidth: true
+                            width: parent.width
                             spacing: 12
 
                             Rectangle {
@@ -335,7 +339,7 @@ Item {
 
             GridLayout {
                 width: parent.width
-                columns: root.compact ? 2 : 4
+                columns: handset ? 1 : (root.compact ? 2 : 4)
                 columnSpacing: 16
                 rowSpacing: 16
 
@@ -361,12 +365,13 @@ Item {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.minimumHeight: 118
+                        implicitHeight: statColumn.implicitHeight + 30
                         radius: 24
                         color: glassPanelSoft
                         border.color: glassBorder
 
                         Column {
+                            id: statColumn
                             anchors.centerIn: parent
                             spacing: 7
 
@@ -412,7 +417,7 @@ Item {
 
             GridLayout {
                 width: parent.width
-                columns: width < 920 ? 1 : 3
+                columns: root.width < 620 ? 1 : (root.singleColumn ? 2 : 3)
                 columnSpacing: 18
                 rowSpacing: 18
 
@@ -452,7 +457,7 @@ Item {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.minimumHeight: 228
+                        implicitHeight: featureColumn.implicitHeight + 44
                         radius: 28
                         color: glassPanelSoft
                         border.color: glassBorder
@@ -468,6 +473,7 @@ Item {
                         }
 
                         Column {
+                            id: featureColumn
                             anchors.fill: parent
                             anchors.margins: 22
                             spacing: 14
@@ -528,7 +534,7 @@ Item {
                 Column {
                     id: journeyColumn
                     anchors.fill: parent
-                    anchors.margins: 24
+                    anchors.margins: compact ? 18 : 24
                     spacing: 18
 
                     Label {
@@ -540,7 +546,7 @@ Item {
 
                     GridLayout {
                         width: parent.width
-                        columns: width < 920 ? 1 : 4
+                        columns: root.width < 620 ? 1 : (root.singleColumn ? 2 : 4)
                         columnSpacing: 16
                         rowSpacing: 16
 
@@ -554,12 +560,13 @@ Item {
 
                             Rectangle {
                                 Layout.fillWidth: true
-                                Layout.minimumHeight: 142
+                                implicitHeight: journeyStepColumn.implicitHeight + 36
                                 radius: 24
                                 color: glassPanelSoft
                                 border.color: glassBorder
 
                                 Column {
+                                    id: journeyStepColumn
                                     anchors.fill: parent
                                     anchors.margins: 18
                                     spacing: 10
@@ -605,7 +612,7 @@ Item {
                 Column {
                     id: footerColumn
                     anchors.fill: parent
-                    anchors.margins: 24
+                    anchors.margins: compact ? 18 : 24
                     spacing: 14
 
                     Label {
@@ -626,7 +633,8 @@ Item {
                         wrapMode: Text.WordWrap
                     }
 
-                    RowLayout {
+                    Flow {
+                        width: parent.width
                         spacing: 12
 
                         Rectangle {

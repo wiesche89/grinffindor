@@ -10,6 +10,7 @@ Item {
     anchors.fill: parent
     readonly property bool compact: width < 760
     readonly property bool singleColumn: width < 980
+    readonly property int pageGutter: compact ? 16 : 28
     readonly property color glassPanel: "#d9101722"
     readonly property color glassPanelSoft: "#cc131c28"
     readonly property color glassBorder: "#1fd8e1f0"
@@ -91,20 +92,20 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 76
+        height: compact ? 64 : 76
         color: "#d80b1018"
         border.color: glassBorder
         z: 10
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 22
-            anchors.rightMargin: 22
+            anchors.leftMargin: pageGutter
+            anchors.rightMargin: pageGutter
             spacing: 14
 
             Rectangle {
-                implicitWidth: 108
-                implicitHeight: 42
+                implicitWidth: compact ? 88 : 108
+                implicitHeight: compact ? 38 : 42
                 radius: 14
                 color: backMouse.containsMouse ? "#14ffffff" : "#0dffffff"
                 border.color: glassBorder
@@ -144,10 +145,10 @@ Item {
 
         Column {
             id: contentColumn
-            width: Math.min(scrollView.width * 0.84, 1120)
+            width: Math.min(scrollView.width - (compact ? 20 : 48), 1120)
             x: Math.round((scrollView.width - width) / 2)
-            y: 28
-            spacing: 28
+            y: compact ? 16 : 28
+            spacing: compact ? 20 : 28
 
             Rectangle {
                 width: parent.width
@@ -228,17 +229,21 @@ Item {
                         border.width: 1
                         implicitHeight: languageRow.implicitHeight + 28
 
-                        RowLayout {
+                        GridLayout {
                             id: languageRow
                             anchors.fill: parent
                             anchors.margins: 14
                             spacing: 14
+                            columns: root.compact ? 1 : 2
+                            rowSpacing: 12
+                            columnSpacing: 14
 
                             Label {
                                 text: i18n ? i18n.tf("settings_language_label", "App language") : "App language"
                                 color: "#f3f5ff"
                                 font.pixelSize: 16
                                 Layout.alignment: Qt.AlignVCenter
+                                Layout.fillWidth: root.compact
                             }
 
                             ComboBox {
