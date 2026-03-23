@@ -35,7 +35,6 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle("Fusion");
 
     NodeFooterStatus nodeFooterStatus;
-
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("nodeFooterStatus", &nodeFooterStatus);
     engine.rootContext()->setContextProperty("assetBaseUrl", detectAssetBaseUrl());

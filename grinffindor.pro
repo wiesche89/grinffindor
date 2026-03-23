@@ -27,10 +27,16 @@ wasm {
     win32 {
         WASM_MEDIA_SOURCE = $$replace($$shell_path($$PWD/media), /, \\)
         WASM_MEDIA_TARGET = $$replace($$shell_path($$OUT_PWD/media), /, \\)
+        WASM_OPT_SCRIPT = $$replace($$shell_path($$PWD/tools/optimize_wasm.ps1), /, \\)
+        WASM_OUTPUT = $$replace($$shell_path($$OUT_PWD/grinffindor.wasm), /, \\)
         QMAKE_POST_LINK += powershell -NoProfile -ExecutionPolicy Bypass -Command \"New-Item -ItemType Directory -Force -Path '$$WASM_MEDIA_TARGET' | Out-Null; Copy-Item -Path '$$WASM_MEDIA_SOURCE\\*' -Destination '$$WASM_MEDIA_TARGET' -Recurse -Force\" $$escape_expand(\\n\\t)
+        QMAKE_POST_LINK += powershell -NoProfile -ExecutionPolicy Bypass -File \"$$WASM_OPT_SCRIPT\" -WasmFile \"$$WASM_OUTPUT\" $$escape_expand(\\n\\t)
     } else {
         WASM_MEDIA_SOURCE = $$shell_path($$PWD/media)
         WASM_MEDIA_TARGET = $$shell_path($$OUT_PWD/media)
+        WASM_OPT_SCRIPT = $$shell_path($$PWD/tools/optimize_wasm.sh)
+        WASM_OUTPUT = $$shell_path($$OUT_PWD/grinffindor.wasm)
         QMAKE_POST_LINK += mkdir -p $$WASM_MEDIA_TARGET && cp -R $$WASM_MEDIA_SOURCE/* $$WASM_MEDIA_TARGET $$escape_expand(\\n\\t)
+        QMAKE_POST_LINK += sh $$WASM_OPT_SCRIPT $$WASM_OUTPUT $$escape_expand(\\n\\t)
     }
 }
