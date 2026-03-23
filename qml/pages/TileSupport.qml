@@ -1,7 +1,271 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
 
-TilePageBase {
-    pageTitle: qsTr("SUPPORT")
-    backgroundSource: "qrc:/res/media/tiles/tile_support.PNG"
+Item {
+    id: root
+    property var i18n: null
+    signal backRequested()
+    anchors.fill: parent
+
+    Image {
+        anchors.fill: parent
+        source: "qrc:/res/media/images/image_wallpaper_tile.png"
+        fillMode: Image.PreserveAspectCrop
+        smooth: true
+        asynchronous: true
+        z: 0
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#140716d9" }
+            GradientStop { position: 0.45; color: "#1b0b1fcc" }
+            GradientStop { position: 1.0; color: "#09040dcc" }
+        }
+        z: 1
+    }
+
+    Button {
+        text: i18n ? i18n.tf("back", "Back") : "Back"
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.leftMargin: 18
+        anchors.topMargin: 18
+        onClicked: root.backRequested()
+        z: 4
+    }
+
+    Flickable {
+        id: scrollView
+        anchors.fill: parent
+        anchors.topMargin: 72
+        clip: true
+        contentWidth: width
+        contentHeight: contentColumn.implicitHeight + 48
+        z: 3
+
+        Column {
+            id: contentColumn
+            width: Math.min(scrollView.width * 0.86, 980)
+            x: Math.round((scrollView.width - width) / 2)
+            y: 22
+            spacing: 18
+
+            Rectangle {
+                width: parent.width
+                radius: 30
+                color: "#111318b8"
+                border.color: "#6b738066"
+                border.width: 1
+                implicitHeight: heroColumn.implicitHeight + 34
+
+                Column {
+                    id: heroColumn
+                    anchors.fill: parent
+                    anchors.margins: 22
+                    spacing: 12
+
+                    Label {
+                        text: i18n ? i18n.tf("support_page_eyebrow", "Direct Help") : "Direct Help"
+                        color: "#b8becf"
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("support_page_title", "Support") : "Support"
+                        font.pixelSize: scrollView.width < 700 ? 30 : 42
+                        font.bold: true
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        width: parent.width * 0.9
+                        text: i18n ? i18n.tf("support_page_intro", "Do you have questions, need help, or ran into a problem? No problem - we are here for you.") : "Do you have questions, need help, or ran into a problem? No problem - we are here for you."
+                        color: "#e8ebff"
+                        font.pixelSize: 18
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        width: parent.width * 0.9
+                        text: i18n ? i18n.tf("support_page_telegram_intro", "For fast and direct support and for reporting bugs, please use our Telegram community:") : "For fast and direct support and for reporting bugs, please use our Telegram community:"
+                        color: "#d8ddff"
+                        font.pixelSize: 16
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            Rectangle {
+                width: parent.width
+                radius: 24
+                color: "#101014b0"
+                border.color: "#6b738066"
+                border.width: 1
+                implicitHeight: telegramColumn.implicitHeight + 30
+
+                Column {
+                    id: telegramColumn
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    spacing: 10
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("support_telegram_title", "Telegram Community") : "Telegram Community"
+                        color: "#ffffff"
+                        font.pixelSize: 22
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "<a href=\"" + (i18n ? i18n.tf("support_telegram_url", "https://t.me/Grinffindor") : "https://t.me/Grinffindor") + "\">"
+                              + (i18n ? i18n.tf("support_telegram_label", "https://t.me/Grinffindor") : "https://t.me/Grinffindor")
+                              + "</a>"
+                        color: "#dfe5ff"
+                        font.pixelSize: 18
+                        font.bold: true
+                        linkColor: "#dfe5ff"
+                        wrapMode: Text.WordWrap
+                        onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                    }
+                }
+            }
+
+            GridLayout {
+                width: parent.width
+                columns: scrollView.width < 860 ? 1 : 2
+                columnSpacing: 16
+                rowSpacing: 16
+
+                Repeater {
+                    model: [
+                        {
+                            title: i18n ? i18n.tf("support_topic_bug_title", "Report Errors and Bugs") : "Report Errors and Bugs",
+                            body: i18n ? i18n.tf("support_topic_bug_body", "Let us know when something is broken, behaves unexpectedly, or produces an error so problems can be tracked and fixed quickly.") : "Let us know when something is broken, behaves unexpectedly, or produces an error so problems can be tracked and fixed quickly."
+                        },
+                        {
+                            title: i18n ? i18n.tf("support_topic_help_title", "Get Help with Wallet, Node, or Bot") : "Get Help with Wallet, Node, or Bot",
+                            body: i18n ? i18n.tf("support_topic_help_body", "Ask for direct support if you need help using the wallet, setting up a node, or working with the bots and related tools.") : "Ask for direct support if you need help using the wallet, setting up a node, or working with the bots and related tools."
+                        },
+                        {
+                            title: i18n ? i18n.tf("support_topic_feedback_title", "Share Feedback and Suggestions") : "Share Feedback and Suggestions",
+                            body: i18n ? i18n.tf("support_topic_feedback_body", "Bring in feedback, ideas for improvements, and practical suggestions that can make the platform better for everyone.") : "Bring in feedback, ideas for improvements, and practical suggestions that can make the platform better for everyone."
+                        },
+                        {
+                            title: i18n ? i18n.tf("support_topic_exchange_title", "Talk with Users and Developers") : "Talk with Users and Developers",
+                            body: i18n ? i18n.tf("support_topic_exchange_body", "Use the group to exchange with other users and developers, compare setups, and resolve issues together.") : "Use the group to exchange with other users and developers, compare setups, and resolve issues together."
+                        }
+                    ]
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.minimumHeight: 150
+                        radius: 24
+                        color: "#111318b0"
+                        border.color: "#6b738066"
+                        border.width: 1
+
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 18
+                            spacing: 10
+
+                            Label {
+                                width: parent.width
+                                text: modelData.title
+                                color: "#ffffff"
+                                font.pixelSize: 21
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Label {
+                                width: parent.width
+                                text: modelData.body
+                                color: "#d8ddff"
+                                font.pixelSize: 15
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: parent.width
+                radius: 26
+                color: "#101014b0"
+                border.color: "#6b738066"
+                border.width: 1
+                implicitHeight: goalColumn.implicitHeight + 34
+
+                Column {
+                    id: goalColumn
+                    anchors.fill: parent
+                    anchors.margins: 22
+                    spacing: 12
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("support_goal_title", "Our Goal") : "Our Goal"
+                        color: "#ffffff"
+                        font.pixelSize: 28
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("support_goal_body", "Our goal is to identify problems quickly and find solutions together.") : "Our goal is to identify problems quickly and find solutions together."
+                        color: "#e8ebff"
+                        font.pixelSize: 16
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            Rectangle {
+                width: parent.width
+                radius: 26
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#17191eb8" }
+                    GradientStop { position: 1.0; color: "#0e1014b8" }
+                }
+                border.color: "#6b738066"
+                border.width: 1
+                implicitHeight: noteColumn.implicitHeight + 34
+
+                Column {
+                    id: noteColumn
+                    anchors.fill: parent
+                    anchors.margins: 22
+                    spacing: 12
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("support_note_title", "Helpful Bug Reports") : "Helpful Bug Reports"
+                        color: "#ffffff"
+                        font.pixelSize: 28
+                        font.bold: true
+                    }
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("support_note_body", "The more precise your description is, including logs, screenshots, or error messages, the faster we can help.") : "The more precise your description is, including logs, screenshots, or error messages, the faster we can help."
+                        color: "#f3f5ff"
+                        font.pixelSize: 18
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+        }
+    }
 }
