@@ -7,6 +7,16 @@ Item {
     property var i18n: null
     signal backRequested()
     anchors.fill: parent
+    readonly property bool compact: width < 760
+    readonly property bool singleColumn: width < 980
+    readonly property color glassPanel: "#d9101722"
+    readonly property color glassPanelSoft: "#cc131c28"
+    readonly property color glassBorder: "#1fd8e1f0"
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#05070b"
+    }
 
     Image {
         anchors.fill: parent
@@ -19,39 +29,106 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: "#140716d9" }
-            GradientStop { position: 0.45; color: "#1b0b1fcc" }
-            GradientStop { position: 1.0; color: "#09040dcc" }
-        }
-        z: 1
+        color: "#660a0e14"
     }
 
-    Button {
-        text: i18n ? i18n.tf("back", "Back") : "Back"
-        anchors.left: parent.left
+    Rectangle {
+        anchors.fill: parent
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#a00b1017" }
+            GradientStop { position: 0.32; color: "#780e141d" }
+            GradientStop { position: 0.68; color: "#880b1017" }
+            GradientStop { position: 1.0; color: "#b0090d14" }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: "transparent"
+
+        Rectangle {
+            width: parent.width * 0.56
+            height: width
+            radius: width / 2
+            x: parent.width - width * 0.72
+            y: -height * 0.24
+            color: "#5b7cff"
+            opacity: 0.035
+        }
+
+        Rectangle {
+            width: parent.width * 0.42
+            height: width
+            radius: width / 2
+            x: -width * 0.18
+            y: parent.height * 0.30
+            color: "#55d6ff"
+            opacity: 0.03
+        }
+    }
+
+    Rectangle {
+        id: topBar
         anchors.top: parent.top
-        anchors.leftMargin: 18
-        anchors.topMargin: 18
-        onClicked: root.backRequested()
-        z: 4
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 76
+        color: "#d80b1018"
+        border.color: glassBorder
+        z: 10
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 22
+            anchors.rightMargin: 22
+            spacing: 14
+
+            Rectangle {
+                implicitWidth: 108
+                implicitHeight: 42
+                radius: 14
+                color: backMouse.containsMouse ? "#14ffffff" : "#0dffffff"
+                border.color: glassBorder
+
+                Text {
+                    anchors.centerIn: parent
+                    text: i18n ? i18n.tf("back", "Back") : "Back"
+                    color: "#f4f7ff"
+                    font.pixelSize: 15
+                    font.weight: Font.DemiBold
+                }
+
+                MouseArea {
+                    id: backMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.backRequested()
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+        }
     }
 
     Flickable {
         id: scrollView
         anchors.fill: parent
-        anchors.topMargin: 72
+        anchors.topMargin: topBar.height
         clip: true
         contentWidth: width
-        contentHeight: contentColumn.implicitHeight + 48
-        z: 3
+        contentHeight: contentColumn.implicitHeight + 56
+
+        ScrollBar.vertical: ScrollBar {
+            policy: ScrollBar.AsNeeded
+        }
 
         Column {
             id: contentColumn
-            width: Math.min(scrollView.width * 0.86, 980)
+            width: Math.min(scrollView.width * 0.84, 1120)
             x: Math.round((scrollView.width - width) / 2)
-            y: 22
-            spacing: 18
+            y: 28
+            spacing: 28
 
             Rectangle {
                 width: parent.width
