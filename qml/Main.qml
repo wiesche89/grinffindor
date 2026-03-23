@@ -8,6 +8,9 @@ import QtCore
 ApplicationWindow {
     id: root
     readonly property bool isWasm: Qt.platform.os === "wasm"
+    function assetPath(path) {
+        return (typeof assetBaseUrl === "string" ? assetBaseUrl : "qrc:/res/") + path
+    }
     width: isWasm ? Screen.width : 960
     height: isWasm ? Screen.height : 640
     visible: true
@@ -33,56 +36,56 @@ ApplicationWindow {
             titleText: "",
             subtitleText: "",
             buttonText: i18n.tf("tile_grinffindor", "Grinffindor"),
-            imageSource: "qrc:/res/media/tiles/tile_grinffindor.PNG",
+            imageSource: root.assetPath("media/tiles/tile_grinffindor.PNG"),
             pageFile: "TileGrinffindor.qml"
         })
         tileModel.append({
             titleText: "",
             subtitleText: "",
             buttonText: i18n.tf("tile_grin_node", "UmbrelOS"),
-            imageSource: "qrc:/res/media/tiles/tile_grin_node.PNG",
+            imageSource: root.assetPath("media/tiles/tile_grin_node.PNG"),
             pageFile: "TileGrinNode.qml"
         })
         tileModel.append({
             titleText: "",
             subtitleText: "",
             buttonText: i18n.tf("tile_mainnet_faucet", "Mainnet Bot"),
-            imageSource: "qrc:/res/media/tiles/tile_mainnet_faucet.PNG",
+            imageSource: root.assetPath("media/tiles/tile_mainnet_faucet.PNG"),
             pageFile: "TileMainnetFaucet.qml"
         })
         tileModel.append({
             titleText: "",
             subtitleText: "",
             buttonText: i18n.tf("tile_testnet_faucet", "Testnet Bot"),
-            imageSource: "qrc:/res/media/tiles/tile_testnet_faucet.PNG",
+            imageSource: root.assetPath("media/tiles/tile_testnet_faucet.PNG"),
             pageFile: "TileTestnetFaucet.qml"
         })
         tileModel.append({
             titleText: "",
             subtitleText: "",
             buttonText: i18n.tf("tile_support", "Support"),
-            imageSource: "qrc:/res/media/tiles/tile_support.PNG",
+            imageSource: root.assetPath("media/tiles/tile_support.PNG"),
             pageFile: "TileSupport.qml"
         })
         tileModel.append({
             titleText: "",
             subtitleText: "",
             buttonText: i18n.tf("tile_exchange", "Exchange"),
-            imageSource: "qrc:/res/media/tiles/tile_exchange.PNG",
+            imageSource: root.assetPath("media/tiles/tile_exchange.PNG"),
             pageFile: "TileExchange.qml"
         })
         tileModel.append({
             titleText: "",
             subtitleText: "",
             buttonText: i18n.tf("tile_explorer", "Explorer"),
-            imageSource: "qrc:/res/media/tiles/tile_explorer.PNG",
+            imageSource: root.assetPath("media/tiles/tile_explorer.PNG"),
             pageFile: "TileExplorer.qml"
         })
         tileModel.append({
             titleText: "",
             subtitleText: "",
             buttonText: i18n.tf("tile_settings", "Settings"),
-            imageSource: "qrc:/res/media/tiles/tile_settings.PNG",
+            imageSource: root.assetPath("media/tiles/tile_settings.PNG"),
             pageFile: "TileSettings.qml"
         })
     }
@@ -130,7 +133,7 @@ ApplicationWindow {
 
         Image {
             anchors.fill: parent
-            source: "qrc:/res/media/images/image_wallpaper.png"
+            source: root.assetPath("media/images/image_wallpaper.png")
             fillMode: Image.Stretch
             smooth: true
             z: -10

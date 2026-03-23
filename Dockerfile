@@ -16,6 +16,7 @@ COPY ${PREBUILT_DIR}/grinffindor.js ./
 COPY ${PREBUILT_DIR}/grinffindor.wasm ./
 COPY ${PREBUILT_DIR}/qtloader.js ./
 COPY ${PREBUILT_DIR}/qtlogo.svg ./
+COPY media ./media
 COPY qml/translation ./translation
 COPY media/images/Image_1_logo.PNG ./Image_1_logo.PNG
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

@@ -6,6 +6,9 @@ Item {
     id: root
     property var i18n: null
     signal backRequested()
+    function assetPath(path) {
+        return (typeof assetBaseUrl === "string" ? assetBaseUrl : "qrc:/res/") + path
+    }
 
     anchors.fill: parent
 
@@ -24,7 +27,7 @@ Item {
 
     Image {
         anchors.fill: parent
-        source: "qrc:/res/media/images/image_wallpaper_tile.png"
+        source: root.assetPath("media/images/image_wallpaper_tile.png")
         fillMode: Image.PreserveAspectCrop
         smooth: true
         asynchronous: true

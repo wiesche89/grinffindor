@@ -5,7 +5,25 @@
 #include <QUrl>
 #include <QCoreApplication>
 
+#ifdef Q_OS_WASM
+#include <emscripten/emscripten.h>
+#endif
+
 #include "nodefooterstatus.h"
+
+#ifdef Q_OS_WASM
+static QString detectAssetBaseUrl()
+{
+    const char *value = emscripten_run_script_string(
+        "(function(){ return new URL('./', window.location.href).href; })();");
+    return QString::fromUtf8(value ? value : "");
+}
+#else
+static QString detectAssetBaseUrl()
+{
+    return QStringLiteral("qrc:/res/");
+}
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -20,6 +38,7 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("nodeFooterStatus", &nodeFooterStatus);
+    engine.rootContext()->setContextProperty("assetBaseUrl", detectAssetBaseUrl());
     engine.load(QUrl(QStringLiteral("qrc:/qml/qml//Main.qml")));
 
     if (engine.rootObjects().isEmpty()) {

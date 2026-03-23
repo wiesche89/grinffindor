@@ -3,37 +3,13 @@
         <file>media/icons/IconX.svg</file>
         <file>media/icons/IconTelegram.svg</file>
         <file>media/icons/IconGrin.svg</file>
-        <file>media/tiles/tile_api.PNG</file>
-        <file>media/tiles/tile_atomic_swaps.PNG</file>
-        <file>media/tiles/tile_book.PNG</file>
-        <file>media/tiles/tile_bountie.PNG</file>
-        <file>media/tiles/tile_cockatoo.PNG</file>
-        <file>media/tiles/tile_contracts.PNG</file>
-        <file>media/tiles/tile_development.PNG</file>
-        <file>media/tiles/tile_emission.PNG</file>
         <file>media/tiles/tile_exchange.PNG</file>
         <file>media/tiles/tile_explorer.PNG</file>
-        <file>media/tiles/tile_governance.PNG</file>
         <file>media/tiles/tile_grin_node.PNG</file>
         <file>media/tiles/tile_grinffindor.PNG</file>
-        <file>media/tiles/tile_gryffindor.PNG</file>
-        <file>media/tiles/tile_hardware_wallet.PNG</file>
-        <file>media/tiles/tile_ignotus.PNG</file>
-        <file>media/tiles/tile_inflation.PNG</file>
-        <file>media/tiles/tile_login.PNG</file>
         <file>media/tiles/tile_mainnet_faucet.PNG</file>
-        <file>media/tiles/tile_mining.PNG</file>
-        <file>media/tiles/tile_mixer.PNG</file>
-        <file>media/tiles/tile_multisig.PNG</file>
-        <file>media/tiles/tile_multisig_coin.PNG</file>
-        <file>media/tiles/tile_mw_book.PNG</file>
-        <file>media/tiles/tile_mwixnet.PNG</file>
-        <file>media/tiles/tile_pool.PNG</file>
-        <file>media/tiles/tile_server.PNG</file>
         <file>media/tiles/tile_settings.PNG</file>
-        <file>media/tiles/tile_shop.PNG</file>
         <file>media/tiles/tile_support.PNG</file>
-        <file>media/tiles/tile_swap.PNG</file>
         <file>media/tiles/tile_testnet_faucet.PNG</file>
         <file>media/images/image_wallpaper_tile.png</file>
         <file>media/images/image_wallpaper.png</file>

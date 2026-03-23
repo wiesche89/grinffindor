@@ -23,4 +23,14 @@ wasm {
     RESOURCES -= res.qrc
     RESOURCES += res-wasm.qrc
     QMAKE_LFLAGS += -Wl,--initial-memory=134217728
+
+    win32 {
+        WASM_MEDIA_SOURCE = $$replace($$shell_path($$PWD/media), /, \\)
+        WASM_MEDIA_TARGET = $$replace($$shell_path($$OUT_PWD/media), /, \\)
+        QMAKE_POST_LINK += powershell -NoProfile -ExecutionPolicy Bypass -Command \"New-Item -ItemType Directory -Force -Path '$$WASM_MEDIA_TARGET' | Out-Null; Copy-Item -Path '$$WASM_MEDIA_SOURCE\\*' -Destination '$$WASM_MEDIA_TARGET' -Recurse -Force\" $$escape_expand(\\n\\t)
+    } else {
+        WASM_MEDIA_SOURCE = $$shell_path($$PWD/media)
+        WASM_MEDIA_TARGET = $$shell_path($$OUT_PWD/media)
+        QMAKE_POST_LINK += mkdir -p $$WASM_MEDIA_TARGET && cp -R $$WASM_MEDIA_SOURCE/* $$WASM_MEDIA_TARGET $$escape_expand(\\n\\t)
+    }
 }

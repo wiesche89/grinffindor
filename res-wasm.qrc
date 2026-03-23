@@ -3,15 +3,5 @@
         <file>media/icons/IconX.svg</file>
         <file>media/icons/IconTelegram.svg</file>
         <file>media/icons/IconGrin.svg</file>
-        <file>media/tiles/tile_grinffindor.PNG</file>
-        <file>media/tiles/tile_grin_node.PNG</file>
-        <file>media/tiles/tile_mainnet_faucet.PNG</file>
-        <file>media/tiles/tile_testnet_faucet.PNG</file>
-        <file>media/tiles/tile_support.PNG</file>
-        <file>media/tiles/tile_exchange.PNG</file>
-        <file>media/tiles/tile_explorer.PNG</file>
-        <file>media/tiles/tile_settings.PNG</file>
-        <file>media/images/image_wallpaper_tile.png</file>
-        <file>media/images/image_wallpaper.png</file>
     </qresource>
 </RCC>
