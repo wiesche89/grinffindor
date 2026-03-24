@@ -1,6 +1,7 @@
 {
   "app_title": "Grinffindor",
   "hero_text": "Grinffindor unterstuetzt die Grin-Community mit offenen Tools und Infrastruktur. Erkunde Testnet- und Mainnet-Faucets, betreibe deinen eigenen Grin Node auf UmbrelOS und finde alles, was du zum Nutzen, Testen und Entwickeln mit Grin brauchst.",
+  "tile_browser_wallet": "Browser Wallet",
   "tile_grinffindor": "Grinffindor",
   "tile_grin_node": "UmbrelOS",
   "tile_mainnet_faucet": "Mainnet Bot",

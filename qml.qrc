@@ -8,6 +8,7 @@
         <file>qml/translation/en.json</file>
         <file>qml/translation/de.json</file>
         <file>qml/pages/TileExchange.qml</file>
+        <file>qml/pages/TileBrowserWallet.qml</file>
         <file>qml/pages/TileExplorer.qml</file>
         <file>qml/pages/TileGrinffindor.qml</file>
         <file>qml/pages/TileGrinNode.qml</file>
@@ -15,5 +16,6 @@
         <file>qml/pages/TileSettings.qml</file>
         <file>qml/pages/TileSupport.qml</file>
         <file>qml/pages/TileTestnetFaucet.qml</file>
+        <file>src/wallet/resources/bip39_english.txt</file>
     </qresource>
 </RCC>

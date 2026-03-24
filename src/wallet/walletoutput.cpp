@@ -1,0 +1,41 @@
+#include "walletoutput.h"
+
+QJsonObject WalletOutput::toJson() const
+{
+    QJsonObject json;
+    json.insert(QStringLiteral("commitment"), commitment);
+    json.insert(QStringLiteral("proof"), proof);
+    json.insert(QStringLiteral("amount"), amount);
+    json.insert(QStringLiteral("source"), source);
+    json.insert(QStringLiteral("key_path"), keyPath);
+    json.insert(QStringLiteral("blinding_factor"), blindingFactor);
+    json.insert(QStringLiteral("child_index"), static_cast<int>(childIndex));
+    json.insert(QStringLiteral("height"), QString::number(height));
+    json.insert(QStringLiteral("coinbase"), coinbase);
+    json.insert(QStringLiteral("on_chain"), onChain);
+    json.insert(QStringLiteral("spent"), spent);
+    json.insert(QStringLiteral("locked"), locked);
+    json.insert(QStringLiteral("pending"), pending);
+    json.insert(QStringLiteral("workflow_id"), workflowId);
+    return json;
+}
+
+WalletOutput WalletOutput::fromJson(const QJsonObject &json)
+{
+    WalletOutput output;
+    output.commitment = json.value(QStringLiteral("commitment")).toString();
+    output.proof = json.value(QStringLiteral("proof")).toString();
+    output.amount = json.value(QStringLiteral("amount")).toString();
+    output.source = json.value(QStringLiteral("source")).toString();
+    output.keyPath = json.value(QStringLiteral("key_path")).toString();
+    output.blindingFactor = json.value(QStringLiteral("blinding_factor")).toString();
+    output.childIndex = static_cast<quint32>(json.value(QStringLiteral("child_index")).toInt());
+    output.height = json.value(QStringLiteral("height")).toVariant().toULongLong();
+    output.coinbase = json.value(QStringLiteral("coinbase")).toBool();
+    output.onChain = json.value(QStringLiteral("on_chain")).toBool();
+    output.spent = json.value(QStringLiteral("spent")).toBool();
+    output.locked = json.value(QStringLiteral("locked")).toBool();
+    output.pending = json.value(QStringLiteral("pending")).toBool();
+    output.workflowId = json.value(QStringLiteral("workflow_id")).toString();
+    return output;
+}

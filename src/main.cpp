@@ -10,6 +10,7 @@
 #endif
 
 #include "nodefooterstatus.h"
+#include "grinwalletcontroller.h"
 
 #ifdef Q_OS_WASM
 static QString detectAssetBaseUrl()
@@ -35,8 +36,10 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle("Fusion");
 
     NodeFooterStatus nodeFooterStatus;
+    GrinWalletController grinWalletController;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("nodeFooterStatus", &nodeFooterStatus);
+    engine.rootContext()->setContextProperty("grinWalletController", &grinWalletController);
     engine.rootContext()->setContextProperty("assetBaseUrl", detectAssetBaseUrl());
     engine.load(QUrl(QStringLiteral("qrc:/qml/qml//Main.qml")));
 
