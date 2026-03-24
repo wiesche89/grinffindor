@@ -133,7 +133,7 @@ ApplicationWindow {
 
         Image {
             anchors.fill: parent
-            source: root.assetPath("media/images/image_wallpaper.png")
+            source: root.assetPath("media/images/image_wallpaper_tile.png")
             fillMode: Image.Stretch
             smooth: true
             z: -10
