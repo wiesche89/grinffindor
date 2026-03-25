@@ -131,6 +131,10 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
         if (!rewound.success) {
             continue;
         }
+        if (!rewound.keyPath.startsWith(QStringLiteral("m/0/0/"))
+            && rewound.keyPath != QStringLiteral("m/0/0")) {
+            continue;
+        }
 
         WalletOutput output;
         output.commitment = chainOutput.commit().hex();

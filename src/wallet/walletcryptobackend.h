@@ -26,6 +26,12 @@ public:
         quint32 childIndex = 0;
     };
 
+    struct CommitmentResult {
+        bool success = false;
+        SlateV4::Commit commit;
+        QString error;
+    };
+
     static bool supportsRealGrinTransactions();
     static ParticipantContext createParticipant(const QString &walletFingerprint,
                                                 const QString &workflowId,
@@ -34,10 +40,10 @@ public:
     static QString addOffsets(const QString &leftOffset,
                               const QString &rightOffset,
                               QString *errorOut = 0);
-    static SlateV4::Commit createCommitment(const QString &walletFingerprint,
-                                            const QString &workflowId,
-                                            const QString &roleTag,
-                                            const QString &amount);
+    static CommitmentResult createCommitment(const QString &walletFingerprint,
+                                             const QString &workflowId,
+                                             const QString &roleTag,
+                                             const QString &amount);
     static OwnedCommitment createOwnedCommitment(const WalletKeychain &keychain,
                                                  quint32 childIndex,
                                                  const QString &amount);

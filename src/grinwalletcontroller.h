@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QJsonObject>
+#include <QUrl>
 #include <QString>
 #include <QVariantList>
 #include <functional>
@@ -68,12 +69,18 @@ public:
     Q_INVOKABLE bool validateMnemonic(const QString &mnemonic) const;
     Q_INVOKABLE void createWallet(const QString &walletName, const QString &password);
     Q_INVOKABLE void importWallet(const QString &walletName, const QString &mnemonic, const QString &password);
+    Q_INVOKABLE void restoreWallet(const QString &walletName, const QString &mnemonic, const QString &password);
     Q_INVOKABLE void unlockWallet(const QString &password);
     Q_INVOKABLE void lockWallet();
+    Q_INVOKABLE void dismissMnemonicPreview();
+    Q_INVOKABLE void deleteWallet();
+    Q_INVOKABLE bool setNodeUrl(const QString &nodeUrl);
+    Q_INVOKABLE void resetNodeUrl();
     Q_INVOKABLE void refreshNodeStatus();
     Q_INVOKABLE void syncWallet();
     Q_INVOKABLE void rescanWallet();
     Q_INVOKABLE QString requestPasteText() const;
+    Q_INVOKABLE bool isValidNodeUrl(const QString &nodeUrl) const;
     Q_INVOKABLE QString createSlatepackTemplate(const QString &sender = QString()) const;
     Q_INVOKABLE void startSendWorkflow(const QString &amount, const QString &note = QString());
     Q_INVOKABLE void startReceiveWorkflow(const QString &amount, const QString &note = QString());
@@ -127,6 +134,7 @@ private:
     bool m_walletExists;
     bool m_walletUnlocked;
     QString m_walletName;
+    QString m_sessionMnemonic;
     QString m_mnemonicPreview;
     QString m_seedFingerprint;
     QString m_nodeUrl;

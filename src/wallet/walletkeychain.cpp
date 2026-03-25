@@ -346,6 +346,11 @@ QString WalletKeychain::masterPublicKey() const
     return QString::fromUtf8(m_masterPublicKey.toHex());
 }
 
+QByteArray WalletKeychain::slatepackSecretKey() const
+{
+    return m_masterSecret;
+}
+
 WalletKeychain::RewindResult WalletKeychain::rewindOutputProof(const QString &commitment, const QString &proof) const
 {
     RewindResult result;

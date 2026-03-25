@@ -1,12 +1,25 @@
 #include "binaryslatev4reader.h"
 
+#include <QCryptographicHash>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QList>
+#include <QMessageAuthenticationCode>
 #include <limits>
 
 #include "slatev4.h"
 
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+#include "monocypher.h"
+#endif
+
 namespace {
+
+const int kAgeFileKeySize = 16;
+const int kAgePayloadNonceSize = 16;
+const int kAgeChunkSize = 64 * 1024;
+const int kChaChaOverhead = 16;
 
 QString formatNanogrin(quint64 value)
 {
@@ -92,6 +105,438 @@ private:
     QByteArray m_data;
     int m_offset;
 };
+
+QByteArray decodeBase64Raw(const QString &input)
+{
+    QByteArray normalized = input.trimmed().toUtf8();
+    const int pad = normalized.size() % 4;
+    if (pad != 0) {
+        normalized.append(QByteArray(4 - pad, '='));
+    }
+    return QByteArray::fromBase64(normalized, QByteArray::Base64Encoding);
+}
+
+QByteArray hkdfSha256(const QByteArray &ikm,
+                      const QByteArray &salt,
+                      const QByteArray &info,
+                      int outputLength)
+{
+    const QByteArray actualSalt = salt.isEmpty() ? QByteArray(32, '\0') : salt;
+    const QByteArray prk = QMessageAuthenticationCode::hash(
+        ikm, actualSalt, QCryptographicHash::Sha256);
+
+    QByteArray output;
+    output.reserve(outputLength);
+    QByteArray previous;
+    quint8 counter = 1;
+    while (output.size() < outputLength) {
+        QByteArray blockInput = previous + info + QByteArray(1, static_cast<char>(counter++));
+        previous = QMessageAuthenticationCode::hash(blockInput, prk, QCryptographicHash::Sha256);
+        output.append(previous);
+    }
+    output.truncate(outputLength);
+    return output;
+}
+
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+bool deriveX25519PublicKey(const QByteArray &privateKey, QByteArray *publicKeyOut)
+{
+    if (!publicKeyOut || privateKey.size() != 32) {
+        return false;
+    }
+
+    QByteArray publicKey(32, Qt::Uninitialized);
+    crypto_x25519_public_key(reinterpret_cast<uint8_t *>(publicKey.data()),
+                             reinterpret_cast<const uint8_t *>(privateKey.constData()));
+    *publicKeyOut = publicKey;
+    return true;
+}
+
+bool deriveX25519SharedSecret(const QByteArray &privateKey,
+                              const QByteArray &peerPublicKey,
+                              QByteArray *sharedSecretOut)
+{
+    if (!sharedSecretOut || privateKey.size() != 32 || peerPublicKey.size() != 32) {
+        return false;
+    }
+
+    QByteArray sharedSecret(32, Qt::Uninitialized);
+    crypto_x25519(reinterpret_cast<uint8_t *>(sharedSecret.data()),
+                  reinterpret_cast<const uint8_t *>(privateKey.constData()),
+                  reinterpret_cast<const uint8_t *>(peerPublicKey.constData()));
+    *sharedSecretOut = sharedSecret;
+    return true;
+}
+
+bool chacha20Poly1305Decrypt(const QByteArray &key,
+                             const QByteArray &nonce,
+                             const QByteArray &ciphertext,
+                             QByteArray *plaintextOut)
+{
+    if (!plaintextOut || key.size() != 32 || nonce.size() != 12 || ciphertext.size() < kChaChaOverhead) {
+        return false;
+    }
+
+    const QByteArray tag = ciphertext.right(kChaChaOverhead);
+    const QByteArray encrypted = ciphertext.left(ciphertext.size() - kChaChaOverhead);
+
+    QByteArray plaintext(encrypted.size(), Qt::Uninitialized);
+    crypto_aead_ctx ctx;
+    crypto_aead_init_ietf(&ctx,
+                          reinterpret_cast<const uint8_t *>(key.constData()),
+                          reinterpret_cast<const uint8_t *>(nonce.constData()));
+    if (crypto_aead_read(&ctx,
+                         reinterpret_cast<uint8_t *>(plaintext.data()),
+                         reinterpret_cast<const uint8_t *>(tag.constData()),
+                         0, 0,
+                         reinterpret_cast<const uint8_t *>(encrypted.constData()),
+                         encrypted.size()) != 0) {
+        return false;
+    }
+    *plaintextOut = plaintext;
+    return true;
+}
+#endif
+
+bool incrementStreamNonce(QByteArray *nonce)
+{
+    if (!nonce || nonce->size() != 12) {
+        return false;
+    }
+    for (int i = nonce->size() - 2; i >= 0; --i) {
+        unsigned char value = static_cast<unsigned char>(nonce->at(i));
+        value = static_cast<unsigned char>(value + 1);
+        (*nonce)[i] = static_cast<char>(value);
+        if (value != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+struct AgeStanza
+{
+    QString type;
+    QStringList args;
+    QByteArray body;
+};
+
+struct DecryptedSlatepackPayload
+{
+    QByteArray payload;
+    QString sender;
+    QStringList recipients;
+};
+
+bool parseSlatepackAddress(ByteCursor *cursor, QString *addressOut)
+{
+    if (!cursor || !addressOut) {
+        return false;
+    }
+
+    bool ok = false;
+    const int addressLength = static_cast<int>(cursor->readU8(&ok));
+    if (!ok || addressLength <= 0) {
+        return false;
+    }
+
+    const QByteArray encodedAddress = cursor->readBytes(addressLength, &ok);
+    if (!ok || encodedAddress.isEmpty()) {
+        return false;
+    }
+
+    *addressOut = QString::fromUtf8(encodedAddress);
+    return !addressOut->trimmed().isEmpty();
+}
+
+bool extractDecryptedSlatepackPayload(const QByteArray &decrypted,
+                                      DecryptedSlatepackPayload *resultOut,
+                                      QString *errorOut)
+{
+    if (!resultOut) {
+        if (errorOut) *errorOut = QStringLiteral("Slatepack metadata output target is missing.");
+        return false;
+    }
+    if (decrypted.size() < 6) {
+        if (errorOut) *errorOut = QStringLiteral("Decrypted Slatepack metadata is truncated.");
+        return false;
+    }
+
+    ByteCursor lengthCursor(decrypted.left(4));
+    bool ok = false;
+    const quint32 metadataLength = lengthCursor.readU32(&ok);
+    if (!ok || metadataLength + 4u > static_cast<quint32>(decrypted.size())) {
+        if (errorOut) *errorOut = QStringLiteral("Decrypted Slatepack metadata length is invalid.");
+        return false;
+    }
+
+    ByteCursor cursor(decrypted.mid(4, static_cast<int>(metadataLength)));
+    const quint16 optionalFlags = cursor.readU16(&ok);
+    if (!ok) {
+        if (errorOut) *errorOut = QStringLiteral("Decrypted Slatepack metadata flags are invalid.");
+        return false;
+    }
+
+    DecryptedSlatepackPayload result;
+    if ((optionalFlags & 0x01) != 0) {
+        if (!parseSlatepackAddress(&cursor, &result.sender)) {
+            if (errorOut) *errorOut = QStringLiteral("Decrypted Slatepack sender address is invalid.");
+            return false;
+        }
+    }
+
+    if ((optionalFlags & 0x02) != 0) {
+        const quint16 recipientCount = cursor.readU16(&ok);
+        if (!ok) {
+            if (errorOut) *errorOut = QStringLiteral("Decrypted Slatepack recipient count is invalid.");
+            return false;
+        }
+        for (quint16 i = 0; i < recipientCount; ++i) {
+            QString recipient;
+            if (!parseSlatepackAddress(&cursor, &recipient)) {
+                if (errorOut) *errorOut = QStringLiteral("Decrypted Slatepack recipient address is invalid.");
+                return false;
+            }
+            result.recipients.append(recipient);
+        }
+    }
+
+    result.payload = decrypted.mid(static_cast<int>(metadataLength) + 4);
+    if (result.payload.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("Decrypted Slatepack payload is empty.");
+        return false;
+    }
+
+    *resultOut = result;
+    return true;
+}
+
+bool unwrapAgeFileKey(const QList<AgeStanza> &stanzas,
+                      const QByteArray &x25519Secret,
+                      const QByteArray &x25519Public,
+                      QByteArray *fileKeyOut)
+{
+    if (!fileKeyOut) {
+        return false;
+    }
+
+    for (int i = 0; i < stanzas.size(); ++i) {
+        const AgeStanza &stanza = stanzas.at(i);
+        if (stanza.type != QStringLiteral("X25519") || stanza.args.size() != 1) {
+            continue;
+        }
+
+        const QByteArray peerPublicKey = decodeBase64Raw(stanza.args.first());
+        if (peerPublicKey.size() != 32) {
+            continue;
+        }
+
+        QByteArray sharedSecret;
+        if (!deriveX25519SharedSecret(x25519Secret, peerPublicKey, &sharedSecret)) {
+            continue;
+        }
+
+        QByteArray salt = peerPublicKey;
+        salt.append(x25519Public);
+        const QByteArray wrappingKey = hkdfSha256(
+            sharedSecret,
+            salt,
+            QByteArrayLiteral("age-encryption.org/v1/X25519"),
+            32);
+
+        QByteArray unwrapped;
+        if (chacha20Poly1305Decrypt(wrappingKey, QByteArray(12, '\0'), stanza.body, &unwrapped)
+            && unwrapped.size() == kAgeFileKeySize) {
+            *fileKeyOut = unwrapped;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool decryptAgePayload(const QByteArray &payload,
+                       const QByteArray &walletSecret,
+                       QByteArray *plaintextOut,
+                       QString *errorOut)
+{
+    if (!plaintextOut) {
+        if (errorOut) *errorOut = QStringLiteral("Age payload output target is missing.");
+        return false;
+    }
+    if (walletSecret.size() != 32) {
+        if (errorOut) *errorOut = QStringLiteral("Wallet secret is unavailable for Slatepack decryption.");
+        return false;
+    }
+    if (!payload.startsWith("age-encryption.org/v1\n")) {
+        if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack payload is not a valid age message.");
+        return false;
+    }
+
+    QByteArray x25519Secret = QCryptographicHash::hash(walletSecret, QCryptographicHash::Sha512).left(32);
+    QByteArray x25519Public;
+    if (!deriveX25519PublicKey(x25519Secret, &x25519Public)) {
+        if (errorOut) *errorOut = QStringLiteral("Failed to derive Slatepack decryption identity.");
+        return false;
+    }
+
+    int offset = QByteArrayLiteral("age-encryption.org/v1\n").size();
+    QByteArray headerWithoutMac = QByteArrayLiteral("age-encryption.org/v1\n");
+    QList<AgeStanza> stanzas;
+    QByteArray headerMac;
+
+    while (offset < payload.size()) {
+        const int lineEnd = payload.indexOf('\n', offset);
+        if (lineEnd < 0) {
+            if (errorOut) *errorOut = QStringLiteral("Age header is truncated.");
+            return false;
+        }
+
+        const QByteArray line = payload.mid(offset, lineEnd - offset + 1);
+        offset = lineEnd + 1;
+
+        if (line.startsWith("---")) {
+            const QList<QByteArray> footerParts = line.trimmed().split(' ');
+            if (footerParts.size() != 2) {
+                if (errorOut) *errorOut = QStringLiteral("Age footer is malformed.");
+                return false;
+            }
+            headerWithoutMac.append("---");
+            headerMac = decodeBase64Raw(QString::fromUtf8(footerParts.at(1)));
+            if (headerMac.size() != 32) {
+                if (errorOut) *errorOut = QStringLiteral("Age header MAC is malformed.");
+                return false;
+            }
+            break;
+        }
+
+        if (!line.startsWith("-> ")) {
+            if (errorOut) *errorOut = QStringLiteral("Age recipient stanza is malformed.");
+            return false;
+        }
+
+        headerWithoutMac.append(line);
+        const QList<QByteArray> parts = line.trimmed().split(' ');
+        if (parts.size() < 2) {
+            if (errorOut) *errorOut = QStringLiteral("Age recipient stanza is incomplete.");
+            return false;
+        }
+
+        AgeStanza stanza;
+        stanza.type = QString::fromUtf8(parts.at(1));
+        for (int i = 2; i < parts.size(); ++i) {
+            stanza.args.append(QString::fromUtf8(parts.at(i)));
+        }
+
+        while (offset < payload.size()) {
+            const int bodyLineEnd = payload.indexOf('\n', offset);
+            if (bodyLineEnd < 0) {
+                if (errorOut) *errorOut = QStringLiteral("Age stanza body is truncated.");
+                return false;
+            }
+
+            const QByteArray bodyLine = payload.mid(offset, bodyLineEnd - offset + 1);
+            offset = bodyLineEnd + 1;
+            const QByteArray bodyDecoded = decodeBase64Raw(QString::fromUtf8(bodyLine.trimmed()));
+            if (bodyDecoded.isEmpty() && !bodyLine.trimmed().isEmpty()) {
+                if (errorOut) *errorOut = QStringLiteral("Age stanza body contains invalid base64.");
+                return false;
+            }
+
+            stanza.body.append(bodyDecoded);
+            headerWithoutMac.append(bodyLine);
+            if (bodyLine.trimmed().size() < 64) {
+                break;
+            }
+        }
+
+        stanzas.append(stanza);
+    }
+
+    if (headerMac.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("Age header MAC is missing.");
+        return false;
+    }
+
+    QByteArray fileKey;
+    if (!unwrapAgeFileKey(stanzas, x25519Secret, x25519Public, &fileKey)) {
+        if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack is not addressed to this wallet.");
+        return false;
+    }
+
+    const QByteArray expectedHeaderMac = QMessageAuthenticationCode::hash(
+        headerWithoutMac,
+        hkdfSha256(fileKey, QByteArray(), QByteArrayLiteral("header"), 32),
+        QCryptographicHash::Sha256);
+    if (expectedHeaderMac != headerMac) {
+        if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack header authentication failed.");
+        return false;
+    }
+
+    if (offset + kAgePayloadNonceSize > payload.size()) {
+        if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack payload nonce is truncated.");
+        return false;
+    }
+
+    const QByteArray streamNonceSeed = payload.mid(offset, kAgePayloadNonceSize);
+    offset += kAgePayloadNonceSize;
+    const QByteArray streamKey = hkdfSha256(fileKey, streamNonceSeed, QByteArrayLiteral("payload"), 32);
+    const QByteArray encryptedStream = payload.mid(offset);
+    if (encryptedStream.isEmpty()) {
+        if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack payload is empty.");
+        return false;
+    }
+
+    QByteArray streamNonce(12, '\0');
+    QByteArray decrypted;
+    int streamOffset = 0;
+    while (streamOffset < encryptedStream.size()) {
+        const int remaining = encryptedStream.size() - streamOffset;
+        const int chunkSize = qMin(kAgeChunkSize + kChaChaOverhead, remaining);
+        const QByteArray chunk = encryptedStream.mid(streamOffset, chunkSize);
+
+        QByteArray plaintext;
+        QByteArray tryNonce = streamNonce;
+        bool lastChunk = chunkSize < (kAgeChunkSize + kChaChaOverhead);
+        if (lastChunk) {
+            tryNonce[11] = 0x01;
+        }
+
+        bool ok = chacha20Poly1305Decrypt(streamKey, tryNonce, chunk, &plaintext);
+        if (!ok && !lastChunk && chunkSize == (kAgeChunkSize + kChaChaOverhead)) {
+            tryNonce = streamNonce;
+            tryNonce[11] = 0x01;
+            ok = chacha20Poly1305Decrypt(streamKey, tryNonce, chunk, &plaintext);
+            lastChunk = ok;
+        }
+
+        if (!ok) {
+            if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack payload authentication failed.");
+            return false;
+        }
+
+        decrypted.append(plaintext);
+        streamOffset += chunkSize;
+        if (lastChunk) {
+            if (streamOffset != encryptedStream.size()) {
+                if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack contains trailing payload data.");
+                return false;
+            }
+            *plaintextOut = decrypted;
+            return true;
+        }
+
+        if (!incrementStreamNonce(&streamNonce)) {
+            if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack nonce overflowed.");
+            return false;
+        }
+    }
+
+    if (errorOut) *errorOut = QStringLiteral("Encrypted Slatepack payload ended unexpectedly.");
+    return false;
+}
+#endif
 
 QString formatUuid(const QByteArray &bytes)
 {
@@ -243,13 +688,122 @@ bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, 
     return true;
 }
 
+bool finalizeDecodedSlatePayload(const QByteArray &payload,
+                                 const QString &senderAddress,
+                                 const QStringList &recipients,
+                                 QString *decodedOut,
+                                 QString *errorOut)
+{
+    QString decoded;
+    if (!decodeSlateV4BinaryPayload(payload, &decoded, errorOut)) {
+        const QJsonDocument jsonDocument = QJsonDocument::fromJson(payload);
+        if (!jsonDocument.isObject()) {
+            return false;
+        }
+        decoded = QString::fromUtf8(jsonDocument.toJson(QJsonDocument::Indented));
+    }
+
+    QJsonDocument document = QJsonDocument::fromJson(decoded.toUtf8());
+    if (!document.isObject()) {
+        if (decodedOut) {
+            *decodedOut = decoded;
+        }
+        return true;
+    }
+
+    QJsonObject object = document.object();
+    if (!senderAddress.trimmed().isEmpty()) {
+        object.insert(QStringLiteral("slatepack_sender"), senderAddress.trimmed());
+    }
+    if (!recipients.isEmpty()) {
+        QJsonArray recipientArray;
+        for (int i = 0; i < recipients.size(); ++i) {
+            recipientArray.append(recipients.at(i));
+        }
+        object.insert(QStringLiteral("slatepack_recipients"), recipientArray);
+    }
+
+    if (decodedOut) {
+        *decodedOut = QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Indented));
+    }
+    return true;
 }
 
-bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload, QString *decodedOut, QString *errorOut)
+bool decodeJsonSlatepackPayload(const QJsonObject &object,
+                                const QByteArray &decryptionKey,
+                                QString *decodedOut,
+                                QString *errorOut)
+{
+    const int mode = object.value(QStringLiteral("mode")).toInt(0);
+    const QString sender = object.value(QStringLiteral("sender")).toString().trimmed();
+    const QByteArray payloadBytes = QByteArray::fromBase64(object.value(QStringLiteral("payload")).toString().toUtf8());
+
+    if (mode == 0) {
+        return finalizeDecodedSlatePayload(payloadBytes, sender, QStringList(), decodedOut, errorOut);
+    }
+
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+    if (!decryptionKey.isEmpty()) {
+        QByteArray decryptedPayload;
+        QString decryptError;
+        if (!decryptAgePayload(payloadBytes, decryptionKey, &decryptedPayload, &decryptError)) {
+            if (errorOut) {
+                *errorOut = decryptError.isEmpty()
+                    ? QStringLiteral("Encrypted JSON Slatepack decryption failed.")
+                    : decryptError;
+            }
+            return false;
+        }
+
+        DecryptedSlatepackPayload unpacked;
+        if (!extractDecryptedSlatepackPayload(decryptedPayload, &unpacked, errorOut)) {
+            return false;
+        }
+        return finalizeDecodedSlatePayload(
+            unpacked.payload,
+            unpacked.sender.trimmed().isEmpty() ? sender : unpacked.sender,
+            unpacked.recipients,
+            decodedOut,
+            errorOut);
+    }
+#endif
+
+    QJsonObject encrypted;
+    encrypted.insert(QStringLiteral("encrypted_slatepack"), true);
+    encrypted.insert(QStringLiteral("major"), 1);
+    encrypted.insert(QStringLiteral("minor"), 0);
+    encrypted.insert(QStringLiteral("mode"), mode);
+    encrypted.insert(QStringLiteral("payload_size"), static_cast<qint64>(payloadBytes.size()));
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+    encrypted.insert(QStringLiteral("note"),
+                     QStringLiteral("Encrypted JSON Slatepack was recognized, but the wallet is currently locked or no matching decryption key is available."));
+#else
+    encrypted.insert(QStringLiteral("note"),
+                     QStringLiteral("Encrypted JSON Slatepack was recognized, but this build does not support recipient decryption yet."));
+#endif
+    if (decodedOut) {
+        *decodedOut = QString::fromUtf8(QJsonDocument(encrypted).toJson(QJsonDocument::Indented));
+    }
+    return true;
+}
+
+}
+
+bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload,
+                                                 const QByteArray &decryptionKey,
+                                                 QString *decodedOut,
+                                                 QString *errorOut)
 {
     const QJsonDocument doc = QJsonDocument::fromJson(payload);
     if (doc.isObject()) {
-        const QString inner = QString::fromUtf8(QByteArray::fromBase64(doc.object().value(QStringLiteral("payload")).toString().toUtf8()));
+        const QJsonObject object = doc.object();
+        if (object.contains(QStringLiteral("slatepack"))
+            && object.contains(QStringLiteral("mode"))
+            && object.contains(QStringLiteral("payload"))) {
+            return decodeJsonSlatepackPayload(object, decryptionKey, decodedOut, errorOut);
+        }
+
+        const QString inner = QString::fromUtf8(QByteArray::fromBase64(object.value(QStringLiteral("payload")).toString().toUtf8()));
         if (!inner.isEmpty()) {
             if (decodedOut) {
                 *decodedOut = inner;
@@ -291,11 +845,49 @@ bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload, QStr
     }
 
     if (mode != 0) {
-        if (errorOut) {
-            *errorOut = QStringLiteral("Encrypted Slatepack v%1.%2 was recognized, but decryption is not implemented yet.")
-                .arg(QString::number(major), QString::number(minor));
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+        if (!decryptionKey.isEmpty()) {
+            QByteArray decryptedPayload;
+            QString decryptError;
+            if (decryptAgePayload(innerPayload, decryptionKey, &decryptedPayload, &decryptError)) {
+                DecryptedSlatepackPayload unpacked;
+                if (!extractDecryptedSlatepackPayload(decryptedPayload, &unpacked, errorOut)) {
+                    return false;
+                }
+                return finalizeDecodedSlatePayload(unpacked.payload,
+                                                   unpacked.sender,
+                                                   unpacked.recipients,
+                                                   decodedOut,
+                                                   errorOut);
+            }
+            if (errorOut) {
+                *errorOut = decryptError.isEmpty()
+                    ? QStringLiteral("Encrypted Slatepack decryption failed.")
+                    : decryptError;
+            }
+            return false;
         }
-        return false;
+#endif
+        QJsonObject encrypted;
+        encrypted.insert(QStringLiteral("encrypted_slatepack"), true);
+        encrypted.insert(QStringLiteral("major"), static_cast<int>(major));
+        encrypted.insert(QStringLiteral("minor"), static_cast<int>(minor));
+        encrypted.insert(QStringLiteral("mode"), static_cast<int>(mode));
+        encrypted.insert(QStringLiteral("opt_flags"), static_cast<int>(optFlags));
+        encrypted.insert(QStringLiteral("payload_size"), static_cast<qint64>(payloadSize));
+#ifndef GRIN_HAS_SLATEPACK_CRYPTO
+        encrypted.insert(QStringLiteral("note"),
+                         QStringLiteral("Encrypted Slatepack v%1.%2 was recognized, but this build does not support recipient decryption yet.")
+                             .arg(QString::number(major), QString::number(minor)));
+#else
+        encrypted.insert(QStringLiteral("note"),
+                         QStringLiteral("Encrypted Slatepack v%1.%2 was recognized, but the wallet is currently locked or no matching decryption key is available.")
+                             .arg(QString::number(major), QString::number(minor)));
+#endif
+        if (decodedOut) {
+            *decodedOut = QString::fromUtf8(QJsonDocument(encrypted).toJson(QJsonDocument::Indented));
+        }
+        return true;
     }
 
     return decodeSlateV4BinaryPayload(innerPayload, decodedOut, errorOut);

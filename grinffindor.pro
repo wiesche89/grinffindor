@@ -17,6 +17,7 @@ SOURCES += src/main.cpp \
            src/wallet/binaryslatev4reader.cpp \
            src/wallet/binaryslatev4writer.cpp \
            src/wallet/walletcryptobackend.cpp \
+           3rdparty/monocypher/monocypher.c \
            3rdparty/secp256k1-zkp/src/secp256k1.c
 
 HEADERS += src/nodefooterstatus.h \
@@ -34,7 +35,10 @@ HEADERS += src/nodefooterstatus.h \
 
 INCLUDEPATH += $$PWD/3rdparty/secp256k1-zkp \
                $$PWD/3rdparty/secp256k1-zkp/include \
-               $$PWD/3rdparty/secp256k1-zkp/src
+               $$PWD/3rdparty/secp256k1-zkp/src \
+               $$PWD/3rdparty/monocypher
+
+DEFINES += GRIN_HAS_SLATEPACK_CRYPTO
 
 DEFINES += HAVE_CONFIG_H
 

@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QGuiApplication>
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -16,6 +17,8 @@
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QTimer>
+#include <QClipboard>
+#include <QUrl>
 #include <QVector>
 #include <cstdlib>
 #include <algorithm>
@@ -70,6 +73,20 @@ const char *kWalletLocalStorageKey = "grinffindor.browserWallet";
 const int kMnemonicEntropyBytes = 32;
 const char *kBase58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const char *kFixedNodeUrl = "https://mainnet.grinffindor.org/v2/foreign";
+
+QString defaultNodeUrl()
+{
+    return QString::fromUtf8(kFixedNodeUrl);
+}
+
+bool isNodeUrlAccepted(const QString &nodeUrl)
+{
+    const QUrl parsed = QUrl::fromUserInput(nodeUrl.trimmed());
+    return parsed.isValid()
+        && !parsed.scheme().trimmed().isEmpty()
+        && !parsed.host().trimmed().isEmpty()
+        && (parsed.scheme() == QStringLiteral("http") || parsed.scheme() == QStringLiteral("https"));
+}
 
 QString storageRootPath()
 {
@@ -135,6 +152,9 @@ QJsonObject defaultDocument()
 
     QJsonObject root;
     root.insert(QStringLiteral("wallet"), QJsonObject());
+    QJsonObject nodeConfig;
+    nodeConfig.insert(QStringLiteral("url"), defaultNodeUrl());
+    root.insert(QStringLiteral("node"), nodeConfig);
     root.insert(QStringLiteral("wallet_state"), walletState);
     root.insert(QStringLiteral("workflow_contexts"), QJsonObject());
     return root;
@@ -357,7 +377,7 @@ bool validateMnemonicValue(const QString &mnemonic)
     return entropyFromMnemonic(mnemonic, 0);
 }
 
-QByteArray deriveKeyMaterial(const QString &password, const QByteArray &salt)
+QByteArray deriveLegacyKeyMaterial(const QString &password, const QByteArray &salt)
 {
     const QByteArray material = password.toUtf8() + salt;
     QByteArray digest = QCryptographicHash::hash(material, QCryptographicHash::Sha256);
@@ -383,16 +403,43 @@ QByteArray xorStream(const QByteArray &data, const QByteArray &key, const QByteA
     return output;
 }
 
+QByteArray deriveKeyMaterialV2(const QString &password, const QByteArray &salt, int iterations, int outputLength)
+{
+    const QByteArray material = password.toUtf8() + salt;
+    QByteArray state = QCryptographicHash::hash(material, QCryptographicHash::Sha512);
+    for (int i = 0; i < iterations; ++i) {
+        state = QCryptographicHash::hash(state + material + QByteArray::number(i), QCryptographicHash::Sha512);
+    }
+
+    QByteArray output;
+    output.reserve(outputLength);
+    QByteArray blockSeed = state;
+    quint32 counter = 0;
+    while (output.size() < outputLength) {
+        blockSeed = QCryptographicHash::hash(
+            blockSeed + material + QByteArray::number(counter++),
+            QCryptographicHash::Sha512);
+        output.append(blockSeed);
+    }
+    output.truncate(outputLength);
+    return output;
+}
+
 QJsonObject encryptMnemonic(const QString &mnemonic, const QString &password)
 {
     const QByteArray salt = randomBytes(16);
-    const QByteArray nonce = randomBytes(16);
-    const QByteArray key = deriveKeyMaterial(password, salt);
+    const QByteArray nonce = randomBytes(24);
+    const int iterations = 240000;
+    const QByteArray keyMaterial = deriveKeyMaterialV2(password, salt, iterations, 64);
+    const QByteArray encryptionKey = keyMaterial.left(32);
+    const QByteArray macKey = keyMaterial.mid(32, 32);
     const QByteArray plain = normalizeMnemonic(mnemonic).toUtf8();
-    const QByteArray cipher = xorStream(plain, key, nonce);
-    const QByteArray mac = QCryptographicHash::hash(key + nonce + cipher + key, QCryptographicHash::Sha256);
+    const QByteArray cipher = xorStream(plain, encryptionKey, nonce);
+    const QByteArray mac = QCryptographicHash::hash(macKey + nonce + cipher + macKey, QCryptographicHash::Sha256);
 
     QJsonObject encrypted;
+    encrypted.insert(QStringLiteral("version"), 2);
+    encrypted.insert(QStringLiteral("kdf_iterations"), iterations);
     encrypted.insert(QStringLiteral("salt"), QString::fromUtf8(salt.toBase64()));
     encrypted.insert(QStringLiteral("nonce"), QString::fromUtf8(nonce.toBase64()));
     encrypted.insert(QStringLiteral("cipher"), QString::fromUtf8(cipher.toBase64()));
@@ -402,17 +449,30 @@ QJsonObject encryptMnemonic(const QString &mnemonic, const QString &password)
 
 bool decryptMnemonic(const QJsonObject &encrypted, const QString &password, QString *mnemonicOut)
 {
+    const int version = encrypted.value(QStringLiteral("version")).toInt(1);
     const QByteArray salt = QByteArray::fromBase64(encrypted.value(QStringLiteral("salt")).toString().toUtf8());
     const QByteArray nonce = QByteArray::fromBase64(encrypted.value(QStringLiteral("nonce")).toString().toUtf8());
     const QByteArray cipher = QByteArray::fromBase64(encrypted.value(QStringLiteral("cipher")).toString().toUtf8());
     const QByteArray mac = QByteArray::fromBase64(encrypted.value(QStringLiteral("mac")).toString().toUtf8());
-    const QByteArray key = deriveKeyMaterial(password, salt);
-    const QByteArray expectedMac = QCryptographicHash::hash(key + nonce + cipher + key, QCryptographicHash::Sha256);
+    QByteArray encryptionKey;
+    QByteArray macKey;
+    if (version >= 2) {
+        const int iterations = std::max(1, encrypted.value(QStringLiteral("kdf_iterations")).toInt(240000));
+        const QByteArray keyMaterial = deriveKeyMaterialV2(password, salt, iterations, 64);
+        encryptionKey = keyMaterial.left(32);
+        macKey = keyMaterial.mid(32, 32);
+    } else {
+        const QByteArray legacyKey = deriveLegacyKeyMaterial(password, salt);
+        encryptionKey = legacyKey;
+        macKey = legacyKey;
+    }
+
+    const QByteArray expectedMac = QCryptographicHash::hash(macKey + nonce + cipher + macKey, QCryptographicHash::Sha256);
     if (expectedMac != mac) {
         return false;
     }
 
-    const QString mnemonic = normalizeMnemonic(QString::fromUtf8(xorStream(cipher, key, nonce)));
+    const QString mnemonic = normalizeMnemonic(QString::fromUtf8(xorStream(cipher, encryptionKey, nonce)));
     if (!validateMnemonicValue(mnemonic)) {
         return false;
     }
@@ -549,6 +609,11 @@ QString encodeSlatepackArmor(const QString &payloadJson, const QString &sender)
     return QStringLiteral("BEGINSLATEPACK. %1. ENDSLATEPACK.\n").arg(formatArmored(encodeBase58(checksum + serialized)));
 }
 
+QString userFacingSlatepackParseNote(const QString &parseError);
+QString buildSlatepackDiagnostic(const QString &kind,
+                                 const QByteArray &payload,
+                                 const QString &note);
+
 QString decodeSlatepackArmor(const QString &slatepack)
 {
     QString cleaned = slatepack;
@@ -576,17 +641,91 @@ QString decodeSlatepackArmor(const QString &slatepack)
 
     QString decodedPayload;
     QString parseError;
-    if (!BinarySlateV4Reader::decodeSlatepackPayload(payload, &decodedPayload, &parseError)) {
-        QJsonObject external;
-        external.insert(QStringLiteral("external_slatepack"), true);
-        external.insert(QStringLiteral("payload_size"), payload.size());
-        external.insert(QStringLiteral("payload_hex_preview"), QString::fromUtf8(payload.left(96).toHex()));
-        external.insert(QStringLiteral("note"), parseError.isEmpty()
-            ? QStringLiteral("Recognized armored binary Slatepack, but payload parsing failed.")
-            : parseError);
-        return QString::fromUtf8(QJsonDocument(external).toJson(QJsonDocument::Indented));
+    if (!BinarySlateV4Reader::decodeSlatepackPayload(payload, QByteArray(), &decodedPayload, &parseError)) {
+        return buildSlatepackDiagnostic(QStringLiteral("armored"), payload, parseError);
     }
     return decodedPayload;
+}
+
+QString userFacingSlatepackParseNote(const QString &parseError)
+{
+    const QString trimmed = parseError.trimmed();
+    if (trimmed.isEmpty()) {
+        return QStringLiteral("Slatepack payload could not be parsed.");
+    }
+
+    if (trimmed.contains(QStringLiteral("Wallet secret is unavailable"), Qt::CaseInsensitive)) {
+        return QStringLiteral("This Slatepack is encrypted. Unlock the wallet that owns the recipient address before decoding it.");
+    }
+    if (trimmed.contains(QStringLiteral("not addressed to this wallet"), Qt::CaseInsensitive)) {
+        return QStringLiteral("This Slatepack is encrypted for a different recipient wallet.");
+    }
+    if (trimmed.contains(QStringLiteral("authentication failed"), Qt::CaseInsensitive)
+        || trimmed.contains(QStringLiteral("invalid base64"), Qt::CaseInsensitive)
+        || trimmed.contains(QStringLiteral("truncated"), Qt::CaseInsensitive)
+        || trimmed.contains(QStringLiteral("malformed"), Qt::CaseInsensitive)) {
+        return QStringLiteral("The Slatepack looks damaged or incomplete. Copy it again and make sure no characters are missing.");
+    }
+
+    return trimmed;
+}
+
+QString buildSlatepackDiagnostic(const QString &kind,
+                                const QByteArray &payload,
+                                const QString &note)
+{
+    QJsonObject diagnostic;
+    diagnostic.insert(QStringLiteral("external_slatepack"), true);
+    diagnostic.insert(QStringLiteral("diagnostic_kind"), kind);
+    diagnostic.insert(QStringLiteral("payload_size"), payload.size());
+    diagnostic.insert(QStringLiteral("payload_hex_preview"), QString::fromUtf8(payload.left(96).toHex()));
+    diagnostic.insert(QStringLiteral("note"), userFacingSlatepackParseNote(note));
+    return QString::fromUtf8(QJsonDocument(diagnostic).toJson(QJsonDocument::Indented));
+}
+
+QString decodeIncomingSlatepack(const QString &input, const QByteArray &decryptionKey)
+{
+    const QString trimmed = input.trimmed();
+    if (trimmed.isEmpty()) {
+        return QString();
+    }
+
+    const QJsonDocument jsonDocument = QJsonDocument::fromJson(trimmed.toUtf8());
+    if (jsonDocument.isObject()) {
+        QString decodedPayload;
+        QString parseError;
+        if (BinarySlateV4Reader::decodeSlatepackPayload(trimmed.toUtf8(), decryptionKey, &decodedPayload, &parseError)) {
+            return decodedPayload;
+        }
+
+        const QJsonObject object = jsonDocument.object();
+        if (object.contains(QStringLiteral("slatepack")) || object.contains(QStringLiteral("payload"))) {
+            const QByteArray payload = QByteArray::fromBase64(object.value(QStringLiteral("payload")).toString().toUtf8());
+            return buildSlatepackDiagnostic(QStringLiteral("json"), payload, parseError);
+        }
+
+        return QString::fromUtf8(jsonDocument.toJson(QJsonDocument::Indented));
+    }
+
+    QString cleaned = trimmed;
+    cleaned.remove(QRegularExpression(QStringLiteral("[>\\n\\r\\t ]")));
+    const QStringList parts = cleaned.split(QLatin1Char('.'), Qt::SkipEmptyParts);
+    if (parts.size() >= 3
+        && parts.at(0) == QStringLiteral("BEGINSLATEPACK")
+        && parts.at(2) == QStringLiteral("ENDSLATEPACK")) {
+        const QByteArray decoded = decodeBase58(parts.at(1));
+        if (decoded.size() >= 5) {
+            const QByteArray payload = decoded.mid(4);
+            QString decodedPayload;
+            QString parseError;
+            if (BinarySlateV4Reader::decodeSlatepackPayload(payload, decryptionKey, &decodedPayload, &parseError)) {
+                return decodedPayload;
+            }
+            return buildSlatepackDiagnostic(QStringLiteral("armored"), payload, parseError);
+        }
+    }
+
+    return decodeSlatepackArmor(trimmed);
 }
 
 } // namespace
@@ -671,10 +810,48 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
         setLastError(QStringLiteral("Wallet name and password are required."));
         return;
     }
-    importWallet(walletName, generateMnemonic(), password);
+
+    const QString mnemonic = generateMnemonic();
+    if (mnemonic.isEmpty()) {
+        setLastError(QStringLiteral("Failed to generate a valid seed phrase."));
+        return;
+    }
+
+    QJsonObject document = defaultDocument();
+    QJsonObject wallet;
+    wallet.insert(QStringLiteral("name"), walletName.trimmed());
+    wallet.insert(QStringLiteral("seed_fingerprint"), seedFingerprintForMnemonic(mnemonic));
+    wallet.insert(QStringLiteral("encrypted_seed"), encryptMnemonic(mnemonic, password));
+    wallet.insert(QStringLiteral("created_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+    wallet.insert(QStringLiteral("seed_origin"), QStringLiteral("generated"));
+    document.insert(QStringLiteral("wallet"), wallet);
+
+    if (!saveDocument(document)) {
+        setLastError(QStringLiteral("Failed to persist wallet in browser storage."));
+        return;
+    }
+
+    m_walletExists = true;
+    m_walletUnlocked = true;
+    m_walletName = walletName.trimmed();
+    m_sessionMnemonic = mnemonic;
+    m_mnemonicPreview = mnemonic;
+    m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
+    emit walletChanged();
+    refreshStateFromStorage();
+    setLastError(QString());
+    setLastInfo(QStringLiteral("Wallet created locally. Save the seed phrase now - it will not be shown again after this session."));
+    if (m_scanHeight == 0) {
+        rescanWallet();
+    }
 }
 
 void GrinWalletController::importWallet(const QString &walletName, const QString &mnemonic, const QString &password)
+{
+    restoreWallet(walletName, mnemonic, password);
+}
+
+void GrinWalletController::restoreWallet(const QString &walletName, const QString &mnemonic, const QString &password)
 {
     const QString normalizedMnemonic = normalizeMnemonic(mnemonic);
     if (walletName.trimmed().isEmpty() || password.isEmpty()) {
@@ -686,12 +863,13 @@ void GrinWalletController::importWallet(const QString &walletName, const QString
         return;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = defaultDocument();
     QJsonObject wallet;
     wallet.insert(QStringLiteral("name"), walletName.trimmed());
     wallet.insert(QStringLiteral("seed_fingerprint"), seedFingerprintForMnemonic(normalizedMnemonic));
     wallet.insert(QStringLiteral("encrypted_seed"), encryptMnemonic(normalizedMnemonic, password));
     wallet.insert(QStringLiteral("created_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+    wallet.insert(QStringLiteral("seed_origin"), QStringLiteral("restored"));
     document.insert(QStringLiteral("wallet"), wallet);
 
     if (!saveDocument(document)) {
@@ -702,11 +880,16 @@ void GrinWalletController::importWallet(const QString &walletName, const QString
     m_walletExists = true;
     m_walletUnlocked = true;
     m_walletName = walletName.trimmed();
-    m_mnemonicPreview = normalizedMnemonic;
+    m_sessionMnemonic = normalizedMnemonic;
+    m_mnemonicPreview.clear();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
     emit walletChanged();
     refreshStateFromStorage();
-    setLastInfo(QStringLiteral("Wallet stored locally. Seed never leaves the browser runtime."));
+    setLastError(QString());
+    setLastInfo(QStringLiteral("Wallet restored locally. Seed is encrypted in local storage and stays hidden after setup."));
+    if (m_scanHeight == 0) {
+        rescanWallet();
+    }
 }
 
 void GrinWalletController::unlockWallet(const QString &password)
@@ -723,17 +906,78 @@ void GrinWalletController::unlockWallet(const QString &password)
     m_walletUnlocked = true;
     m_walletName = wallet.value(QStringLiteral("name")).toString();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
-    m_mnemonicPreview = mnemonic;
+    m_sessionMnemonic = mnemonic;
+    m_mnemonicPreview.clear();
     emit walletChanged();
+    setLastError(QString());
     setLastInfo(QStringLiteral("Wallet unlocked locally."));
+    if (m_scanHeight == 0) {
+        rescanWallet();
+    }
 }
 
 void GrinWalletController::lockWallet()
 {
     m_walletUnlocked = false;
+    m_sessionMnemonic.clear();
     m_mnemonicPreview.clear();
     emit walletChanged();
     setLastInfo(QStringLiteral("Wallet locked. Seed material cleared from the UI state."));
+}
+
+void GrinWalletController::dismissMnemonicPreview()
+{
+    if (m_mnemonicPreview.isEmpty()) {
+        return;
+    }
+
+    m_mnemonicPreview.clear();
+    emit walletChanged();
+    setLastInfo(QStringLiteral("Seed phrase hidden. Use your password to unlock the wallet next time."));
+}
+
+void GrinWalletController::deleteWallet()
+{
+    if (!saveDocument(defaultDocument())) {
+        setLastError(QStringLiteral("Failed to delete the local wallet configuration."));
+        return;
+    }
+
+    clearWorkflow();
+    loadFromStorage();
+    setLastError(QString());
+    setLastInfo(QStringLiteral("Local wallet configuration deleted. You can now create or restore a wallet."));
+}
+
+bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
+{
+    const QString trimmed = nodeUrl.trimmed();
+    if (!isNodeUrlAccepted(trimmed)) {
+        setLastError(QStringLiteral("Node URL must be a valid http or https endpoint."));
+        return false;
+    }
+
+    QJsonObject document = loadDocument();
+    QJsonObject node = document.value(QStringLiteral("node")).toObject();
+    node.insert(QStringLiteral("url"), trimmed);
+    document.insert(QStringLiteral("node"), node);
+    if (!saveDocument(document)) {
+        setLastError(QStringLiteral("Failed to persist node settings."));
+        return false;
+    }
+
+    m_nodeUrl = trimmed;
+    emit nodeConfigChanged();
+    connectNodeClient();
+    setLastError(QString());
+    setLastInfo(QStringLiteral("External node updated. Reconnecting to %1").arg(trimmed));
+    refreshNodeStatus();
+    return true;
+}
+
+void GrinWalletController::resetNodeUrl()
+{
+    setNodeUrl(defaultNodeUrl());
 }
 
 void GrinWalletController::refreshNodeStatus()
@@ -752,7 +996,7 @@ void GrinWalletController::refreshNodeStatus()
 
 void GrinWalletController::syncWallet()
 {
-    if (!m_walletUnlocked || m_mnemonicPreview.trimmed().isEmpty()) {
+    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
         setLastError(QStringLiteral("Unlock the wallet before running a wallet sync."));
         setLastInfo(QStringLiteral("Wallet sync was skipped because the wallet is locked."));
         return;
@@ -768,7 +1012,7 @@ void GrinWalletController::syncWallet()
 
 void GrinWalletController::rescanWallet()
 {
-    if (!m_walletUnlocked || m_mnemonicPreview.trimmed().isEmpty()) {
+    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
         setLastError(QStringLiteral("Unlock the wallet before starting a full rescan."));
         setLastInfo(QStringLiteral("Full rescan was skipped because the wallet is locked."));
         return;
@@ -781,21 +1025,12 @@ void GrinWalletController::rescanWallet()
 
     QJsonObject document = loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-    for (int i = 0; i < outputs.size(); ++i) {
-        outputs[i].onChain = false;
-        outputs[i].height = 0;
-        outputs[i].spent = false;
-        outputs[i].locked = false;
-        outputs[i].pending = false;
-        outputs[i].workflowId.clear();
-    }
     QJsonObject balances;
     balances.insert(QStringLiteral("total"), QStringLiteral("0.000000000"));
     balances.insert(QStringLiteral("spendable"), QStringLiteral("0.000000000"));
     balances.insert(QStringLiteral("locked"), QStringLiteral("0.000000000"));
     balances.insert(QStringLiteral("immature"), QStringLiteral("0.000000000"));
-    walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
+    walletState.insert(QStringLiteral("outputs"), QJsonArray());
     walletState.insert(QStringLiteral("balances"), balances);
     walletState.insert(QStringLiteral("transactions"), QJsonArray());
     walletState.insert(QStringLiteral("scan_height"), 0);
@@ -829,8 +1064,14 @@ QString GrinWalletController::requestPasteText() const
         "})()");
     return QString::fromUtf8(value ? value : "");
 #else
-    return QString();
+    const QClipboard *clipboard = QGuiApplication::clipboard();
+    return clipboard ? clipboard->text() : QString();
 #endif
+}
+
+bool GrinWalletController::isValidNodeUrl(const QString &nodeUrl) const
+{
+    return isNodeUrlAccepted(nodeUrl);
 }
 
 QString GrinWalletController::createSlatepackTemplate(const QString &sender) const
@@ -961,13 +1202,19 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
         slate.commitments.append(invoiceCommit);
         storeOwnedOutput(invoiceOutput);
     } else {
-        slate.commitments.append(WalletCryptoBackend::createCommitment(m_seedFingerprint, slate.id, QStringLiteral("invoice"), slate.amount));
-        if (!slate.commitments.isEmpty()) {
-            storeOwnedOutput(QStringLiteral("invoice"), slate.amount, slate.commitments.first());
+        const WalletCryptoBackend::CommitmentResult fallbackCommit =
+            WalletCryptoBackend::createCommitment(m_seedFingerprint, slate.id, QStringLiteral("invoice"), slate.amount);
+        if (!fallbackCommit.success) {
+            setLastError(!outputError.isEmpty()
+                ? QStringLiteral("Failed to derive invoice output: %1").arg(outputError)
+                : (fallbackCommit.error.isEmpty()
+                    ? QStringLiteral("Failed to create invoice commitment.")
+                    : fallbackCommit.error));
+            return;
         }
-        if (!outputError.isEmpty()) {
-            setLastInfo(QStringLiteral("Invoice output fallback used: %1").arg(outputError));
-        }
+
+        slate.commitments.append(fallbackCommit.commit);
+        storeOwnedOutput(QStringLiteral("invoice"), slate.amount, fallbackCommit.commit);
     }
     slate.hasPaymentProof = true;
     slate.paymentProof = WalletCryptoBackend::createPaymentProof(receiverContext, receiverContext);
@@ -992,7 +1239,15 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
 
 void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
 {
-    const QString decoded = decodeSlatepackArmor(slatepack);
+    QByteArray decryptionKey;
+    if (m_walletUnlocked && !m_sessionMnemonic.trimmed().isEmpty()) {
+        const WalletKeychain keychain(m_sessionMnemonic);
+        if (keychain.isValid()) {
+            decryptionKey = keychain.slatepackSecretKey();
+        }
+    }
+
+    const QString decoded = decodeIncomingSlatepack(slatepack, decryptionKey);
     if (decoded.isEmpty()) {
         setLastError(QStringLiteral("Incoming Slatepack could not be decoded."));
         return;
@@ -1003,13 +1258,32 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         setLastError(QStringLiteral("Decoded Slatepack is not valid JSON."));
         return;
     }
+    if (document.object().value(QStringLiteral("encrypted_slatepack")).toBool()) {
+        const QString info = document.object().value(QStringLiteral("note")).toString(
+            QStringLiteral("Encrypted Slatepacks are not supported yet."));
+        setLastError(info);
+        setWorkflow(QString(), QString(), QString(), slatepack, QString::fromUtf8(document.toJson(QJsonDocument::Indented)));
+        return;
+    }
     if (document.object().value(QStringLiteral("external_slatepack")).toBool()) {
-        setLastError(QStringLiteral("Incoming Slatepack armor was recognized, but binary Grin Slatepack deserialization is not implemented yet."));
+        setLastError(document.object().value(QStringLiteral("note")).toString(
+            QStringLiteral("Incoming Slatepack armor was recognized, but payload parsing failed.")));
         setWorkflow(QString(), QString(), QString(), slatepack, QString::fromUtf8(document.toJson(QJsonDocument::Indented)));
         return;
     }
 
     SlateV4 slate = SlateV4::fromJson(document.object());
+    if (slate.workflowId().isEmpty() && !slate.id.isEmpty() && slate.state != SlateV4::Unknown) {
+        slate.metadata.insert(QStringLiteral("workflow_id"), slate.id);
+        slate.metadata.insert(QStringLiteral("workflow"),
+                              slate.metadata.value(QStringLiteral("external_binary")).toBool()
+                                  ? QStringLiteral("external-grin-slatepack")
+                                  : QStringLiteral("imported-slatepack"));
+    }
+    if (slate.network().trimmed().isEmpty()) {
+        slate.metadata.insert(QStringLiteral("network"), QStringLiteral("mainnet"));
+    }
+
     const QString workflowId = slate.workflowId();
     const QString mode = slate.modeCode();
     const QString state = slate.stateCode();
@@ -1077,10 +1351,18 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
     const QString nextState = slate.stateCode();
     const bool externalBinary = slate.metadata.value(QStringLiteral("external_binary")).toBool();
     if (!externalBinary && slate.commitments.isEmpty()) {
-        slate.commitments.append(WalletCryptoBackend::createCommitment(
-            m_seedFingerprint, slate.id, mode == QStringLiteral("invoice") ? QStringLiteral("invoice") : QStringLiteral("send"), slate.amount));
-        if (!slate.commitments.isEmpty() && mode == QStringLiteral("invoice")) {
-            storeOwnedOutput(QStringLiteral("invoice"), slate.amount, slate.commitments.first());
+        const WalletCryptoBackend::CommitmentResult commitResult = WalletCryptoBackend::createCommitment(
+            m_seedFingerprint, slate.id, mode == QStringLiteral("invoice") ? QStringLiteral("invoice") : QStringLiteral("send"), slate.amount);
+        if (!commitResult.success) {
+            setLastError(commitResult.error.isEmpty()
+                ? QStringLiteral("Failed to create workflow commitment.")
+                : commitResult.error);
+            return;
+        }
+
+        slate.commitments.append(commitResult.commit);
+        if (mode == QStringLiteral("invoice")) {
+            storeOwnedOutput(QStringLiteral("invoice"), slate.amount, commitResult.commit);
         }
     }
     slate.metadata.insert(QStringLiteral("processed_by"), m_walletName);
@@ -1314,12 +1596,32 @@ void GrinWalletController::cancelTransaction(const QString &workflowId)
 
 QString GrinWalletController::encodeSlatepack(const QString &slateJson, const QString &sender) const
 {
-    return encodeSlatepackArmor(slateJson.trimmed(), sender.trimmed());
+    const QString trimmed = slateJson.trimmed();
+    const QJsonDocument document = QJsonDocument::fromJson(trimmed.toUtf8());
+    if (document.isObject()) {
+        const SlateV4 slate = SlateV4::fromJson(document.object());
+        if (slate.state != SlateV4::Unknown && !slate.id.trimmed().isEmpty()) {
+            QString binarySlatepack;
+            QString writerError;
+            if (BinarySlateV4Writer::encodeSlatepack(slate, &binarySlatepack, &writerError)) {
+                return binarySlatepack;
+            }
+        }
+    }
+
+    return encodeSlatepackArmor(trimmed, sender.trimmed());
 }
 
 QString GrinWalletController::decodeSlatepack(const QString &slatepack) const
 {
-    return decodeSlatepackArmor(slatepack);
+    QByteArray decryptionKey;
+    if (m_walletUnlocked && !m_sessionMnemonic.trimmed().isEmpty()) {
+        const WalletKeychain keychain(m_sessionMnemonic);
+        if (keychain.isValid()) {
+            decryptionKey = keychain.slatepackSecretKey();
+        }
+    }
+    return decodeIncomingSlatepack(slatepack, decryptionKey);
 }
 
 void GrinWalletController::loadFromStorage()
@@ -1330,9 +1632,12 @@ void GrinWalletController::loadFromStorage()
     m_walletExists = !wallet.isEmpty();
     m_walletUnlocked = false;
     m_walletName = wallet.value(QStringLiteral("name")).toString();
+    m_sessionMnemonic.clear();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
     m_mnemonicPreview.clear();
-    m_nodeUrl = QString::fromUtf8(kFixedNodeUrl);
+    const QJsonObject node = document.value(QStringLiteral("node")).toObject();
+    const QString storedNodeUrl = node.value(QStringLiteral("url")).toString();
+    m_nodeUrl = isNodeUrlAccepted(storedNodeUrl) ? storedNodeUrl : defaultNodeUrl();
 
     emit walletChanged();
     emit nodeConfigChanged();
@@ -1391,10 +1696,14 @@ void GrinWalletController::connectNodeClient()
         setLastInfo(QStringLiteral("Node tip updated to height %1.").arg(QString::number(m_chainHeight)));
 
         if (m_walletUnlocked
-            && !m_mnemonicPreview.trimmed().isEmpty()
+            && !m_sessionMnemonic.trimmed().isEmpty()
             && !m_walletScanInFlight
             && !m_seedScanActive) {
-            requestWalletScan();
+            if (m_scanHeight == 0) {
+                rescanWallet();
+            } else {
+                requestWalletScan();
+            }
         }
 
         refreshBroadcastStatuses();
@@ -1445,11 +1754,11 @@ void GrinWalletController::connectNodeClient()
             return;
         }
 
-        if (!m_seedScanActive || !m_walletUnlocked || m_mnemonicPreview.trimmed().isEmpty()) {
+        if (!m_seedScanActive || !m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
             return;
         }
 
-        WalletKeychain keychain(m_mnemonicPreview);
+        WalletKeychain keychain(m_sessionMnemonic);
         if (!keychain.isValid()) {
             setLastError(QStringLiteral("Wallet keychain could not be derived for seed scan."));
             m_seedScanActive = false;
@@ -1784,7 +2093,7 @@ bool GrinWalletController::buildOwnedOutput(const QString &source,
         }
         return false;
     }
-    if (!m_walletUnlocked || m_mnemonicPreview.trimmed().isEmpty()) {
+    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
         if (errorOut) {
             *errorOut = QStringLiteral("Wallet must be unlocked to derive owned outputs.");
         }
@@ -1793,7 +2102,7 @@ bool GrinWalletController::buildOwnedOutput(const QString &source,
 
     const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
     const quint32 childIndex = nextChildIndexFromState(walletState);
-    const WalletKeychain keychain(m_mnemonicPreview);
+    const WalletKeychain keychain(m_sessionMnemonic);
     if (!keychain.isValid()) {
         if (errorOut) {
             *errorOut = QStringLiteral("Wallet keychain could not be derived.");
@@ -2162,7 +2471,7 @@ void GrinWalletController::finishSeedScan(const QString &message)
 
 void GrinWalletController::requestWalletScan()
 {
-    if (!m_walletUnlocked || m_mnemonicPreview.trimmed().isEmpty()) {
+    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
         setLastError(QStringLiteral("Unlock the wallet before scanning outputs."));
         return;
     }

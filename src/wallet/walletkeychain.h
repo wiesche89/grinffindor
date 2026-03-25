@@ -29,6 +29,7 @@ public:
 
     bool isValid() const;
     QString masterPublicKey() const;
+    QByteArray slatepackSecretKey() const;
     RewindResult rewindOutputProof(const QString &commitment, const QString &proof) const;
     OutputSecrets deriveOutputSecrets(quint32 childIndex, quint64 amount) const;
 

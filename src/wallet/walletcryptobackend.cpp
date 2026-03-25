@@ -580,7 +580,7 @@ bool verifyPartialSignature(const QByteArray &signature,
 
 bool WalletCryptoBackend::supportsRealGrinTransactions()
 {
-    return false;
+    return true;
 }
 
 WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipant(const QString &walletFingerprint,
@@ -619,17 +619,18 @@ QString WalletCryptoBackend::addOffsets(const QString &leftOffset, const QString
     return QString::fromUtf8(sum.toHex());
 }
 
-SlateV4::Commit WalletCryptoBackend::createCommitment(const QString &walletFingerprint,
-                                                      const QString &workflowId,
-                                                      const QString &roleTag,
-                                                      const QString &amount)
+WalletCryptoBackend::CommitmentResult WalletCryptoBackend::createCommitment(const QString &walletFingerprint,
+                                                                            const QString &workflowId,
+                                                                            const QString &roleTag,
+                                                                            const QString &amount)
 {
-    SlateV4::Commit commit;
-    if (!createCommitmentAndRangeproof(walletFingerprint, workflowId, roleTag, amount, &commit)) {
-        commit.commitment = hashHex(QStringLiteral("fallback-commit:%1:%2:%3").arg(walletFingerprint, workflowId, roleTag));
-        commit.proof = QStringLiteral("unavailable");
+    CommitmentResult result;
+    if (!createCommitmentAndRangeproof(walletFingerprint, workflowId, roleTag, amount, &result.commit)) {
+        result.error = QStringLiteral("Failed to create commitment and rangeproof.");
+        return result;
     }
-    return commit;
+    result.success = true;
+    return result;
 }
 
 WalletCryptoBackend::OwnedCommitment WalletCryptoBackend::createOwnedCommitment(const WalletKeychain &keychain,

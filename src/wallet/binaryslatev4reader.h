@@ -7,7 +7,10 @@
 class BinarySlateV4Reader
 {
 public:
-    static bool decodeSlatepackPayload(const QByteArray &payload, QString *decodedOut, QString *errorOut);
+    static bool decodeSlatepackPayload(const QByteArray &payload,
+                                       const QByteArray &decryptionKey,
+                                       QString *decodedOut,
+                                       QString *errorOut);
 };
 
 #endif // BINARYSLATEV4READER_H

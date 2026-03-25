@@ -14,8 +14,8 @@ This repository now contains a first-pass `GrinWalletController` for a browser w
   - Generates and validates 24-word BIP39 mnemonics from the browser reference word list.
   - Stores only encrypted mnemonic material and a public fingerprint.
 - Crypto backend
-  - `WalletCryptoBackend` is now the dedicated integration point for participant keys, offsets, and payment-proof placeholders.
-  - This isolates the later swap to a real `secp256k1-zkp`/Aggsig backend instead of spreading crypto assumptions across the UI/controller.
+  - `WalletCryptoBackend` is now the dedicated integration point for participant keys, offsets, commitments, bulletproofs, and aggsig handling.
+  - This keeps the secp256k1-zkp integration localized instead of spreading crypto details across the UI/controller.
 - External node integration
   - Uses the existing `NodeForeignApi` C++ wrapper.
   - The node is treated strictly as a remote chain-data service.
@@ -29,10 +29,10 @@ This repository now contains a first-pass `GrinWalletController` for a browser w
 
 - `libwallet/src/slate.rs`
   - Source of truth for slate state machine, participant data, fee fields, and final kernel signing flow.
-  - Slate structure/state is now mirrored in a first native C++ `SlateV4` model, but not yet with real cryptographic validation/signing.
+  - Slate structure/state is mirrored in the native C++ `SlateV4` model and backed by local secp256k1-zkp signing/finalize flow, but still not at full `grin-wallet` interoperability parity.
 - `libwallet/src/slatepack/`
   - Source of truth for final interoperable binary slatepack payload and recipient encryption.
-  - The current implementation covers browser-local framing/checksum flow, not the full binary packer.
+  - The current implementation covers binary SlateV4 payload encode/decode and browser-local framing/checksum flow, but recipient-encrypted Slatepacks are still pending.
 - `libwallet/src/internal/scan.rs`
   - Future source for owned-output detection and rewind-based scanning.
 - `libwallet/src/internal/selection.rs`
@@ -46,8 +46,8 @@ This repository now contains a first-pass `GrinWalletController` for a browser w
 
 1. Add a dedicated wallet node client adapter on top of `NodeForeignApi` for outputs, kernels, and tx broadcast.
 2. Replace the current local workflow scaffold with real slate v4 transaction objects and participant data from `grin-wallet`.
-3. Replace `WalletCryptoBackend` placeholder values with a secp256k1-zkp capable WASM backend.
-4. Port output scanning and coin-selection logic using that backend.
-5. Implement round signing, finalize, and kernel verification for real `S1-S3` and `I1-I3` completion.
-6. Replace the current temporary local seed cipher with stronger authenticated encryption.
-7. Add transaction history, owned outputs, and final broadcast path to the page.
+3. Add recipient-encrypted Slatepack decrypt/encrypt support.
+4. Tighten external-wallet interoperability against `grin-wallet` edge cases and binary feature variants.
+5. Port output scanning and coin-selection logic to full `grin-wallet` parity.
+6. Continue hardening the local seed cipher toward stronger authenticated encryption primitives.
+7. Extend transaction history, owned-output tracking, and broadcast verification.
