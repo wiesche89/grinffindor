@@ -54,6 +54,98 @@ bool isSpendable(const WalletOutput &output, qulonglong chainHeight)
     return true;
 }
 
+bool isBetterCandidate(const WalletSelection::Result &candidate,
+                       const WalletSelection::Result &best)
+{
+    if (!candidate.success) {
+        return false;
+    }
+    if (!best.success) {
+        return true;
+    }
+    if (candidate.change == 0 && best.change != 0) {
+        return true;
+    }
+    if (candidate.change != 0 && best.change == 0) {
+        return false;
+    }
+    if (candidate.selectedOutputs.size() != best.selectedOutputs.size()) {
+        return candidate.selectedOutputs.size() < best.selectedOutputs.size();
+    }
+    if (candidate.change != best.change) {
+        return candidate.change < best.change;
+    }
+    if (candidate.totalSelected != best.totalSelected) {
+        return candidate.totalSelected < best.totalSelected;
+    }
+    return candidate.fee < best.fee;
+}
+
+WalletSelection::Result buildCandidate(const QList<WalletOutput> &selectedOutputs,
+                                       quint64 amount)
+{
+    WalletSelection::Result result;
+    result.selectedOutputs = selectedOutputs;
+    result.amount = amount;
+
+    quint64 totalSelected = 0;
+    for (int i = 0; i < selectedOutputs.size(); ++i) {
+        totalSelected += amountToNanogrin(selectedOutputs.at(i).amount);
+    }
+    result.totalSelected = totalSelected;
+
+    if (selectedOutputs.isEmpty()) {
+        result.error = QStringLiteral("No spendable outputs selected.");
+        return result;
+    }
+
+    const quint64 feeWithoutChange = WalletSelection::estimateFee(selectedOutputs.size(), 1, 1);
+    if (totalSelected >= amount + feeWithoutChange) {
+        result.fee = feeWithoutChange;
+        result.change = totalSelected - amount - feeWithoutChange;
+        result.success = true;
+        return result;
+    }
+
+    const quint64 feeWithChange = WalletSelection::estimateFee(selectedOutputs.size(), 2, 1);
+    if (totalSelected >= amount + feeWithChange) {
+        result.fee = feeWithChange;
+        result.change = totalSelected - amount - feeWithChange;
+        result.success = true;
+        return result;
+    }
+
+    result.error = QStringLiteral("Insufficient spendable outputs.");
+    return result;
+}
+
+void considerAccumulatedCandidates(const QList<WalletOutput> &orderedCandidates,
+                                   quint64 amount,
+                                   WalletSelection::Result *bestResult)
+{
+    if (!bestResult) {
+        return;
+    }
+
+    QList<WalletOutput> currentSelection;
+    quint64 runningTotal = 0;
+    for (int i = 0; i < orderedCandidates.size(); ++i) {
+        currentSelection.append(orderedCandidates.at(i));
+        runningTotal += amountToNanogrin(orderedCandidates.at(i).amount);
+
+        const quint64 minimumPossibleFee =
+            WalletSelection::estimateFee(currentSelection.size(), 1, 1);
+        if (runningTotal < amount + minimumPossibleFee) {
+            continue;
+        }
+
+        const WalletSelection::Result candidate = buildCandidate(currentSelection, amount);
+        if (isBetterCandidate(candidate, *bestResult)) {
+            *bestResult = candidate;
+        }
+    }
+}
+
 }
 
 quint64 WalletSelection::estimateFee(int numInputs, int numOutputs, int numKernels)
@@ -82,17 +174,21 @@ WalletSelection::Result WalletSelection::selectSpendableOutputs(const QList<Wall
         return amountToNanogrin(left.amount) < amountToNanogrin(right.amount);
     });
 
-    quint64 runningTotal = 0;
-    for (int i = candidates.size() - 1; i >= 0; --i) {
-        result.selectedOutputs.prepend(candidates.at(i));
-        runningTotal += amountToNanogrin(candidates.at(i).amount);
-        result.fee = estimateFee(result.selectedOutputs.size(), 2, 1);
-        if (runningTotal >= amount + result.fee) {
-            result.totalSelected = runningTotal;
-            result.change = runningTotal - amount - result.fee;
-            result.success = true;
-            return result;
+    for (int i = 0; i < candidates.size(); ++i) {
+        const QList<WalletOutput> singleCandidate(1, candidates.at(i));
+        const Result candidate = buildCandidate(singleCandidate, amount);
+        if (isBetterCandidate(candidate, result)) {
+            result = candidate;
         }
+    }
+
+    QList<WalletOutput> descendingCandidates = candidates;
+    std::reverse(descendingCandidates.begin(), descendingCandidates.end());
+    considerAccumulatedCandidates(descendingCandidates, amount, &result);
+    considerAccumulatedCandidates(candidates, amount, &result);
+
+    if (result.success) {
+        return result;
     }
 
     result.error = QStringLiteral("Insufficient spendable outputs.");

@@ -23,16 +23,17 @@ This repository now contains a first-pass `GrinWalletController` for a browser w
   - Adds local armored encode/decode framing so the wallet already has a browser-side exchange surface.
 - Exchange workflow
   - The browser wallet now carries a local `SEND`/`RECEIVE` workflow state machine for `S1-S3` and `I1-I3`.
-  - This is a guided exchange/session scaffold, not yet a fully interoperable Grin transaction engine.
+  - The browser wallet now builds and advances real local slate state, transaction skeletons, payment proofs, and Slatepack envelopes.
+  - Remaining work is interoperability hardening, broader fixture coverage, and fuller `grin-wallet` parity around restore/history edge cases.
 
 ## Mapping to `grin-wallet`
 
 - `libwallet/src/slate.rs`
   - Source of truth for slate state machine, participant data, fee fields, and final kernel signing flow.
-  - Slate structure/state is mirrored in the native C++ `SlateV4` model and backed by local secp256k1-zkp signing/finalize flow, but still not at full `grin-wallet` interoperability parity.
+  - Slate structure/state is mirrored in the native C++ `SlateV4` model and backed by local secp256k1-zkp signing/finalize flow, with the remaining gap now mostly in edge-case parity and external-wallet coverage.
 - `libwallet/src/slatepack/`
   - Source of truth for final interoperable binary slatepack payload and recipient encryption.
-  - The current implementation covers binary SlateV4 payload encode/decode and browser-local framing/checksum flow, but recipient-encrypted Slatepacks are still pending.
+  - The current implementation covers binary SlateV4 payload encode/decode, local armor framing, and recipient-encrypted Slatepacks, with more fixture-based interop validation still pending.
 - `libwallet/src/internal/scan.rs`
   - Future source for owned-output detection and rewind-based scanning.
 - `libwallet/src/internal/selection.rs`
@@ -44,10 +45,9 @@ This repository now contains a first-pass `GrinWalletController` for a browser w
 
 ## Immediate next steps
 
-1. Add a dedicated wallet node client adapter on top of `NodeForeignApi` for outputs, kernels, and tx broadcast.
-2. Replace the current local workflow scaffold with real slate v4 transaction objects and participant data from `grin-wallet`.
-3. Add recipient-encrypted Slatepack decrypt/encrypt support.
-4. Tighten external-wallet interoperability against `grin-wallet` edge cases and binary feature variants.
-5. Port output scanning and coin-selection logic to full `grin-wallet` parity.
+1. Tighten external-wallet interoperability against `grin-wallet` edge cases and binary feature variants.
+2. Expand fixture coverage with additional real `send`, `receive`, `pay`, and `finalize` stage artifacts.
+3. Port output scanning and coin-selection logic to fuller `grin-wallet` parity, especially around restore and cancel semantics.
+4. Continue hardening transaction history reconstruction after deep rescans and partial local-state loss.
+5. Consider a dedicated wallet node client adapter on top of `NodeForeignApi` for outputs, kernels, and tx broadcast.
 6. Continue hardening the local seed cipher toward stronger authenticated encryption primitives.
-7. Extend transaction history, owned-output tracking, and broadcast verification.

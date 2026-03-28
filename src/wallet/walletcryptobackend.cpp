@@ -8,6 +8,12 @@
 #include <QStringList>
 #include <cstring>
 
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+extern "C" {
+#include "monocypher.h"
+}
+#endif
+
 extern "C" {
 #include "secp256k1.h"
 #include "secp256k1_aggsig.h"
@@ -140,6 +146,17 @@ QByteArray deriveValidSecretBytes(const QString &domain, const QString &left, co
 QByteArray deriveSigningBaseSecret(const QString &walletFingerprint, const QString &workflowId, const QString &roleTag)
 {
     return deriveValidSecretBytes(QStringLiteral("blind-base"), walletFingerprint, workflowId + QLatin1Char(':') + roleTag);
+}
+
+QByteArray paymentProofMessage(const SlateV4 &slate)
+{
+    return QStringLiteral("%1|%2|%3|%4|%5")
+        .arg(slate.id,
+             slate.amount,
+             slate.fee,
+             slate.paymentProof.senderAddress,
+             slate.paymentProof.receiverAddress)
+        .toUtf8();
 }
 
 QString createCompressedPubkeyHex(const QByteArray &secretKey)
@@ -619,6 +636,60 @@ QString WalletCryptoBackend::addOffsets(const QString &leftOffset, const QString
     return QString::fromUtf8(sum.toHex());
 }
 
+QString WalletCryptoBackend::combineBlindingFactors(const QStringList &positiveBlinds,
+                                                    const QStringList &negativeBlinds,
+                                                    QString *errorOut)
+{
+    QByteArray combined;
+    bool initialized = false;
+
+    for (int i = 0; i < positiveBlinds.size(); ++i) {
+        const QByteArray blind = fromHex(positiveBlinds.at(i));
+        if (blind.size() != 32) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Invalid positive blinding factor.");
+            }
+            return QString();
+        }
+        if (!initialized) {
+            combined = blind;
+            initialized = true;
+            continue;
+        }
+        if (!addScalars(combined, blind, &combined)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Failed to combine positive blinding factors.");
+            }
+            return QString();
+        }
+    }
+
+    if (!initialized) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("No positive blinding factors were available.");
+        }
+        return QString();
+    }
+
+    for (int i = 0; i < negativeBlinds.size(); ++i) {
+        const QByteArray blind = fromHex(negativeBlinds.at(i));
+        if (blind.size() != 32) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Invalid negative blinding factor.");
+            }
+            return QString();
+        }
+        if (!subtractScalars(combined, blind, &combined)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Failed to subtract negative blinding factors.");
+            }
+            return QString();
+        }
+    }
+
+    return QString::fromUtf8(combined.toHex());
+}
+
 WalletCryptoBackend::CommitmentResult WalletCryptoBackend::createCommitment(const QString &walletFingerprint,
                                                                             const QString &workflowId,
                                                                             const QString &roleTag,
@@ -661,6 +732,45 @@ WalletCryptoBackend::OwnedCommitment WalletCryptoBackend::createOwnedCommitment(
     return owned;
 }
 
+QString WalletCryptoBackend::slatepackAddress(const WalletKeychain &keychain)
+{
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+    const QByteArray seed = keychain.slatepackSecretKey();
+    if (seed.size() != 32) {
+        return QString();
+    }
+
+    QByteArray publicKey(32, Qt::Uninitialized);
+    crypto_x25519_public_key(reinterpret_cast<uint8_t *>(publicKey.data()),
+                             reinterpret_cast<const uint8_t *>(seed.constData()));
+    return QString::fromUtf8(publicKey.toHex());
+#else
+    Q_UNUSED(keychain);
+    return QString();
+#endif
+}
+
+QString WalletCryptoBackend::paymentProofAddress(const WalletKeychain &keychain)
+{
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+    const QByteArray seed = keychain.slatepackSecretKey();
+    if (seed.size() != 32) {
+        return QString();
+    }
+
+    QByteArray seedCopy = seed;
+    QByteArray secretKey(64, Qt::Uninitialized);
+    QByteArray publicKey(32, Qt::Uninitialized);
+    crypto_eddsa_key_pair(reinterpret_cast<uint8_t *>(secretKey.data()),
+                          reinterpret_cast<uint8_t *>(publicKey.data()),
+                          reinterpret_cast<uint8_t *>(seedCopy.data()));
+    return QString::fromUtf8(publicKey.toHex());
+#else
+    Q_UNUSED(keychain);
+    return QString();
+#endif
+}
+
 SlateV4::ParticipantData WalletCryptoBackend::createParticipantData(const ParticipantContext &context)
 {
     SlateV4::ParticipantData data;
@@ -675,6 +785,124 @@ SlateV4::PaymentProof WalletCryptoBackend::createPaymentProof(const ParticipantC
     proof.senderAddress = sender.address;
     proof.receiverAddress = receiver.address;
     return proof;
+}
+
+bool WalletCryptoBackend::signPaymentProof(SlateV4 *slate,
+                                           const WalletKeychain &keychain,
+                                           QString *errorOut)
+{
+    if (!slate) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Slate is missing.");
+        }
+        return false;
+    }
+    if (!slate->hasPaymentProof) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Payment proof is missing.");
+        }
+        return false;
+    }
+    if (slate->paymentProof.senderAddress.trimmed().isEmpty()
+        || slate->paymentProof.receiverAddress.trimmed().isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Payment proof addresses are incomplete.");
+        }
+        return false;
+    }
+
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+    const QByteArray seed = keychain.slatepackSecretKey();
+    if (seed.size() != 32) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Wallet keychain does not expose a Slatepack signing seed.");
+        }
+        return false;
+    }
+
+    QByteArray seedCopy = seed;
+    QByteArray secretKey(64, Qt::Uninitialized);
+    QByteArray publicKey(32, Qt::Uninitialized);
+    crypto_eddsa_key_pair(reinterpret_cast<uint8_t *>(secretKey.data()),
+                          reinterpret_cast<uint8_t *>(publicKey.data()),
+                          reinterpret_cast<uint8_t *>(seedCopy.data()));
+    const QString receiverAddress = paymentProofAddress(keychain);
+    if (!slate->paymentProof.receiverAddress.isEmpty()
+        && slate->paymentProof.receiverAddress != receiverAddress) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Current wallet does not match the payment proof receiver address.");
+        }
+        return false;
+    }
+
+    const QByteArray message = paymentProofMessage(*slate);
+    unsigned char signature[64];
+    crypto_eddsa_sign(signature,
+                      reinterpret_cast<const uint8_t *>(secretKey.constData()),
+                      reinterpret_cast<const uint8_t *>(message.constData()),
+                      static_cast<size_t>(message.size()));
+    slate->paymentProof.receiverAddress = receiverAddress;
+    slate->paymentProof.receiverSignature = toHex(signature, sizeof(signature));
+    return true;
+#else
+    Q_UNUSED(keychain);
+    if (errorOut) {
+        *errorOut = QStringLiteral("This build does not support Slatepack payment proof signatures.");
+    }
+    return false;
+#endif
+}
+
+bool WalletCryptoBackend::verifyPaymentProof(const SlateV4 &slate, QString *errorOut)
+{
+    if (!slate.hasPaymentProof) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Payment proof is missing.");
+        }
+        return false;
+    }
+    if (slate.paymentProof.senderAddress.trimmed().isEmpty()
+        || slate.paymentProof.receiverAddress.trimmed().isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Payment proof addresses are incomplete.");
+        }
+        return false;
+    }
+    if (slate.paymentProof.receiverSignature.trimmed().isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Payment proof receiver signature is missing.");
+        }
+        return false;
+    }
+
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+    const QByteArray publicKey = QByteArray::fromHex(slate.paymentProof.receiverAddress.trimmed().toUtf8());
+    const QByteArray signature = QByteArray::fromHex(slate.paymentProof.receiverSignature.trimmed().toUtf8());
+    if (publicKey.size() != 32 || signature.size() != 64) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Payment proof key material is malformed.");
+        }
+        return false;
+    }
+
+    const QByteArray message = paymentProofMessage(slate);
+    const int ok = crypto_eddsa_check(reinterpret_cast<const uint8_t *>(signature.constData()),
+                                      reinterpret_cast<const uint8_t *>(publicKey.constData()),
+                                      reinterpret_cast<const uint8_t *>(message.constData()),
+                                      static_cast<size_t>(message.size()));
+    if (ok != 0) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Payment proof signature verification failed.");
+        }
+        return false;
+    }
+    return true;
+#else
+    if (errorOut) {
+        *errorOut = QStringLiteral("This build does not support Slatepack payment proof verification.");
+    }
+    return false;
+#endif
 }
 
 bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
@@ -696,18 +924,23 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
     }
 
     ParticipantContext context = createParticipant(walletFingerprint, slate->workflowId(), roleTag);
-    if (roleTag == QStringLiteral("receiver")
-        && slate->metadata.value(QStringLiteral("external_binary")).toBool()) {
-        const QString receiverBlindHex = slate->metadata.value(QStringLiteral("receiver_blind")).toString();
-        const QString receiverOffsetHex = slate->metadata.value(QStringLiteral("receiver_offset")).toString();
-        const QByteArray baseBlind = receiverBlindHex.isEmpty()
+    if (slate->metadata.value(QStringLiteral("external_binary")).toBool()) {
+        const QString customBlindHex =
+            (roleTag == QStringLiteral("receiver"))
+                ? slate->metadata.value(QStringLiteral("receiver_blind")).toString()
+                : slate->metadata.value(QStringLiteral("sender_blind")).toString();
+        const QString customOffsetHex =
+            (roleTag == QStringLiteral("receiver"))
+                ? slate->metadata.value(QStringLiteral("receiver_offset")).toString()
+                : slate->metadata.value(QStringLiteral("sender_offset")).toString();
+        const QByteArray baseBlind = customBlindHex.isEmpty()
             ? deriveSigningBaseSecret(walletFingerprint, slate->workflowId(), roleTag)
-            : fromHex(receiverBlindHex);
-        const QByteArray offset = receiverOffsetHex.isEmpty() ? fromHex(slate->offset) : fromHex(receiverOffsetHex);
+            : fromHex(customBlindHex);
+        const QByteArray offset = customOffsetHex.isEmpty() ? fromHex(slate->offset) : fromHex(customOffsetHex);
         QByteArray signingSecret;
         if (!subtractScalars(baseBlind, offset, &signingSecret)) {
             if (errorOut) {
-                *errorOut = QStringLiteral("Failed to derive receiver signing key from offset.");
+                *errorOut = QStringLiteral("Failed to derive participant signing key from offset.");
             }
             return false;
         }

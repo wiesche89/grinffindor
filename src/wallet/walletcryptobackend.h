@@ -40,6 +40,9 @@ public:
     static QString addOffsets(const QString &leftOffset,
                               const QString &rightOffset,
                               QString *errorOut = 0);
+    static QString combineBlindingFactors(const QStringList &positiveBlinds,
+                                          const QStringList &negativeBlinds = QStringList(),
+                                          QString *errorOut = 0);
     static CommitmentResult createCommitment(const QString &walletFingerprint,
                                              const QString &workflowId,
                                              const QString &roleTag,
@@ -47,8 +50,14 @@ public:
     static OwnedCommitment createOwnedCommitment(const WalletKeychain &keychain,
                                                  quint32 childIndex,
                                                  const QString &amount);
+    static QString slatepackAddress(const WalletKeychain &keychain);
+    static QString paymentProofAddress(const WalletKeychain &keychain);
     static SlateV4::ParticipantData createParticipantData(const ParticipantContext &context);
     static SlateV4::PaymentProof createPaymentProof(const ParticipantContext &sender, const ParticipantContext &receiver);
+    static bool signPaymentProof(SlateV4 *slate,
+                                 const WalletKeychain &keychain,
+                                 QString *errorOut = 0);
+    static bool verifyPaymentProof(const SlateV4 &slate, QString *errorOut = 0);
     static bool applyRound2Signature(SlateV4 *slate,
                                      const QString &walletFingerprint,
                                      const QString &roleTag,

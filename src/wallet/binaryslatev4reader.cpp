@@ -374,7 +374,7 @@ bool decryptAgePayload(const QByteArray &payload,
         return false;
     }
 
-    QByteArray x25519Secret = QCryptographicHash::hash(walletSecret, QCryptographicHash::Sha512).left(32);
+    const QByteArray x25519Secret = walletSecret;
     QByteArray x25519Public;
     if (!deriveX25519PublicKey(x25519Secret, &x25519Public)) {
         if (errorOut) *errorOut = QStringLiteral("Failed to derive Slatepack decryption identity.");
@@ -679,7 +679,6 @@ bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, 
 
     slate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
     slate.metadata.insert(QStringLiteral("workflow_id"), slate.id);
-    slate.metadata.insert(QStringLiteral("network"), QStringLiteral("mainnet"));
     slate.metadata.insert(QStringLiteral("external_binary"), true);
 
     if (decodedOut) {

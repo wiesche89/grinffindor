@@ -22,7 +22,9 @@ class GrinWalletController : public QObject
     Q_PROPERTY(QString walletName READ walletName NOTIFY walletChanged)
     Q_PROPERTY(QString mnemonicPreview READ mnemonicPreview NOTIFY walletChanged)
     Q_PROPERTY(QString seedFingerprint READ seedFingerprint NOTIFY walletChanged)
+    Q_PROPERTY(QString selectedNetwork READ selectedNetwork NOTIFY nodeConfigChanged)
     Q_PROPERTY(QString nodeUrl READ nodeUrl NOTIFY nodeConfigChanged)
+    Q_PROPERTY(QString storagePersistenceState READ storagePersistenceState NOTIFY statusChanged)
     Q_PROPERTY(qulonglong chainHeight READ chainHeight NOTIFY statusChanged)
     Q_PROPERTY(QString syncStatus READ syncStatus NOTIFY statusChanged)
     Q_PROPERTY(QString totalBalance READ totalBalance NOTIFY statusChanged)
@@ -37,6 +39,7 @@ class GrinWalletController : public QObject
     Q_PROPERTY(QString workflowMode READ workflowMode NOTIFY workflowChanged)
     Q_PROPERTY(QString workflowSlatepack READ workflowSlatepack NOTIFY workflowChanged)
     Q_PROPERTY(QString workflowDecoded READ workflowDecoded NOTIFY workflowChanged)
+    Q_PROPERTY(QVariantList walletOutputs READ walletOutputs NOTIFY statusChanged)
     Q_PROPERTY(QVariantList transactionHistory READ transactionHistory NOTIFY statusChanged)
 
 public:
@@ -47,7 +50,9 @@ public:
     QString walletName() const;
     QString mnemonicPreview() const;
     QString seedFingerprint() const;
+    QString selectedNetwork() const;
     QString nodeUrl() const;
+    QString storagePersistenceState() const;
     qulonglong chainHeight() const;
     QString syncStatus() const;
     QString totalBalance() const;
@@ -62,6 +67,7 @@ public:
     QString workflowMode() const;
     QString workflowSlatepack() const;
     QString workflowDecoded() const;
+    QVariantList walletOutputs() const;
     QVariantList transactionHistory() const;
 
     Q_INVOKABLE void initialize();
@@ -72,14 +78,25 @@ public:
     Q_INVOKABLE void restoreWallet(const QString &walletName, const QString &mnemonic, const QString &password);
     Q_INVOKABLE void unlockWallet(const QString &password);
     Q_INVOKABLE void lockWallet();
+    Q_INVOKABLE void clearLastError();
     Q_INVOKABLE void dismissMnemonicPreview();
+    Q_INVOKABLE bool revealSeedPhrase(const QString &password);
     Q_INVOKABLE void deleteWallet();
+    Q_INVOKABLE QString exportEncryptedWalletBackup() const;
+    Q_INVOKABLE bool importEncryptedWalletBackup(const QString &backupJson);
+    Q_INVOKABLE bool setSelectedNetwork(const QString &networkName);
     Q_INVOKABLE bool setNodeUrl(const QString &nodeUrl);
     Q_INVOKABLE void resetNodeUrl();
     Q_INVOKABLE void refreshNodeStatus();
     Q_INVOKABLE void syncWallet();
     Q_INVOKABLE void rescanWallet();
     Q_INVOKABLE QString requestPasteText() const;
+    Q_INVOKABLE bool copyTextToClipboard(const QString &text) const;
+    Q_INVOKABLE bool downloadTextFile(const QString &suggestedName, const QString &text) const;
+    Q_INVOKABLE void requestPersistentBrowserStorage();
+    Q_INVOKABLE void updateBrowserShortcutContext(const QString &text,
+                                                  const QString &selectedText = QString(),
+                                                  bool focused = false) const;
     Q_INVOKABLE bool isValidNodeUrl(const QString &nodeUrl) const;
     Q_INVOKABLE QString createSlatepackTemplate(const QString &sender = QString()) const;
     Q_INVOKABLE void startSendWorkflow(const QString &amount, const QString &note = QString());
@@ -91,6 +108,9 @@ public:
     Q_INVOKABLE void clearWorkflow();
     Q_INVOKABLE QString encodeSlatepack(const QString &slateJson, const QString &sender = QString()) const;
     Q_INVOKABLE QString decodeSlatepack(const QString &slatepack) const;
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 signals:
     void walletChanged();
@@ -125,19 +145,42 @@ private:
     void updateTransactionEntry(const QString &workflowId, const std::function<void(QJsonObject &)> &updater);
     void refreshBroadcastStatuses();
     void startNextKernelStatusCheck();
+    void refreshStoragePersistenceState();
     QString kernelExcessFromEntry(const QJsonObject &entry) const;
     void refreshTransactionConfirmations();
-    QJsonArray rebuildTransactionHistoryFromOutputs(const QList<WalletOutput> &outputs) const;
+    void touchWalletSession();
+    void recoverPendingBroadcasts();
+    void finalizeBroadcastedWorkflow(const QString &workflowId);
+    QJsonArray rebuildTransactionHistoryFromOutputs(const QList<WalletOutput> &outputs,
+                                                   const QJsonArray &existingTransactions) const;
+    bool ensureWorkflowSelectionContext(const QString &workflowId,
+                                        const QString &amount,
+                                        QString *feeOut = 0,
+                                        QString *errorOut = 0);
+    bool ensureReceiverOutputContext(const QString &workflowId,
+                                     const QString &amount,
+                                     const QString &source,
+                                     WalletOutput *outputOut,
+                                     SlateV4::Commit *commitOut,
+                                     QString *errorOut = 0);
+    QString currentSlatepackAddress() const;
+    QString currentPaymentProofAddress() const;
+    QByteArray currentSlatepackSecret() const;
+    QStringList outgoingSlatepackRecipients(const SlateV4 &slate) const;
+    QString resolvedNetworkName() const;
 
     NodeForeignApi *m_nodeApi;
     QTimer *m_autoRefreshTimer;
+    QTimer *m_sessionLockTimer;
     bool m_walletExists;
     bool m_walletUnlocked;
     QString m_walletName;
     QString m_sessionMnemonic;
     QString m_mnemonicPreview;
     QString m_seedFingerprint;
+    QString m_selectedNetwork;
     QString m_nodeUrl;
+    QString m_storagePersistenceState;
     qulonglong m_chainHeight;
     QString m_syncStatus;
     QString m_totalBalance;
