@@ -8,6 +8,7 @@
 #include <QRandomGenerator>
 #include <QStringList>
 #include <QVector>
+#include <QDebug>
 
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
 extern "C" {
@@ -24,6 +25,7 @@ const int kAgeFileKeySize = 16;
 const int kAgePayloadNonceSize = 16;
 const int kAgeChunkSize = 64 * 1024;
 const int kChaChaOverhead = 16;
+const char kBech32Charset[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 void appendU8(QByteArray &out, quint8 value)
 {
@@ -181,6 +183,79 @@ QByteArray randomBytes(int size)
     return data;
 }
 
+QVector<int> bech32CharsetReverse()
+{
+    QVector<int> reverse(128, -1);
+    for (int i = 0; kBech32Charset[i] != '\0'; ++i) {
+        reverse[static_cast<int>(kBech32Charset[i])] = i;
+    }
+    return reverse;
+}
+
+QByteArray convertBitsToBytes(const QVector<int> &data, int fromBits, int toBits, bool pad)
+{
+    QByteArray output;
+    int accumulator = 0;
+    int bitCount = 0;
+    const int maxValue = (1 << toBits) - 1;
+    const int maxAccumulator = (1 << (fromBits + toBits - 1)) - 1;
+
+    for (int i = 0; i < data.size(); ++i) {
+        const int value = data.at(i);
+        if (value < 0 || (value >> fromBits) != 0) {
+            return QByteArray();
+        }
+        accumulator = ((accumulator << fromBits) | value) & maxAccumulator;
+        bitCount += fromBits;
+        while (bitCount >= toBits) {
+            bitCount -= toBits;
+            output.append(static_cast<char>((accumulator >> bitCount) & maxValue));
+        }
+    }
+
+    if (pad) {
+        if (bitCount > 0) {
+            output.append(static_cast<char>((accumulator << (toBits - bitCount)) & maxValue));
+        }
+    } else if (bitCount >= fromBits || ((accumulator << (toBits - bitCount)) & maxValue) != 0) {
+        return QByteArray();
+    }
+
+    return output;
+}
+
+QByteArray decodeBech32Payload(const QString &address, QString *hrpOut = 0)
+{
+    static const QVector<int> reverse = bech32CharsetReverse();
+
+    const QString trimmed = address.trimmed().toLower();
+    const int separator = trimmed.lastIndexOf(QLatin1Char('1'));
+    if (separator <= 0 || separator + 7 > trimmed.size()) {
+        return QByteArray();
+    }
+
+    if (hrpOut) {
+        *hrpOut = trimmed.left(separator);
+    }
+
+    QVector<int> values;
+    values.reserve(trimmed.size() - separator - 1);
+    for (int i = separator + 1; i < trimmed.size(); ++i) {
+        const ushort ch = trimmed.at(i).unicode();
+        if (ch >= static_cast<ushort>(reverse.size()) || reverse.at(ch) < 0) {
+            return QByteArray();
+        }
+        values.append(reverse.at(ch));
+    }
+
+    if (values.size() < 6) {
+        return QByteArray();
+    }
+
+    values.resize(values.size() - 6);
+    return convertBitsToBytes(values, 5, 8, false);
+}
+
 QByteArray hkdfSha256(const QByteArray &ikm,
                       const QByteArray &salt,
                       const QByteArray &info,
@@ -298,7 +373,13 @@ bool chacha20Poly1305Encrypt(const QByteArray &key,
 
 QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
 {
-    return QCryptographicHash::hash(walletSecret, QCryptographicHash::Sha512).left(32);
+    QByteArray scalar = QCryptographicHash::hash(walletSecret, QCryptographicHash::Sha512).left(32);
+    if (scalar.size() != 32) {
+        return QByteArray();
+    }
+    scalar[0] = static_cast<char>(static_cast<unsigned char>(scalar[0]) & 248U);
+    scalar[31] = static_cast<char>((static_cast<unsigned char>(scalar[31]) & 127U) | 64U);
+    return scalar;
 }
 
 bool recipientAddressToX25519(const QString &recipientAddress, QByteArray *x25519PublicOut)
@@ -307,10 +388,20 @@ bool recipientAddressToX25519(const QString &recipientAddress, QByteArray *x2551
         return false;
     }
 
-    const QByteArray x25519Public = QByteArray::fromHex(recipientAddress.trimmed().toUtf8());
-    if (x25519Public.size() != 32) {
+    const QByteArray legacyHex = QByteArray::fromHex(recipientAddress.trimmed().toUtf8());
+    if (legacyHex.size() == 32) {
+        *x25519PublicOut = legacyHex;
+        return true;
+    }
+
+    const QByteArray ed25519Public = decodeBech32Payload(recipientAddress);
+    if (ed25519Public.size() != 32) {
         return false;
     }
+
+    QByteArray x25519Public(32, Qt::Uninitialized);
+    crypto_eddsa_to_x25519(reinterpret_cast<uint8_t *>(x25519Public.data()),
+                           reinterpret_cast<const uint8_t *>(ed25519Public.constData()));
     *x25519PublicOut = x25519Public;
     return true;
 }
@@ -490,6 +581,47 @@ QByteArray serializeJsonEnvelope(const QByteArray &payload, int mode, const QStr
     return QJsonDocument(envelope).toJson(QJsonDocument::Compact);
 }
 
+QByteArray buildBinaryEnvelopeOptionalFields(const QString &sender, const QStringList &recipients, quint16 *flagsOut)
+{
+    quint16 flags = 0;
+    QByteArray fields;
+
+    if (!sender.trimmed().isEmpty()) {
+        const QByteArray senderBytes = sender.trimmed().toUtf8();
+        if (!senderBytes.isEmpty() && senderBytes.size() <= 255) {
+            flags |= 0x01;
+            appendU8(fields, static_cast<quint8>(senderBytes.size()));
+            fields.append(senderBytes);
+        }
+    }
+
+    QStringList normalizedRecipients;
+    for (int i = 0; i < recipients.size(); ++i) {
+        const QString recipient = recipients.at(i).trimmed();
+        if (!recipient.isEmpty()) {
+            normalizedRecipients.append(recipient);
+        }
+    }
+
+    if (!normalizedRecipients.isEmpty()) {
+        flags |= 0x02;
+        appendU16(fields, static_cast<quint16>(normalizedRecipients.size()));
+        for (int i = 0; i < normalizedRecipients.size(); ++i) {
+            const QByteArray recipientBytes = normalizedRecipients.at(i).toUtf8();
+            if (recipientBytes.isEmpty() || recipientBytes.size() > 255) {
+                continue;
+            }
+            appendU8(fields, static_cast<quint8>(recipientBytes.size()));
+            fields.append(recipientBytes);
+        }
+    }
+
+    if (flagsOut) {
+        *flagsOut = flags;
+    }
+    return fields;
+}
+
 bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
 {
     if (!payloadOut) {
@@ -507,12 +639,29 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
         return false;
     }
 
+    const bool compactExternalInvoiceI2 =
+        slate.metadata.value(QStringLiteral("external_binary")).toBool()
+        && slate.state == SlateV4::Invoice2
+        && slate.signatures.size() == 1
+        && slate.amount.trimmed().isEmpty();
+
     quint8 optionalFields = 0;
-    if (slate.numParticipants != 2) optionalFields |= 0x01;
+    if (slate.numParticipants != 2 && !compactExternalInvoiceI2) optionalFields |= 0x01;
     if (!slate.amount.trimmed().isEmpty() && parseNanogrin(slate.amount) > 0) optionalFields |= 0x02;
     if (!slate.fee.trimmed().isEmpty() && parseNanogrin(slate.fee) > 0) optionalFields |= 0x04;
     if (slate.kernelFeatures != 0) optionalFields |= 0x08;
     if (!slate.ttl.trimmed().isEmpty() && slate.ttl != QStringLiteral("0")) optionalFields |= 0x10;
+    qDebug() << "[BinarySlateWriter::Slate]"
+             << "workflowId=" << slate.workflowId()
+             << "state=" << slate.stateCode()
+             << "slateVersion=" << slate.ver.slateVersion
+             << "blockHeaderVersion=" << slate.ver.blockHeaderVersion
+             << "participantCount=" << slate.numParticipants
+             << "amount=" << slate.amount
+             << "fee=" << slate.fee
+             << "kernelFeatures=" << slate.kernelFeatures
+             << "ttl=" << slate.ttl
+             << "optionalFields=" << optionalFields;
     appendU8(payload, optionalFields);
 
     if (optionalFields & 0x01) appendU8(payload, static_cast<quint8>(slate.numParticipants));
@@ -522,8 +671,16 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     if (optionalFields & 0x10) appendU64(payload, slate.ttl.toULongLong());
 
     appendU8(payload, static_cast<quint8>(slate.signatures.size()));
+    qDebug() << "[BinarySlateWriter::Slate]"
+             << "signatureCount=" << slate.signatures.size();
     for (int i = 0; i < slate.signatures.size(); ++i) {
         const SlateV4::ParticipantData &sig = slate.signatures.at(i);
+        qDebug() << "[BinarySlateWriter::Slate] sig"
+                 << i
+                 << "hasPart=" << !sig.part.isEmpty()
+                 << "xs=" << sig.xs
+                 << "nonce=" << sig.nonce
+                 << "partLen=" << sig.part.length();
         appendU8(payload, sig.part.isEmpty() ? 0 : 1);
         if (!appendHex(payload, sig.xs, 33) || !appendHex(payload, sig.nonce, 33)) {
             return false;
@@ -536,12 +693,22 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     quint8 optionalStructs = 0;
     if (!slate.commitments.isEmpty()) optionalStructs |= 0x01;
     if (slate.hasPaymentProof) optionalStructs |= 0x02;
+    qDebug() << "[BinarySlateWriter::Slate]"
+             << "optionalStructs=" << optionalStructs
+             << "commitmentCount=" << slate.commitments.size()
+             << "hasPaymentProof=" << slate.hasPaymentProof;
     appendU8(payload, optionalStructs);
 
     if (optionalStructs & 0x01) {
         appendU16(payload, static_cast<quint16>(slate.commitments.size()));
         for (int i = 0; i < slate.commitments.size(); ++i) {
             const SlateV4::Commit &commit = slate.commitments.at(i);
+            qDebug() << "[BinarySlateWriter::Slate] commit"
+                     << i
+                     << "feature=" << commit.feature
+                     << "hasProof=" << !commit.proof.isEmpty()
+                     << "commitment=" << commit.commitment
+                     << "proofLen=" << commit.proof.length();
             appendU8(payload, commit.proof.isEmpty() ? 0 : 1);
             appendU8(payload, static_cast<quint8>(commit.feature));
             if (!appendHex(payload, commit.commitment, 33)) {
@@ -559,6 +726,10 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     }
 
     if (optionalStructs & 0x02) {
+        qDebug() << "[BinarySlateWriter::Slate]"
+                 << "paymentProofSender=" << slate.paymentProof.senderAddress
+                 << "paymentProofReceiver=" << slate.paymentProof.receiverAddress
+                 << "paymentProofReceiverSigLen=" << slate.paymentProof.receiverSignature.length();
         if (!appendHex(payload, slate.paymentProof.senderAddress, 32)
             || !appendHex(payload, slate.paymentProof.receiverAddress, 32)) {
             return false;
@@ -571,9 +742,14 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     }
 
     if (slate.kernelFeatures == 2 && slate.metadata.contains(QStringLiteral("lock_height"))) {
+        qDebug() << "[BinarySlateWriter::Slate]"
+                 << "lockHeight=" << slate.metadata.value(QStringLiteral("lock_height")).toString();
         appendU64(payload, slate.metadata.value(QStringLiteral("lock_height")).toString().toULongLong());
     }
 
+    qDebug() << "[BinarySlateWriter::Slate]"
+             << "payloadBytes=" << payload.size()
+             << "payloadHead=" << QString::fromUtf8(payload.left(48).toHex());
     *payloadOut = payload;
     return true;
 }
@@ -604,32 +780,57 @@ bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
         return false;
     }
 
+    const bool preserveExternalBinary = slate.metadata.value(QStringLiteral("external_binary")).toBool();
+    quint16 optFlags = 0;
+    const QByteArray optFields = buildBinaryEnvelopeOptionalFields(
+        preserveExternalBinary ? sender : QString(),
+        QStringList(),
+        &optFlags);
+
     QByteArray slatepackPayload;
     appendU8(slatepackPayload, 1);
     appendU8(slatepackPayload, 0);
     appendU8(slatepackPayload, 0);
-    appendU16(slatepackPayload, 0);
-    appendU32(slatepackPayload, 0);
+    appendU16(slatepackPayload, optFlags);
+    appendU32(slatepackPayload, static_cast<quint32>(optFields.size()));
+    slatepackPayload.append(optFields);
     appendU64(slatepackPayload, static_cast<quint64>(slatePayload.size()));
     slatepackPayload.append(slatePayload);
 
     QByteArray outputPayload = slatepackPayload;
-    if (!recipients.isEmpty()) {
+    QString outputFormat = QStringLiteral("binary-raw");
+    if (!recipients.isEmpty() && !preserveExternalBinary) {
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
         QByteArray encryptedPayload;
         if (!encryptAgePayload(slatePayload, sender, recipients, senderSecret, &encryptedPayload, errorOut)) {
             return false;
         }
         outputPayload = serializeJsonEnvelope(encryptedPayload, 1, sender);
+        outputFormat = QStringLiteral("json-encrypted");
 #else
         if (errorOut) {
             *errorOut = QStringLiteral("This build does not support recipient-encrypted Slatepacks.");
         }
         return false;
 #endif
-    } else if (!sender.trimmed().isEmpty()) {
+    } else if (!sender.trimmed().isEmpty() && !preserveExternalBinary) {
         outputPayload = serializeJsonEnvelope(slatePayload, 0, sender);
+        outputFormat = QStringLiteral("json-plain");
     }
+
+    qDebug() << "[BinarySlateWriter]"
+             << "workflowId=" << slate.workflowId()
+             << "state=" << slate.stateCode()
+             << "sender=" << sender
+             << "recipientCount=" << recipients.size()
+             << "recipients=" << recipients
+             << "optFlags=" << optFlags
+             << "optFieldsLen=" << optFields.size()
+             << "preserveExternalBinary=" << preserveExternalBinary
+             << "senderSecretBytes=" << senderSecret.size()
+             << "slatePayloadBytes=" << slatePayload.size()
+             << "outputPayloadBytes=" << outputPayload.size()
+             << "outputFormat=" << outputFormat;
 
     if (armoredOut) {
         *armoredOut = armorPayload(outputPayload);

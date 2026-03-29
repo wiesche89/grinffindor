@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QMessageAuthenticationCode>
+#include <QDebug>
 #include <limits>
 
 #include "slatev4.h"
@@ -138,6 +139,17 @@ QByteArray hkdfSha256(const QByteArray &ikm,
     return output;
 }
 
+QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
+{
+    QByteArray scalar = QCryptographicHash::hash(walletSecret, QCryptographicHash::Sha512).left(32);
+    if (scalar.size() != 32) {
+        return QByteArray();
+    }
+    scalar[0] = static_cast<char>(static_cast<unsigned char>(scalar[0]) & 248U);
+    scalar[31] = static_cast<char>((static_cast<unsigned char>(scalar[31]) & 127U) | 64U);
+    return scalar;
+}
+
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
 bool deriveX25519PublicKey(const QByteArray &privateKey, QByteArray *publicKeyOut)
 {
@@ -248,6 +260,54 @@ bool parseSlatepackAddress(ByteCursor *cursor, QString *addressOut)
 
     *addressOut = QString::fromUtf8(encodedAddress);
     return !addressOut->trimmed().isEmpty();
+}
+
+bool parseBinaryEnvelopeOptionalFields(const QByteArray &optFields,
+                                       quint16 optFlags,
+                                       QString *senderOut,
+                                       QStringList *recipientsOut,
+                                       QString *errorOut)
+{
+    ByteCursor cursor(optFields);
+    bool ok = true;
+
+    if ((optFlags & 0x01) != 0) {
+        QString sender;
+        if (!parseSlatepackAddress(&cursor, &sender)) {
+            if (errorOut) *errorOut = QStringLiteral("Binary Slatepack sender address is invalid.");
+            return false;
+        }
+        if (senderOut) {
+            *senderOut = sender;
+        }
+    }
+
+    if ((optFlags & 0x02) != 0) {
+        const quint16 recipientCount = cursor.readU16(&ok);
+        if (!ok) {
+            if (errorOut) *errorOut = QStringLiteral("Binary Slatepack recipient count is invalid.");
+            return false;
+        }
+        QStringList recipients;
+        for (quint16 i = 0; i < recipientCount; ++i) {
+            QString recipient;
+            if (!parseSlatepackAddress(&cursor, &recipient)) {
+                if (errorOut) *errorOut = QStringLiteral("Binary Slatepack recipient address is invalid.");
+                return false;
+            }
+            recipients.append(recipient);
+        }
+        if (recipientsOut) {
+            *recipientsOut = recipients;
+        }
+    }
+
+    if (cursor.canRead(1)) {
+        qDebug() << "[BinarySlatepackEnvelope] optional field payload has trailing bytes"
+                 << "optFlags=" << optFlags
+                 << "optFieldsLen=" << optFields.size();
+    }
+    return true;
 }
 
 bool extractDecryptedSlatepackPayload(const QByteArray &decrypted,
@@ -374,7 +434,7 @@ bool decryptAgePayload(const QByteArray &payload,
         return false;
     }
 
-    const QByteArray x25519Secret = walletSecret;
+    const QByteArray x25519Secret = x25519SecretFromWalletSecret(walletSecret);
     QByteArray x25519Public;
     if (!deriveX25519PublicKey(x25519Secret, &x25519Public)) {
         if (errorOut) *errorOut = QStringLiteral("Failed to derive Slatepack decryption identity.");
@@ -594,7 +654,8 @@ bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, 
         if (errorOut) *errorOut = QStringLiteral("Invalid binary slate field status.");
         return false;
     }
-    if (optionalFields & 0x01) slate.numParticipants = static_cast<int>(cursor.readU8(&ok));
+    const bool hasParticipantCountField = (optionalFields & 0x01) != 0;
+    if (hasParticipantCountField) slate.numParticipants = static_cast<int>(cursor.readU8(&ok));
     if (optionalFields & 0x02) slate.amount = formatNanogrin(cursor.readU64(&ok));
     if (optionalFields & 0x04) {
         const quint64 rawFee = cursor.readU64(&ok);
@@ -634,8 +695,13 @@ bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, 
         if (errorOut) *errorOut = QStringLiteral("Invalid binary struct status.");
         return false;
     }
+    qDebug() << "[BinarySlateReader] optionalStructs="
+             << optionalStructs
+             << "state=" << slate.stateCode()
+             << "id=" << slate.id;
     if (optionalStructs & 0x01) {
         const quint16 numComs = cursor.readU16(&ok);
+        qDebug() << "[BinarySlateReader] numComs=" << numComs;
         for (quint16 i = 0; i < numComs; ++i) {
             SlateV4::Commit commit;
             const quint8 hasProof = cursor.readU8(&ok);
@@ -654,6 +720,12 @@ bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, 
                 return false;
             }
             slate.commitments.append(commit);
+            qDebug() << "[BinarySlateReader] com"
+                     << i
+                     << "feature=" << commit.feature
+                     << "hasProof=" << (hasProof > 0)
+                     << "commitment=" << commit.commitment
+                     << "proofLength=" << commit.proof.length();
         }
     }
     if (optionalStructs & 0x02) {
@@ -824,12 +896,30 @@ bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload,
     }
 
     const QByteArray optFields = cursor.readBytes(static_cast<int>(optFieldsLen), &ok);
-    Q_UNUSED(optFields);
-    Q_UNUSED(optFlags);
     if (!ok) {
         if (errorOut) *errorOut = QStringLiteral("Invalid binary slatepack metadata.");
         return false;
     }
+
+    QString envelopeSender;
+    QStringList envelopeRecipients;
+    QString envelopeError;
+    if (!parseBinaryEnvelopeOptionalFields(optFields, optFlags, &envelopeSender, &envelopeRecipients, &envelopeError)) {
+        if (errorOut) {
+            *errorOut = envelopeError.isEmpty()
+                ? QStringLiteral("Invalid binary slatepack optional fields.")
+                : envelopeError;
+        }
+        return false;
+    }
+    qDebug() << "[BinarySlatepackEnvelope]"
+             << "major=" << major
+             << "minor=" << minor
+             << "mode=" << mode
+             << "optFlags=" << optFlags
+             << "optFieldsLen=" << optFieldsLen
+             << "sender=" << envelopeSender
+             << "recipientCount=" << envelopeRecipients.size();
 
     const quint64 payloadSize = cursor.readU64(&ok);
     if (!ok || payloadSize > static_cast<quint64>(std::numeric_limits<int>::max())) {
@@ -889,5 +979,17 @@ bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload,
         return true;
     }
 
-    return decodeSlateV4BinaryPayload(innerPayload, decodedOut, errorOut);
+    QString decodedSlate;
+    if (!decodeSlateV4BinaryPayload(innerPayload, &decodedSlate, errorOut)) {
+        return false;
+    }
+
+    if (envelopeSender.trimmed().isEmpty() && envelopeRecipients.isEmpty()) {
+        if (decodedOut) {
+            *decodedOut = decodedSlate;
+        }
+        return true;
+    }
+
+    return finalizeDecodedSlatePayload(innerPayload, envelopeSender, envelopeRecipients, decodedOut, errorOut);
 }

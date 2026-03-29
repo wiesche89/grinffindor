@@ -68,89 +68,23 @@ Item {
         errorDialogText = text
         errorPopup.open()
     }
-    function activeTextControl() {
-        var item = root.window ? root.window.activeFocusItem : null
-        while (item) {
-            if (item.copy || item.selectAll || item.paste
-                    || typeof item.text === "string"
-                    || typeof item.text === "object") {
-                return item
-            }
-            item = item.parent
-        }
-        return null
-    }
-    function selectAllInActiveTextControl() {
-        var control = activeTextControl()
-        if (control && control.selectAll)
-            control.selectAll()
-    }
-    function copyFromActiveTextControl() {
-        var control = activeTextControl()
-        if (!control)
-            return
-        if (control.copy) {
-            control.copy()
-            return
-        }
-        var copiedText = control.selectedText && control.selectedText.length > 0
-            ? control.selectedText
-            : control.text
-        grinWalletController.copyTextToClipboard(copiedText)
-    }
-    function pasteIntoControl(control) {
-        if (!control || control.readOnly === true)
-            return
-        var pastedText = grinWalletController.requestPasteText()
-        if (!pastedText || pastedText.length === 0)
-            return
-
-        if (control.remove && control.insert
-                && control.selectionStart !== undefined
-                && control.selectionEnd !== undefined) {
-            var start = Math.min(control.selectionStart, control.selectionEnd)
-            var end = Math.max(control.selectionStart, control.selectionEnd)
-            if (end > start)
-                control.remove(start, end)
-            control.insert(start, pastedText)
-        } else if (control.text !== undefined) {
-            control.text = pastedText
-        }
-        root.syncBrowserShortcutContext(control)
-    }
     function handleTextControlKeyPress(control, event) {
-        if (!control || !(event.modifiers & Qt.ControlModifier))
-            return
-        if (event.key === Qt.Key_A) {
-            if (control.selectAll)
-                control.selectAll()
-            event.accepted = true
-            return
-        }
-        if (event.key === Qt.Key_C) {
-            if (control.copy) {
-                control.copy()
-            } else {
-                var copiedText = control.selectedText && control.selectedText.length > 0
-                    ? control.selectedText
-                    : control.text
-                grinWalletController.copyTextToClipboard(copiedText)
-            }
-            event.accepted = true
-            return
-        }
-        if (event.key === Qt.Key_V) {
-            root.pasteIntoControl(control)
-            event.accepted = true
-        }
+        event.accepted = false
     }
     function syncBrowserShortcutContext(control) {
         if (!control) {
+            console.log("[ShortcutContext]", JSON.stringify({ focused: false, textLength: 0, selectedLength: 0 }))
             grinWalletController.updateBrowserShortcutContext("", "", false)
             return
         }
         var textValue = control.text !== undefined && control.text !== null ? control.text : ""
         var selectedValue = control.selectedText !== undefined && control.selectedText !== null ? control.selectedText : ""
+        console.log("[ShortcutContext]", JSON.stringify({
+            focused: !!control.activeFocus,
+            textLength: textValue.length,
+            selectedLength: selectedValue.length,
+            objectName: control.objectName !== undefined ? control.objectName : ""
+        }))
         grinWalletController.updateBrowserShortcutContext(textValue, selectedValue, !!control.activeFocus)
     }
     function openRevealSeedPopup() {
@@ -332,16 +266,6 @@ Item {
     }
 
     Rectangle { anchors.fill: parent; color: "#091018" }
-    Shortcut {
-        sequences: [StandardKey.SelectAll, "Ctrl+A"]
-        context: Qt.ApplicationShortcut
-        onActivated: root.selectAllInActiveTextControl()
-    }
-    Shortcut {
-        sequences: [StandardKey.Copy, "Ctrl+C"]
-        context: Qt.ApplicationShortcut
-        onActivated: root.copyFromActiveTextControl()
-    }
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
@@ -376,7 +300,8 @@ Item {
             }
 
             Label {
-                text: root.tf("browser_wallet_title", "Grin Browser Wallet")
+                text: root.tf("browser_wallet_title", "Grin Browser Wallet") + " / "
+                      + root.tf("browser_wallet_self_custodial", "Self-Custodial")
                 color: "#f7fbff"
                 font.pixelSize: 28
                 font.weight: Font.Bold
@@ -576,23 +501,7 @@ Item {
                         id: overviewColumn
                         anchors.fill: parent
                         anchors.margins: 18
-                        spacing: 12
-
-                        Label {
-                            width: parent.width
-                            text: root.tf("browser_wallet_overview_title", "Overview")
-                            color: "#ffffff"
-                            font.pixelSize: 30
-                            font.weight: Font.Bold
-                        }
-
-                        Label {
-                            width: parent.width
-                            text: root.tf("browser_wallet_intro", "A self-custodial Grin wallet shell for Qt WASM. Seed and slate handling stay local in the browser runtime, while chain data comes from an external node.")
-                            color: "#d7e9f4"
-                            wrapMode: Text.WordWrap
-                            font.pixelSize: 17
-                        }
+                        spacing: 0
 
                         GridLayout {
                             width: parent.width
@@ -835,6 +744,19 @@ Item {
                                         wrapMode: Text.WrapAnywhere
                                         font.pixelSize: 12
                                     }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        visible: !!(modelData.locked && modelData.workflow_id && modelData.workflow_id.length > 0)
+
+                                        Button {
+                                            text: root.tf("browser_wallet_utxo_cancel_lock", "Cancel Lock")
+                                            enabled: grinWalletController.walletUnlocked
+                                            onClicked: grinWalletController.cancelTransaction(modelData.workflow_id)
+                                        }
+
+                                        Item { Layout.fillWidth: true }
+                                    }
                                 }
                             }
                         }
@@ -981,7 +903,9 @@ Item {
                                                  && modelData.output_commitments.length !== undefined
                                                  && modelData.output_commitments.length > 0
                                         text: root.tf("browser_wallet_history_outputs", "Outputs") + ": "
-                                              + modelData.output_commitments.join(", ")
+                                              + ((modelData.output_commitments && modelData.output_commitments.join)
+                                                    ? modelData.output_commitments.join(", ")
+                                                    : "")
                                         color: "#8fb4c9"
                                         wrapMode: Text.WrapAnywhere
                                         font.pixelSize: 12
@@ -1011,7 +935,7 @@ Item {
                                                  && modelData.payment_proof.saddr !== undefined
                                                  && (modelData.payment_proof.saddr || "").length > 0
                                         text: root.tf("browser_wallet_history_payment_proof_sender", "Proof sender") + ": "
-                                              + modelData.payment_proof.saddr
+                                              + ((modelData.payment_proof && modelData.payment_proof.saddr) ? modelData.payment_proof.saddr : "")
                                         color: "#8fb4c9"
                                         wrapMode: Text.WrapAnywhere
                                         font.pixelSize: 12
@@ -1023,7 +947,7 @@ Item {
                                                  && modelData.payment_proof.raddr !== undefined
                                                  && (modelData.payment_proof.raddr || "").length > 0
                                         text: root.tf("browser_wallet_history_payment_proof_receiver", "Proof receiver") + ": "
-                                              + modelData.payment_proof.raddr
+                                              + ((modelData.payment_proof && modelData.payment_proof.raddr) ? modelData.payment_proof.raddr : "")
                                         color: "#8fb4c9"
                                         wrapMode: Text.WrapAnywhere
                                         font.pixelSize: 12
@@ -1035,7 +959,7 @@ Item {
                                                  && modelData.payment_proof.rsig !== undefined
                                                  && (modelData.payment_proof.rsig || "").length > 0
                                         text: root.tf("browser_wallet_history_payment_proof_signature", "Receiver signature") + ": "
-                                              + modelData.payment_proof.rsig
+                                              + ((modelData.payment_proof && modelData.payment_proof.rsig) ? modelData.payment_proof.rsig : "")
                                         color: "#8fb4c9"
                                         wrapMode: Text.WrapAnywhere
                                         font.pixelSize: 12
@@ -1052,7 +976,7 @@ Item {
                                         activeFocusOnPress: true
                                         wrapMode: TextEdit.WrapAnywhere
                                         color: "#d7e9f4"
-                                        text: JSON.stringify(modelData.payment_proof, null, 2)
+                                        text: modelData.payment_proof !== undefined ? JSON.stringify(modelData.payment_proof, null, 2) : ""
                                         Keys.onPressed: function(event) { root.handleTextControlKeyPress(this, event) }
                                     }
 
@@ -1135,7 +1059,7 @@ Item {
                                 id: amountField
                                 Layout.fillWidth: true
                                 text: walletPageSettings.amountDraft
-                                placeholderText: root.tf("browser_wallet_amount_placeholder", "Amount, e.g. 1.000000000")
+                                placeholderText: root.tf("browser_wallet_amount_placeholder", "Amount in GRIN, e.g. 1.000000000")
                                 onActiveFocusChanged: root.syncBrowserShortcutContext(amountField)
                                 onSelectedTextChanged: root.syncBrowserShortcutContext(amountField)
                                 onTextChanged: {
@@ -1285,6 +1209,7 @@ Item {
 
                             TextArea {
                                 id: slatepackArea
+                                objectName: "slatepackArea"
                                 width: parent.width
                                 wrapMode: TextEdit.WrapAnywhere
                                 textFormat: TextEdit.PlainText
@@ -1300,16 +1225,6 @@ Item {
                                 onSelectedTextChanged: root.syncBrowserShortcutContext(slatepackArea)
                                 onTextChanged: root.syncBrowserShortcutContext(slatepackArea)
                                 Keys.onPressed: function(event) { root.handleTextControlKeyPress(slatepackArea, event) }
-                            }
-                        }
-
-                        Shortcut {
-                            sequences: [StandardKey.Paste, "Ctrl+V", "Shift+Insert"]
-                            onActivated: {
-                                if (slatepackArea.activeFocus) {
-                                    var pastedSlatepack = grinWalletController.requestPasteText()
-                                    if (pastedSlatepack.length > 0) slatepackArea.text = pastedSlatepack
-                                }
                             }
                         }
 
@@ -1455,6 +1370,46 @@ Item {
                                     onSelectedTextChanged: root.syncBrowserShortcutContext(settingsSeedArea)
                                     onTextChanged: root.syncBrowserShortcutContext(settingsSeedArea)
                                     Keys.onPressed: function(event) { root.handleTextControlKeyPress(settingsSeedArea, event) }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            radius: 16
+                            color: "#132635"
+                            border.color: "#2a4f64"
+                            implicitHeight: securitySettingsColumn.implicitHeight + 20
+
+                            ColumnLayout {
+                                id: securitySettingsColumn
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 8
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.tf("settings_security_title", "Security")
+                                    color: "#ffffff"
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.tf("settings_auto_lock_note", "Lock the wallet automatically when the app loses focus or is minimized.")
+                                    color: "#d7e9f4"
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Switch {
+                                    Layout.alignment: Qt.AlignLeft
+                                    checked: grinWalletController ? grinWalletController.autoLockOnAppDeactivate : false
+                                    text: root.tf("settings_auto_lock_label", "Lock on app exit/focus loss")
+
+                                    onToggled: {
+                                        if (grinWalletController)
+                                            grinWalletController.setAutoLockOnAppDeactivate(checked)
+                                    }
                                 }
                             }
                         }
@@ -1893,19 +1848,6 @@ Item {
                         root.syncBrowserShortcutContext(importBackupArea)
                     }
                     Keys.onPressed: function(event) { root.handleTextControlKeyPress(importBackupArea, event) }
-                }
-
-                Shortcut {
-                    sequences: [StandardKey.Paste, "Ctrl+V", "Shift+Insert"]
-                    onActivated: {
-                        if (restoreMnemonicArea.activeFocus) {
-                            var pastedText = grinWalletController.requestPasteText()
-                            if (pastedText.length > 0) restoreMnemonicArea.text = pastedText
-                        } else if (importBackupArea.activeFocus) {
-                            var pastedBackup = grinWalletController.requestPasteText()
-                            if (pastedBackup.length > 0) importBackupArea.text = pastedBackup
-                        }
-                    }
                 }
 
                 RowLayout {

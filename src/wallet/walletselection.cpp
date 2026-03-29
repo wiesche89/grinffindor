@@ -100,9 +100,9 @@ WalletSelection::Result buildCandidate(const QList<WalletOutput> &selectedOutput
     }
 
     const quint64 feeWithoutChange = WalletSelection::estimateFee(selectedOutputs.size(), 1, 1);
-    if (totalSelected >= amount + feeWithoutChange) {
+    if (totalSelected == amount + feeWithoutChange) {
         result.fee = feeWithoutChange;
-        result.change = totalSelected - amount - feeWithoutChange;
+        result.change = 0;
         result.success = true;
         return result;
     }
@@ -150,10 +150,10 @@ void considerAccumulatedCandidates(const QList<WalletOutput> &orderedCandidates,
 
 quint64 WalletSelection::estimateFee(int numInputs, int numOutputs, int numKernels)
 {
-    const quint64 weight = static_cast<quint64>(numInputs) * 4ULL
+    const quint64 weight = static_cast<quint64>(numInputs) * 1ULL
                          + static_cast<quint64>(numOutputs) * 21ULL
                          + static_cast<quint64>(numKernels) * 3ULL;
-    return weight * 1000000ULL;
+    return weight * 500000ULL;
 }
 
 WalletSelection::Result WalletSelection::selectSpendableOutputs(const QList<WalletOutput> &outputs,

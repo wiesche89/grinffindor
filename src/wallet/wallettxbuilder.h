@@ -22,6 +22,8 @@ public:
                                                 const QList<WalletOutput> &selectedInputs,
                                                 const WalletOutput *receiverOutput,
                                                 const WalletOutput *changeOutput);
+    static BuildResult buildTransactionSkeletonFromCommitments(const SlateV4 &slate,
+                                                               const WalletOutput *receiverOutput);
 };
 
 #endif // WALLETTXBUILDER_H

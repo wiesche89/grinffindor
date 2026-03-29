@@ -9,6 +9,7 @@
 #include <functional>
 
 #include "wallet/slatev4.h"
+#include "wallet/walletcryptobackend.h"
 #include "wallet/walletoutput.h"
 
 class NodeForeignApi;
@@ -39,6 +40,7 @@ class GrinWalletController : public QObject
     Q_PROPERTY(QString workflowMode READ workflowMode NOTIFY workflowChanged)
     Q_PROPERTY(QString workflowSlatepack READ workflowSlatepack NOTIFY workflowChanged)
     Q_PROPERTY(QString workflowDecoded READ workflowDecoded NOTIFY workflowChanged)
+    Q_PROPERTY(bool autoLockOnAppDeactivate READ autoLockOnAppDeactivate WRITE setAutoLockOnAppDeactivate NOTIFY statusChanged)
     Q_PROPERTY(QVariantList walletOutputs READ walletOutputs NOTIFY statusChanged)
     Q_PROPERTY(QVariantList transactionHistory READ transactionHistory NOTIFY statusChanged)
 
@@ -67,6 +69,7 @@ public:
     QString workflowMode() const;
     QString workflowSlatepack() const;
     QString workflowDecoded() const;
+    bool autoLockOnAppDeactivate() const;
     QVariantList walletOutputs() const;
     QVariantList transactionHistory() const;
 
@@ -106,8 +109,10 @@ public:
     Q_INVOKABLE void broadcastTransaction(const QString &workflowId);
     Q_INVOKABLE void cancelTransaction(const QString &workflowId);
     Q_INVOKABLE void clearWorkflow();
+    Q_INVOKABLE void setAutoLockOnAppDeactivate(bool enabled);
     Q_INVOKABLE QString encodeSlatepack(const QString &slateJson, const QString &sender = QString()) const;
     Q_INVOKABLE QString decodeSlatepack(const QString &slatepack) const;
+    bool processShortcutKey(int key);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -163,11 +168,21 @@ private:
                                      WalletOutput *outputOut,
                                      SlateV4::Commit *commitOut,
                                      QString *errorOut = 0);
+    bool prepareInvoiceSenderContext(const QString &workflowId,
+                                     SlateV4 *slate,
+                                     WalletCryptoBackend::ParticipantContext *signatureOverrideOut,
+                                     QString *errorOut = 0);
+    void compactInvoiceSlateForReturn(const QString &workflowId, SlateV4 *slate);
+    void compactStandardSlateForReturn(const QString &workflowId, SlateV4 *slate);
     QString currentSlatepackAddress() const;
     QString currentPaymentProofAddress() const;
     QByteArray currentSlatepackSecret() const;
     QStringList outgoingSlatepackRecipients(const SlateV4 &slate) const;
     QString resolvedNetworkName() const;
+    void alignSlateVersionWithNode(SlateV4 *slate) const;
+    void runExternalInvoicePreflight(const SlateV4 &incomingSlate,
+                                     const SlateV4 &emittedSlate,
+                                     const QString &armoredSlatepack) const;
 
     NodeForeignApi *m_nodeApi;
     QTimer *m_autoRefreshTimer;
@@ -182,6 +197,7 @@ private:
     QString m_nodeUrl;
     QString m_storagePersistenceState;
     qulonglong m_chainHeight;
+    int m_nodeBlockHeaderVersion;
     QString m_syncStatus;
     QString m_totalBalance;
     QString m_spendableBalance;
@@ -195,6 +211,7 @@ private:
     QString m_workflowMode;
     QString m_workflowSlatepack;
     QString m_workflowDecoded;
+    bool m_autoLockOnAppDeactivate;
     bool m_walletScanInFlight;
     bool m_seedScanActive;
     qulonglong m_seedScanNextIndex;

@@ -142,7 +142,6 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
         output.amount = formatNanogrin(rewound.amount);
         output.source = QStringLiteral("scan");
         output.keyPath = rewound.keyPath;
-        output.blindingFactor = rewound.blindingFactor;
         output.childIndex = rewound.childIndex;
         output.height = chainOutput.blockHeight().toULongLong();
         output.coinbase =
@@ -150,6 +149,13 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
         output.onChain = true;
         output.spent = chainOutput.spent();
         output.locked = false;
+        const WalletKeychain::OutputSecrets secrets =
+            keychain.deriveOutputSecrets(rewound.childIndex, rewound.amount);
+        if (secrets.success) {
+            output.blindingFactor = QString::fromUtf8(secrets.blindingFactor.toHex());
+        } else {
+            output.blindingFactor = rewound.blindingFactor;
+        }
         discovered.append(output);
     }
 

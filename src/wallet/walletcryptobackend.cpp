@@ -5,7 +5,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRandomGenerator>
+#include <QDebug>
 #include <QStringList>
+#include <QVector>
 #include <cstring>
 
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
@@ -94,6 +96,116 @@ QByteArray hashBytes(const QByteArray &input)
 QString toHex(const unsigned char *data, int size)
 {
     return QString::fromUtf8(QByteArray(reinterpret_cast<const char *>(data), size).toHex());
+}
+
+const char kBech32Charset[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+QVector<int> bech32CharsetReverse()
+{
+    QVector<int> reverse(128, -1);
+    for (int i = 0; kBech32Charset[i] != '\0'; ++i) {
+        reverse[static_cast<int>(kBech32Charset[i])] = i;
+    }
+    return reverse;
+}
+
+QVector<int> convertBits(const QByteArray &data, int fromBits, int toBits, bool pad)
+{
+    QVector<int> output;
+    int accumulator = 0;
+    int bitCount = 0;
+    const int maxValue = (1 << toBits) - 1;
+    const int maxAccumulator = (1 << (fromBits + toBits - 1)) - 1;
+
+    for (int i = 0; i < data.size(); ++i) {
+        const int value = static_cast<unsigned char>(data.at(i));
+        if ((value >> fromBits) != 0) {
+            return QVector<int>();
+        }
+        accumulator = ((accumulator << fromBits) | value) & maxAccumulator;
+        bitCount += fromBits;
+        while (bitCount >= toBits) {
+            bitCount -= toBits;
+            output.append((accumulator >> bitCount) & maxValue);
+        }
+    }
+
+    if (pad) {
+        if (bitCount > 0) {
+            output.append((accumulator << (toBits - bitCount)) & maxValue);
+        }
+    } else if (bitCount >= fromBits || ((accumulator << (toBits - bitCount)) & maxValue) != 0) {
+        return QVector<int>();
+    }
+
+    return output;
+}
+
+QVector<int> hrpExpand(const QString &hrp)
+{
+    QVector<int> expanded;
+    expanded.reserve(hrp.size() * 2 + 1);
+    for (int i = 0; i < hrp.size(); ++i) {
+        expanded.append(hrp.at(i).unicode() >> 5);
+    }
+    expanded.append(0);
+    for (int i = 0; i < hrp.size(); ++i) {
+        expanded.append(hrp.at(i).unicode() & 31);
+    }
+    return expanded;
+}
+
+quint32 bech32Polymod(const QVector<int> &values)
+{
+    static const quint32 generators[5] = {
+        0x3b6a57b2U, 0x26508e6dU, 0x1ea119faU, 0x3d4233ddU, 0x2a1462b3U
+    };
+
+    quint32 checksum = 1;
+    for (int i = 0; i < values.size(); ++i) {
+        const quint32 top = checksum >> 25;
+        checksum = ((checksum & 0x1ffffffU) << 5) ^ static_cast<quint32>(values.at(i));
+        for (int j = 0; j < 5; ++j) {
+            if (((top >> j) & 1U) != 0U) {
+                checksum ^= generators[j];
+            }
+        }
+    }
+    return checksum;
+}
+
+QVector<int> bech32CreateChecksum(const QString &hrp, const QVector<int> &data)
+{
+    QVector<int> values = hrpExpand(hrp);
+    values += data;
+    values += QVector<int>(6, 0);
+    const quint32 polymod = bech32Polymod(values) ^ 1U;
+
+    QVector<int> checksum;
+    checksum.reserve(6);
+    for (int i = 0; i < 6; ++i) {
+        checksum.append((polymod >> (5 * (5 - i))) & 31U);
+    }
+    return checksum;
+}
+
+QString bech32Encode(const QString &hrp, const QByteArray &payload)
+{
+    const QVector<int> data = convertBits(payload, 8, 5, true);
+    if (data.isEmpty() && !payload.isEmpty()) {
+        return QString();
+    }
+
+    const QVector<int> checksum = bech32CreateChecksum(hrp, data);
+    QString encoded = hrp + QLatin1Char('1');
+    encoded.reserve(hrp.size() + 1 + data.size() + checksum.size());
+    for (int i = 0; i < data.size(); ++i) {
+        encoded.append(QLatin1Char(kBech32Charset[data.at(i)]));
+    }
+    for (int i = 0; i < checksum.size(); ++i) {
+        encoded.append(QLatin1Char(kBech32Charset[checksum.at(i)]));
+    }
+    return encoded;
 }
 
 void appendU8(QByteArray &out, quint8 value)
@@ -617,6 +729,23 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipant(c
     return context;
 }
 
+WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createRandomParticipant(const QString &roleTag)
+{
+    const QString entropy = QStringLiteral("%1:%2")
+        .arg(roleTag, randomHex(32));
+    const QByteArray blindSecret = deriveValidSecretBytes(QStringLiteral("random-blind"), entropy, QStringLiteral("blind"));
+    const QByteArray nonceSecret = deriveValidSecretBytes(QStringLiteral("random-nonce"), entropy, QStringLiteral("nonce"));
+
+    ParticipantContext context;
+    context.role = roleTag;
+    context.blindSecret = QString::fromUtf8(blindSecret.toHex());
+    context.nonceSecret = QString::fromUtf8(nonceSecret.toHex());
+    context.blindPublic = createCompressedPubkeyHex(blindSecret);
+    context.noncePublic = createCompressedPubkeyHex(nonceSecret);
+    context.address = hashHex(QStringLiteral("addr:") + entropy);
+    return context;
+}
+
 QString WalletCryptoBackend::createOffset(const QString &walletFingerprint, const QString &workflowId)
 {
     return QString::fromUtf8(deriveValidSecretBytes(QStringLiteral("offset"), walletFingerprint, workflowId).toHex());
@@ -634,6 +763,25 @@ QString WalletCryptoBackend::addOffsets(const QString &leftOffset, const QString
         return QString();
     }
     return QString::fromUtf8(sum.toHex());
+}
+
+QString WalletCryptoBackend::negateScalar(const QString &value, QString *errorOut)
+{
+    QByteArray scalar = fromHex(value);
+    if (scalar.size() != 32) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Invalid scalar length.");
+        }
+        return QString();
+    }
+    if (secp256k1_ec_privkey_negate(walletSecpContext(),
+                                    reinterpret_cast<unsigned char *>(scalar.data())) != 1) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to negate scalar.");
+        }
+        return QString();
+    }
+    return QString::fromUtf8(scalar.toHex());
 }
 
 QString WalletCryptoBackend::combineBlindingFactors(const QStringList &positiveBlinds,
@@ -732,7 +880,8 @@ WalletCryptoBackend::OwnedCommitment WalletCryptoBackend::createOwnedCommitment(
     return owned;
 }
 
-QString WalletCryptoBackend::slatepackAddress(const WalletKeychain &keychain)
+QString WalletCryptoBackend::slatepackAddress(const WalletKeychain &keychain,
+                                              const QString &networkName)
 {
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
     const QByteArray seed = keychain.slatepackSecretKey();
@@ -740,12 +889,20 @@ QString WalletCryptoBackend::slatepackAddress(const WalletKeychain &keychain)
         return QString();
     }
 
+    QByteArray seedCopy = seed;
+    QByteArray secretKey(64, Qt::Uninitialized);
     QByteArray publicKey(32, Qt::Uninitialized);
-    crypto_x25519_public_key(reinterpret_cast<uint8_t *>(publicKey.data()),
-                             reinterpret_cast<const uint8_t *>(seed.constData()));
-    return QString::fromUtf8(publicKey.toHex());
+    crypto_eddsa_key_pair(reinterpret_cast<uint8_t *>(secretKey.data()),
+                          reinterpret_cast<uint8_t *>(publicKey.data()),
+                          reinterpret_cast<uint8_t *>(seedCopy.data()));
+
+    const QString hrp = networkName.trimmed().compare(QStringLiteral("mainnet"), Qt::CaseInsensitive) == 0
+        ? QStringLiteral("grin")
+        : QStringLiteral("tgrin");
+    return bech32Encode(hrp, publicKey);
 #else
     Q_UNUSED(keychain);
+    Q_UNUSED(networkName);
     return QString();
 #endif
 }
@@ -908,6 +1065,7 @@ bool WalletCryptoBackend::verifyPaymentProof(const SlateV4 &slate, QString *erro
 bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
                                                const QString &walletFingerprint,
                                                const QString &roleTag,
+                                               const ParticipantContext *overrideContext,
                                                QString *errorOut)
 {
     if (!slate) {
@@ -924,28 +1082,8 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
     }
 
     ParticipantContext context = createParticipant(walletFingerprint, slate->workflowId(), roleTag);
-    if (slate->metadata.value(QStringLiteral("external_binary")).toBool()) {
-        const QString customBlindHex =
-            (roleTag == QStringLiteral("receiver"))
-                ? slate->metadata.value(QStringLiteral("receiver_blind")).toString()
-                : slate->metadata.value(QStringLiteral("sender_blind")).toString();
-        const QString customOffsetHex =
-            (roleTag == QStringLiteral("receiver"))
-                ? slate->metadata.value(QStringLiteral("receiver_offset")).toString()
-                : slate->metadata.value(QStringLiteral("sender_offset")).toString();
-        const QByteArray baseBlind = customBlindHex.isEmpty()
-            ? deriveSigningBaseSecret(walletFingerprint, slate->workflowId(), roleTag)
-            : fromHex(customBlindHex);
-        const QByteArray offset = customOffsetHex.isEmpty() ? fromHex(slate->offset) : fromHex(customOffsetHex);
-        QByteArray signingSecret;
-        if (!subtractScalars(baseBlind, offset, &signingSecret)) {
-            if (errorOut) {
-                *errorOut = QStringLiteral("Failed to derive participant signing key from offset.");
-            }
-            return false;
-        }
-        context.blindSecret = QString::fromUtf8(signingSecret.toHex());
-        context.blindPublic = createCompressedPubkeyHex(signingSecret);
+    if (overrideContext) {
+        context = *overrideContext;
     }
     const int existingIndex = findParticipantIndex(*slate, context.blindPublic);
     if (existingIndex < 0) {
@@ -958,6 +1096,13 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
         blindPubkeys.append(slate->signatures.at(i).xs);
         noncePubkeys.append(slate->signatures.at(i).nonce);
     }
+    qDebug() << "[WalletRound2]"
+             << "workflowId=" << slate->workflowId()
+             << "state=" << slate->stateCode()
+             << "role=" << roleTag
+             << "sigCount=" << slate->signatures.size()
+             << "blindPubkeys=" << blindPubkeys
+             << "noncePubkeys=" << noncePubkeys;
 
     secp256k1_pubkey totalBlind;
     secp256k1_pubkey totalNonce;
@@ -972,6 +1117,12 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
     }
 
     const QByteArray messageHash = buildKernelSignatureMessage(*slate);
+    qDebug() << "[WalletRound2]"
+             << "workflowId=" << slate->workflowId()
+             << "messageHash=" << QString::fromUtf8(messageHash.toHex())
+             << "contextBlindPublic=" << context.blindPublic
+             << "contextNoncePublic=" << context.noncePublic
+             << "override=" << (overrideContext != 0);
     QByteArray partialSignature;
     if (!createPartialSignature(messageHash,
                                 fromHex(context.blindSecret),
@@ -1005,6 +1156,11 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
     slate->metadata.insert(QStringLiteral("pubkey_total"), serializePubkey(totalBlind));
     slate->metadata.insert(QStringLiteral("pubnonce_total"), serializePubkey(totalNonce));
     slate->metadata.insert(QStringLiteral("signature_status"), QStringLiteral("partial"));
+    qDebug() << "[WalletRound2]"
+             << "workflowId=" << slate->workflowId()
+             << "partialLen=" << partialSignature.size()
+             << "pubkeyTotal=" << serializePubkey(totalBlind)
+             << "pubnonceTotal=" << serializePubkey(totalNonce);
     return true;
 }
 
@@ -1017,10 +1173,26 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
         return false;
     }
 
-    QList<QString> blindPubkeys;
-    QList<QString> noncePubkeys;
+    QList<QString> allBlindPubkeys;
+    QList<QString> allNoncePubkeys;
+    QList<QString> sigBlindPubkeys;
+    qDebug() << "[WalletFinalize] start"
+             << "workflowId=" << slate->workflowId()
+             << "state=" << slate->stateCode()
+             << "numParticipants=" << slate->numParticipants
+             << "sigCount=" << slate->signatures.size()
+             << "amount=" << slate->amount
+             << "fee=" << slate->fee
+             << "offset=" << slate->offset;
     for (int i = 0; i < slate->signatures.size(); ++i) {
         const SlateV4::ParticipantData &participant = slate->signatures.at(i);
+        qDebug() << "[WalletFinalize] participant"
+                 << i
+                 << "xs=" << participant.xs
+                 << "nonce=" << participant.nonce
+                 << "partLen=" << participant.part.length();
+        allBlindPubkeys.append(participant.xs);
+        allNoncePubkeys.append(participant.nonce);
         if (participant.part.isEmpty()) {
             continue;
         }
@@ -1031,11 +1203,15 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
             }
             return false;
         }
-        blindPubkeys.append(participant.xs);
-        noncePubkeys.append(participant.nonce);
+        sigBlindPubkeys.append(participant.xs);
     }
+    qDebug() << "[WalletFinalize]"
+             << "workflowId=" << slate->workflowId()
+             << "usablePartialCount=" << sigBlindPubkeys.size()
+             << "blindPubkeys=" << allBlindPubkeys
+             << "noncePubkeys=" << allNoncePubkeys;
 
-    if (blindPubkeys.size() < slate->numParticipants) {
+    if (sigBlindPubkeys.size() < slate->numParticipants) {
         if (errorOut) {
             *errorOut = QStringLiteral("Not enough partial signatures to finalize.");
         }
@@ -1044,12 +1220,16 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
 
     secp256k1_pubkey totalBlind;
     secp256k1_pubkey totalNonce;
-    if (!combinePubkeys(blindPubkeys, &totalBlind) || !combinePubkeys(noncePubkeys, &totalNonce)) {
+    if (!combinePubkeys(allBlindPubkeys, &totalBlind) || !combinePubkeys(allNoncePubkeys, &totalNonce)) {
         if (errorOut) {
             *errorOut = QStringLiteral("Failed to combine final public keys.");
         }
         return false;
     }
+    qDebug() << "[WalletFinalize]"
+             << "workflowId=" << slate->workflowId()
+             << "pubkeyTotal=" << serializePubkey(totalBlind)
+             << "pubnonceTotal=" << serializePubkey(totalNonce);
 
     QVector<unsigned char *> sigPointers;
     QVector<QByteArray> sigBuffers;
@@ -1073,25 +1253,22 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
         }
         return false;
     }
+    qDebug() << "[WalletFinalize]"
+             << "workflowId=" << slate->workflowId()
+             << "combinedFinalSig=" << toHex(finalSig, sizeof(finalSig));
 
     const QByteArray messageHash = buildKernelSignatureMessage(*slate);
-    QVector<secp256k1_pubkey> pubkeys;
-    for (int i = 0; i < blindPubkeys.size(); ++i) {
-        secp256k1_pubkey pubkey;
-        if (!parsePubkey(blindPubkeys.at(i), &pubkey)) {
-            if (errorOut) {
-                *errorOut = QStringLiteral("Failed to parse final participant key.");
-            }
-            return false;
-        }
-        pubkeys.append(pubkey);
-    }
-
-    if (secp256k1_aggsig_build_scratch_and_verify(walletSecpContext(),
-                                                  finalSig,
-                                                  reinterpret_cast<const unsigned char *>(messageHash.constData()),
-                                                  pubkeys.constData(),
-                                                  static_cast<size_t>(pubkeys.size())) != 1) {
+    qDebug() << "[WalletFinalize]"
+             << "workflowId=" << slate->workflowId()
+             << "messageHash=" << QString::fromUtf8(messageHash.toHex());
+    if (secp256k1_aggsig_verify_single(walletSecpContext(),
+                                       finalSig,
+                                       reinterpret_cast<const unsigned char *>(messageHash.constData()),
+                                       0,
+                                       &totalBlind,
+                                       &totalBlind,
+                                       0,
+                                       1) != 1) {
         if (errorOut) {
             *errorOut = QStringLiteral("Final aggsig verification failed.");
         }
@@ -1103,6 +1280,257 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
     slate->metadata.insert(QStringLiteral("pubnonce_total"), serializePubkey(totalNonce));
     slate->metadata.insert(QStringLiteral("final_sig"), toHex(finalSig, sizeof(finalSig)));
     slate->metadata.insert(QStringLiteral("signature_status"), QStringLiteral("finalized"));
+    qDebug() << "[WalletFinalize] success"
+             << "workflowId=" << slate->workflowId()
+             << "finalSig=" << toHex(finalSig, sizeof(finalSig));
+    return true;
+}
+
+bool WalletCryptoBackend::verifyPartialSignatures(const SlateV4 &slate, QString *errorOut)
+{
+    QList<QString> blindPubkeys;
+    QList<QString> noncePubkeys;
+    for (int i = 0; i < slate.signatures.size(); ++i) {
+        const SlateV4::ParticipantData &participant = slate.signatures.at(i);
+        if (participant.xs.isEmpty() || participant.nonce.isEmpty()) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Participant entry is missing public keys.");
+            }
+            return false;
+        }
+        blindPubkeys.append(participant.xs);
+        noncePubkeys.append(participant.nonce);
+    }
+
+    if (blindPubkeys.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Slate does not contain participants.");
+        }
+        return false;
+    }
+
+    secp256k1_pubkey totalBlind;
+    secp256k1_pubkey totalNonce;
+    if (!combinePubkeys(blindPubkeys, &totalBlind) || !combinePubkeys(noncePubkeys, &totalNonce)) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to combine participant public keys.");
+        }
+        return false;
+    }
+
+    const QByteArray messageHash = buildKernelSignatureMessage(slate);
+    int verifiedCount = 0;
+    for (int i = 0; i < slate.signatures.size(); ++i) {
+        const SlateV4::ParticipantData &participant = slate.signatures.at(i);
+        if (participant.part.isEmpty()) {
+            continue;
+        }
+
+        const QByteArray partialBytes = fromHex(participant.part);
+        if (partialBytes.size() != 64) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Invalid partial signature length.");
+            }
+            return false;
+        }
+
+        secp256k1_pubkey participantPubkey;
+        if (!parsePubkey(participant.xs, &participantPubkey)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Failed to parse participant public key.");
+            }
+            return false;
+        }
+
+        if (!verifyPartialSignature(partialBytes,
+                                    messageHash,
+                                    totalNonce,
+                                    participantPubkey,
+                                    totalBlind)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Partial signature verification failed.");
+            }
+            return false;
+        }
+        ++verifiedCount;
+    }
+
+    if (verifiedCount == 0) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Slate does not contain partial signatures.");
+        }
+        return false;
+    }
+
+    qDebug() << "[WalletVerifyPartial]"
+             << "workflowId=" << slate.workflowId()
+             << "state=" << slate.stateCode()
+             << "participantCount=" << slate.signatures.size()
+             << "verifiedCount=" << verifiedCount
+             << "messageHash=" << QString::fromUtf8(messageHash.toHex())
+             << "pubkeyTotal=" << serializePubkey(totalBlind)
+             << "pubnonceTotal=" << serializePubkey(totalNonce);
+    return true;
+}
+
+QString WalletCryptoBackend::calculateExcessCommitment(const SlateV4 &slate, QString *errorOut)
+{
+    QList<QString> blindPubkeys;
+    for (int i = 0; i < slate.signatures.size(); ++i) {
+        const SlateV4::ParticipantData &participant = slate.signatures.at(i);
+        if (participant.xs.isEmpty()) {
+            continue;
+        }
+        blindPubkeys.append(participant.xs);
+    }
+
+    secp256k1_pubkey totalBlind;
+    if (!combinePubkeys(blindPubkeys, &totalBlind)) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to combine participant excess keys.");
+        }
+        return QString();
+    }
+
+    secp256k1_pedersen_commitment commitment;
+    if (secp256k1_pubkey_to_pedersen_commitment(walletSecpContext(), &commitment, &totalBlind) != 1) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to convert public blind sum into excess commitment.");
+        }
+        return QString();
+    }
+
+    unsigned char serialized[33];
+    if (secp256k1_pedersen_commitment_serialize(walletSecpContext(), serialized, &commitment) != 1) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to serialize excess commitment.");
+        }
+        return QString();
+    }
+
+    return toHex(serialized, sizeof(serialized));
+}
+
+QString WalletCryptoBackend::kernelSignatureMessageHex(const SlateV4 &slate)
+{
+    return QString::fromUtf8(buildKernelSignatureMessage(slate).toHex());
+}
+
+QString WalletCryptoBackend::combinedBlindPublicKeyHex(const SlateV4 &slate, QString *errorOut)
+{
+    QList<QString> blindPubkeys;
+    for (int i = 0; i < slate.signatures.size(); ++i) {
+        const SlateV4::ParticipantData &participant = slate.signatures.at(i);
+        if (!participant.xs.isEmpty()) {
+            blindPubkeys.append(participant.xs);
+        }
+    }
+
+    secp256k1_pubkey totalBlind;
+    if (!combinePubkeys(blindPubkeys, &totalBlind)) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to combine participant blind public keys.");
+        }
+        return QString();
+    }
+    return serializePubkey(totalBlind);
+}
+
+QString WalletCryptoBackend::combinedNoncePublicKeyHex(const SlateV4 &slate, QString *errorOut)
+{
+    QList<QString> noncePubkeys;
+    for (int i = 0; i < slate.signatures.size(); ++i) {
+        const SlateV4::ParticipantData &participant = slate.signatures.at(i);
+        if (!participant.nonce.isEmpty()) {
+            noncePubkeys.append(participant.nonce);
+        }
+    }
+
+    secp256k1_pubkey totalNonce;
+    if (!combinePubkeys(noncePubkeys, &totalNonce)) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to combine participant nonce public keys.");
+        }
+        return QString();
+    }
+    return serializePubkey(totalNonce);
+}
+
+bool WalletCryptoBackend::buildFinalSignature(const SlateV4 &slate,
+                                              QString *finalSignatureOut,
+                                              QString *errorOut)
+{
+    QList<QString> allBlindPubkeys;
+    QList<QString> allNoncePubkeys;
+    QVector<QByteArray> sigBuffers;
+
+    for (int i = 0; i < slate.signatures.size(); ++i) {
+        const SlateV4::ParticipantData &participant = slate.signatures.at(i);
+        allBlindPubkeys.append(participant.xs);
+        allNoncePubkeys.append(participant.nonce);
+        if (!participant.part.isEmpty()) {
+            const QByteArray partialBytes = fromHex(participant.part);
+            if (partialBytes.size() != 64) {
+                if (errorOut) {
+                    *errorOut = QStringLiteral("Invalid partial signature length.");
+                }
+                return false;
+            }
+            sigBuffers.append(partialBytes);
+        }
+    }
+
+    if (sigBuffers.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Slate does not contain partial signatures.");
+        }
+        return false;
+    }
+
+    secp256k1_pubkey totalBlind;
+    secp256k1_pubkey totalNonce;
+    if (!combinePubkeys(allBlindPubkeys, &totalBlind) || !combinePubkeys(allNoncePubkeys, &totalNonce)) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to combine final public keys.");
+        }
+        return false;
+    }
+
+    QVector<unsigned char *> sigPointers;
+    for (int i = 0; i < sigBuffers.size(); ++i) {
+        sigPointers.append(reinterpret_cast<unsigned char *>(sigBuffers[i].data()));
+    }
+
+    unsigned char finalSig[64];
+    if (secp256k1_aggsig_add_signatures_single(walletSecpContext(),
+                                               finalSig,
+                                               const_cast<const unsigned char **>(sigPointers.data()),
+                                               static_cast<size_t>(sigPointers.size()),
+                                               &totalNonce) != 1) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to combine aggsig partials.");
+        }
+        return false;
+    }
+
+    const QByteArray messageHash = buildKernelSignatureMessage(slate);
+    if (secp256k1_aggsig_verify_single(walletSecpContext(),
+                                       finalSig,
+                                       reinterpret_cast<const unsigned char *>(messageHash.constData()),
+                                       0,
+                                       &totalBlind,
+                                       &totalBlind,
+                                       0,
+                                       1) != 1) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Final aggsig verification failed.");
+        }
+        return false;
+    }
+
+    if (finalSignatureOut) {
+        *finalSignatureOut = toHex(finalSig, sizeof(finalSig));
+    }
     return true;
 }
 

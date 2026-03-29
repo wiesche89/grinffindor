@@ -36,10 +36,12 @@ public:
     static ParticipantContext createParticipant(const QString &walletFingerprint,
                                                 const QString &workflowId,
                                                 const QString &roleTag);
+    static ParticipantContext createRandomParticipant(const QString &roleTag);
     static QString createOffset(const QString &walletFingerprint, const QString &workflowId);
     static QString addOffsets(const QString &leftOffset,
                               const QString &rightOffset,
                               QString *errorOut = 0);
+    static QString negateScalar(const QString &value, QString *errorOut = 0);
     static QString combineBlindingFactors(const QStringList &positiveBlinds,
                                           const QStringList &negativeBlinds = QStringList(),
                                           QString *errorOut = 0);
@@ -50,7 +52,8 @@ public:
     static OwnedCommitment createOwnedCommitment(const WalletKeychain &keychain,
                                                  quint32 childIndex,
                                                  const QString &amount);
-    static QString slatepackAddress(const WalletKeychain &keychain);
+    static QString slatepackAddress(const WalletKeychain &keychain,
+                                    const QString &networkName = QString());
     static QString paymentProofAddress(const WalletKeychain &keychain);
     static SlateV4::ParticipantData createParticipantData(const ParticipantContext &context);
     static SlateV4::PaymentProof createPaymentProof(const ParticipantContext &sender, const ParticipantContext &receiver);
@@ -61,7 +64,16 @@ public:
     static bool applyRound2Signature(SlateV4 *slate,
                                      const QString &walletFingerprint,
                                      const QString &roleTag,
+                                     const ParticipantContext *overrideContext,
                                      QString *errorOut = 0);
+    static bool verifyPartialSignatures(const SlateV4 &slate, QString *errorOut = 0);
+    static QString calculateExcessCommitment(const SlateV4 &slate, QString *errorOut = 0);
+    static QString kernelSignatureMessageHex(const SlateV4 &slate);
+    static QString combinedBlindPublicKeyHex(const SlateV4 &slate, QString *errorOut = 0);
+    static QString combinedNoncePublicKeyHex(const SlateV4 &slate, QString *errorOut = 0);
+    static bool buildFinalSignature(const SlateV4 &slate,
+                                    QString *finalSignatureOut,
+                                    QString *errorOut = 0);
     static bool finalizeSlate(SlateV4 *slate, QString *errorOut = 0);
     static QString describeBackend();
 
