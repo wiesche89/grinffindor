@@ -32,6 +32,8 @@ class GrinWalletController : public QObject
     Q_PROPERTY(QString spendableBalance READ spendableBalance NOTIFY statusChanged)
     Q_PROPERTY(QString lockedBalance READ lockedBalance NOTIFY statusChanged)
     Q_PROPERTY(QString immatureBalance READ immatureBalance NOTIFY statusChanged)
+    Q_PROPERTY(QString awaitingConfirmationBalance READ awaitingConfirmationBalance NOTIFY statusChanged)
+    Q_PROPERTY(QString awaitingFinalizationBalance READ awaitingFinalizationBalance NOTIFY statusChanged)
     Q_PROPERTY(qulonglong scanHeight READ scanHeight NOTIFY statusChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QString lastInfo READ lastInfo NOTIFY lastInfoChanged)
@@ -61,6 +63,8 @@ public:
     QString spendableBalance() const;
     QString lockedBalance() const;
     QString immatureBalance() const;
+    QString awaitingConfirmationBalance() const;
+    QString awaitingFinalizationBalance() const;
     qulonglong scanHeight() const;
     QString lastError() const;
     QString lastInfo() const;
@@ -109,6 +113,7 @@ public:
     Q_INVOKABLE void broadcastTransaction(const QString &workflowId);
     Q_INVOKABLE void cancelTransaction(const QString &workflowId);
     Q_INVOKABLE void clearWorkflow();
+    Q_INVOKABLE void cleanupLocalAndCancelledItems();
     Q_INVOKABLE void setAutoLockOnAppDeactivate(bool enabled);
     Q_INVOKABLE QString encodeSlatepack(const QString &slateJson, const QString &sender = QString()) const;
     Q_INVOKABLE QString decodeSlatepack(const QString &slatepack) const;
@@ -203,6 +208,8 @@ private:
     QString m_spendableBalance;
     QString m_lockedBalance;
     QString m_immatureBalance;
+    QString m_awaitingConfirmationBalance;
+    QString m_awaitingFinalizationBalance;
     qulonglong m_scanHeight;
     QString m_lastError;
     QString m_lastInfo;

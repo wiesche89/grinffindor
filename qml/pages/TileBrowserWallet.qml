@@ -511,12 +511,12 @@ Item {
 
                             Repeater {
                                 model: [
-                                    { title: root.tf("browser_wallet_metric_wallet", "Wallet"), value: grinWalletController.walletExists ? grinWalletController.walletName : root.tf("browser_wallet_metric_empty", "Not created") },
                                     { title: root.tf("browser_wallet_metric_network", "Network"), value: grinWalletController.selectedNetwork },
                                     { title: root.tf("browser_wallet_metric_chain", "Chain Height"), value: "" + grinWalletController.chainHeight },
+                                    { title: root.tf("browser_wallet_metric_scan", "Scan Height"), value: "" + grinWalletController.scanHeight },
                                     { title: root.tf("browser_wallet_metric_balance", "Spendable"), value: grinWalletController.spendableBalance + " GRIN" },
-                                    { title: root.tf("browser_wallet_locked", "Locked"), value: grinWalletController.lockedBalance + " GRIN" },
-                                    { title: root.tf("browser_wallet_metric_scan", "Scan Height"), value: "" + grinWalletController.scanHeight }
+                                    { title: root.tf("browser_wallet_awaiting_confirmation", "Awaiting Confirmation"), value: grinWalletController.awaitingConfirmationBalance + " GRIN" },
+                                    { title: root.tf("browser_wallet_locked", "Locked"), value: grinWalletController.lockedBalance + " GRIN" }
                                 ]
 
                                 Rectangle {
@@ -823,27 +823,27 @@ Item {
                                         font.pixelSize: 12
                                     }
 
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: root.tf("browser_wallet_history_confirmations", "Confirmations") + ": "
+                                              + (modelData.confirmations !== undefined ? modelData.confirmations : 0)
+                                        color: "#d7e9f4"
+                                        wrapMode: Text.WordWrap
+                                    }
+
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: root.tf("browser_wallet_history_confirmed_height", "Confirmed Height") + ": "
+                                              + (modelData.confirmed_height !== undefined && modelData.confirmed_height !== "" ? modelData.confirmed_height : "-")
+                                        color: "#d7e9f4"
+                                        wrapMode: Text.WordWrap
+                                    }
+
                                     GridLayout {
                                         Layout.fillWidth: true
                                         columns: width < 820 ? 1 : 2
                                         rowSpacing: 6
                                         columnSpacing: 12
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: root.tf("browser_wallet_history_confirmations", "Confirmations") + ": "
-                                                  + (modelData.confirmations !== undefined ? modelData.confirmations : 0)
-                                            color: "#d7e9f4"
-                                            wrapMode: Text.WordWrap
-                                        }
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: root.tf("browser_wallet_history_confirmed_height", "Confirmed Height") + ": "
-                                                  + (modelData.confirmed_height !== undefined && modelData.confirmed_height !== "" ? modelData.confirmed_height : "-")
-                                            color: "#d7e9f4"
-                                            wrapMode: Text.WordWrap
-                                        }
 
                                         Label {
                                             Layout.fillWidth: true
@@ -1636,6 +1636,57 @@ Item {
                                     Label { text: grinWalletController.lockedBalance + " GRIN"; color: "#ffffff" }
                                     Label { text: root.tf("browser_wallet_immature", "Immature"); color: "#8fb4c9" }
                                     Label { text: grinWalletController.immatureBalance + " GRIN"; color: "#ffffff" }
+                                    Label { text: root.tf("browser_wallet_awaiting_confirmation", "Awaiting Confirmation"); color: "#8fb4c9" }
+                                    Label { text: grinWalletController.awaitingConfirmationBalance + " GRIN"; color: "#ffffff" }
+                                    Label { text: root.tf("browser_wallet_awaiting_finalization", "Awaiting Finalization"); color: "#8fb4c9" }
+                                    Label { text: grinWalletController.awaitingFinalizationBalance + " GRIN"; color: "#ffffff" }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            radius: 16
+                            color: "#132635"
+                            border.color: "#2a4f64"
+                            implicitHeight: maintenanceSettingsColumn.implicitHeight + 20
+
+                            ColumnLayout {
+                                id: maintenanceSettingsColumn
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 8
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.tf("browser_wallet_maintenance_title", "Wallet Maintenance")
+                                    color: "#ffffff"
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.tf("browser_wallet_maintenance_note", "Remove local (off-chain) UTXOs and cancelled transactions to clean up your wallet.")
+                                    color: "#d7e9f4"
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: root.tf("browser_wallet_maintenance_warning", "This action is permanent. Confirmed UTXOs on the blockchain remain intact.")
+                                    color: "#ffc8a8"
+                                    wrapMode: Text.WordWrap
+                                    font.pixelSize: 13
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Button {
+                                        text: root.tf("browser_wallet_maintenance_cleanup", "Clean Up Now")
+                                        enabled: grinWalletController.walletUnlocked
+                                        onClicked: grinWalletController.cleanupLocalAndCancelledItems()
+                                    }
+                                    Item { Layout.fillWidth: true }
                                 }
                             }
                         }

@@ -37,5 +37,23 @@ WalletOutput WalletOutput::fromJson(const QJsonObject &json)
     output.locked = json.value(QStringLiteral("locked")).toBool();
     output.pending = json.value(QStringLiteral("pending")).toBool();
     output.workflowId = json.value(QStringLiteral("workflow_id")).toString();
+
+    // Backward-compatibility normalization for older/partial persisted states.
+    // If an output has a chain height but was stored with on_chain=false,
+    // treat it as on-chain unless it is explicitly pending local workflow state.
+    if (!output.onChain
+        && output.height > 0
+        && !output.pending
+        && !output.locked
+        && !output.commitment.isEmpty()) {
+        output.onChain = true;
+    }
+
+    // Spent outputs should not remain in pending/locked workflow states.
+    if (output.spent) {
+        output.pending = false;
+        output.locked = false;
+    }
+
     return output;
 }

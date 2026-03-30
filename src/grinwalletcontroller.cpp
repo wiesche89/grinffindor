@@ -1554,16 +1554,22 @@ QStringList transactionOutputCommitments(const QJsonObject &entry)
 
 qint64 inferredConfirmedHeightForTransactionEntry(const QJsonObject &entry, const QList<WalletOutput> &outputs)
 {
-    const qint64 storedHeight = entry.value(QStringLiteral("confirmed_height")).toVariant().toLongLong();
-    if (storedHeight > 0) {
-        return storedHeight;
-    }
-
+    // Always try live output state first: it reflects the actual on-chain block and
+    // overrides any stale stored height that might have been written from old input UTXOs.
     const QString workflowId = entry.value(QStringLiteral("workflow_id")).toString();
+    // For receive/invoice transactions the owned UTXO may later be spent (used as input
+    // in a subsequent send), but its creation height is still correct as the receive height.
+    const QString mode = entry.value(QStringLiteral("mode")).toString();
+    const bool isReceiveSide = (mode == QStringLiteral("receive") || mode == QStringLiteral("invoice"));
     quint64 inferredHeight = 0;
     for (int i = 0; i < outputs.size(); ++i) {
         const WalletOutput &output = outputs.at(i);
         if (!output.onChain || output.height == 0) {
+            continue;
+        }
+        // For send transactions skip spent inputs: their height predates the send.
+        // For receive/invoice keep spent outputs: creation height = receive height.
+        if (!isReceiveSide && output.spent) {
             continue;
         }
         if (!workflowId.isEmpty() && output.workflowId == workflowId) {
@@ -1580,13 +1586,22 @@ qint64 inferredConfirmedHeightForTransactionEntry(const QJsonObject &entry, cons
             if (!output.onChain || output.height == 0) {
                 continue;
             }
+            if (!isReceiveSide && output.spent) {
+                continue;
+            }
             if (inferredHeight == 0 || output.height < inferredHeight) {
                 inferredHeight = output.height;
             }
         }
     }
 
-    return static_cast<qint64>(inferredHeight);
+    if (inferredHeight > 0) {
+        return static_cast<qint64>(inferredHeight);
+    }
+
+    // Fall back to the stored height (e.g. set by kernel check or from a previous scan
+    // before the output was discovered on-chain).
+    return entry.value(QStringLiteral("confirmed_height")).toVariant().toLongLong();
 }
 
 qint64 transactionSortKey(const QJsonObject &entry)
@@ -2131,6 +2146,8 @@ GrinWalletController::GrinWalletController(QObject *parent) :
     m_spendableBalance(QStringLiteral("0.000000000")),
     m_lockedBalance(QStringLiteral("0.000000000")),
     m_immatureBalance(QStringLiteral("0.000000000")),
+    m_awaitingConfirmationBalance(QStringLiteral("0.000000000")),
+    m_awaitingFinalizationBalance(QStringLiteral("0.000000000")),
     m_scanHeight(0),
     m_walletScanInFlight(false),
     m_seedScanActive(false),
@@ -2154,6 +2171,8 @@ QString GrinWalletController::totalBalance() const { return m_totalBalance; }
 QString GrinWalletController::spendableBalance() const { return m_spendableBalance; }
 QString GrinWalletController::lockedBalance() const { return m_lockedBalance; }
 QString GrinWalletController::immatureBalance() const { return m_immatureBalance; }
+QString GrinWalletController::awaitingConfirmationBalance() const { return m_awaitingConfirmationBalance; }
+QString GrinWalletController::awaitingFinalizationBalance() const { return m_awaitingFinalizationBalance; }
 qulonglong GrinWalletController::scanHeight() const { return m_scanHeight; }
 QString GrinWalletController::lastError() const { return m_lastError; }
 QString GrinWalletController::lastInfo() const { return m_lastInfo; }
@@ -2902,8 +2921,9 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     QJsonObject document = loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+    const qulonglong effectiveHeight = m_chainHeight > 0 ? m_chainHeight : m_scanHeight;
     const WalletSelection::Result selection =
-        WalletSelection::selectSpendableOutputs(outputs, requestedAmount, m_chainHeight);
+        WalletSelection::selectSpendableOutputs(outputs, requestedAmount, effectiveHeight);
     if (!selection.success) {
         setLastError(selection.error);
         return;
@@ -2912,8 +2932,9 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     for (int i = 0; i < outputs.size(); ++i) {
         for (int j = 0; j < selection.selectedOutputs.size(); ++j) {
             if (outputs[i].commitment == selection.selectedOutputs.at(j).commitment) {
+                // Only lock the input UTXO. Preserve its workflowId so the transaction
+                // that created it (e.g. an invoice) retains its own identity.
                 outputs[i].locked = true;
-                outputs[i].workflowId.clear();
             }
         }
     }
@@ -2921,13 +2942,8 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     SlateV4 slate;
     alignSlateVersionWithNode(&slate);
     const QString workflowId = generateWorkflowId();
-    for (int i = 0; i < outputs.size(); ++i) {
-        for (int j = 0; j < selection.selectedOutputs.size(); ++j) {
-            if (outputs[i].commitment == selection.selectedOutputs.at(j).commitment) {
-                outputs[i].workflowId = workflowId;
-            }
-        }
-    }
+    // Do NOT set workflowId on input UTXOs here – they belong to the workflow that
+    // received them. The send workflow tracks its inputs via selected_input_commits.
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
     document.insert(QStringLiteral("wallet_state"), walletState);
@@ -3611,6 +3627,52 @@ void GrinWalletController::clearWorkflow()
     setLastInfo(QStringLiteral("Workflow state cleared."));
 }
 
+void GrinWalletController::cleanupLocalAndCancelledItems()
+{
+    touchWalletSession();
+    
+    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
+        setLastError(QStringLiteral("Unlock the wallet before cleaning up."));
+        return;
+    }
+
+    QJsonObject document = loadDocument();
+    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+    
+    // Entferne lokale Outputs (noch nicht on-chain)
+    int localCount = 0;
+    for (int i = outputs.size() - 1; i >= 0; --i) {
+        if (!outputs.at(i).onChain) {
+            outputs.removeAt(i);
+            ++localCount;
+        }
+    }
+    
+    // Entferne abgebrochene Transaktionen
+    QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
+    int cancelledCount = 0;
+    for (int i = transactions.size() - 1; i >= 0; --i) {
+        const QJsonObject tx = transactions.at(i).toObject();
+        if (tx.value(QStringLiteral("status")).toString() == QStringLiteral("cancelled")) {
+            transactions.removeAt(i);
+            ++cancelledCount;
+        }
+    }
+
+    walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
+    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
+    walletState.insert(QStringLiteral("transactions"), transactions);
+    document.insert(QStringLiteral("wallet_state"), walletState);
+    saveDocument(document);
+    refreshStateFromStorage();
+
+    QString infoMsg = QStringLiteral("Cleanup completed: %1 local output(s) and %2 cancelled transaction(s) removed.")
+                          .arg(QString::number(localCount))
+                          .arg(QString::number(cancelledCount));
+    setLastInfo(infoMsg);
+}
+
 void GrinWalletController::broadcastCurrentWorkflowTransaction()
 {
     touchWalletSession();
@@ -3743,6 +3805,18 @@ void GrinWalletController::cancelTransaction(const QString &workflowId)
     QJsonObject document = loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+    
+    // Ermittle die ursprünglichen Inputs aus dem Workflow-Kontext
+    const QJsonObject localContext = workflowContext(workflowId);
+    const QJsonArray selectedInputCommits = localContext.value(QStringLiteral("selected_input_commits")).toArray();
+    
+    // Konvertiere Selected Input Commits zu QStringList für schnelleren Lookup
+    QStringList selectedInputCommitments;
+    for (int j = 0; j < selectedInputCommits.size(); ++j) {
+        selectedInputCommitments.append(selectedInputCommits.at(j).toString());
+    }
+    
+    // Verarbeite alle Outputs mit diesem Workflow ID
     for (int i = 0; i < outputs.size(); ++i) {
         if (outputs[i].workflowId != workflowId) {
             continue;
@@ -3752,17 +3826,19 @@ void GrinWalletController::cancelTransaction(const QString &workflowId)
             continue;
         }
 
-        if (outputs[i].source == QStringLiteral("change")
-            || outputs[i].source == QStringLiteral("receive")
-            || outputs[i].source == QStringLiteral("invoice")) {
+        // Überprüfe, ob dies ein Input (UTXO) ist, das ursprünglich von dieser Transaktion verwendet wurde
+        if (selectedInputCommitments.contains(outputs[i].commitment)) {
+            // Dies ist ein Input - gebe ihn frei.
+            // workflowId NICHT löschen: sie zeigt auf die ursprüngliche Receive/Invoice-Tx,
+            // die diesen UTXO erstellt hat, und wird für die Height-Inferenz benötigt.
+            outputs[i].locked = false;
+            outputs[i].pending = false;
+        } else {
+            // Dies ist ein neu erstellter Output (Change, Receive, Invoice, etc.)
+            // der nicht auf die Blockchain ging - entferne ihn
             outputs.removeAt(i);
             --i;
-            continue;
         }
-
-        outputs[i].locked = false;
-        outputs[i].pending = false;
-        outputs[i].workflowId.clear();
     }
 
     QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
@@ -3790,7 +3866,7 @@ void GrinWalletController::cancelTransaction(const QString &workflowId)
         clearWorkflow();
     }
     setLastError(QString());
-    setLastInfo(QStringLiteral("Transaction %1 cancelled and locks released.").arg(workflowId));
+    setLastInfo(QStringLiteral("Transaction %1 cancelled and UTXOs released.").arg(workflowId));
 }
 
 QString GrinWalletController::encodeSlatepack(const QString &slateJson, const QString &sender) const
@@ -4071,7 +4147,34 @@ void GrinWalletController::connectNodeClient()
         QJsonObject document = loadDocument();
         QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
         QList<WalletOutput> tracked = WalletScanner::outputsFromState(walletState);
-        tracked = WalletScanner::reconcileTrackedOutputs(tracked, result.value());
+        const QList<OutputPrintable> chainOutputs = result.value();
+
+        QSet<QString> trackedCommitments;
+        for (int i = 0; i < tracked.size(); ++i) {
+            trackedCommitments.insert(tracked.at(i).commitment);
+        }
+
+        int matchedCommitments = 0;
+        for (int i = 0; i < chainOutputs.size(); ++i) {
+            const QString commitHex = chainOutputs.at(i).commit().hex();
+            if (trackedCommitments.contains(commitHex)) {
+                ++matchedCommitments;
+            }
+        }
+
+        // If node returns no usable data for tracked commitments, fall back to seed scan from leaf 1.
+        // This self-heals stale commitment sets without requiring manual full rescan.
+        if (!tracked.isEmpty() && (chainOutputs.isEmpty() || matchedCommitments == 0)) {
+            walletState.insert(QStringLiteral("restore_leaf_index"), 0);
+            document.insert(QStringLiteral("wallet_state"), walletState);
+            saveDocument(document);
+            m_walletScanInFlight = false;
+            setLastInfo(QStringLiteral("Node returned no tracked outputs. Falling back to seed scan from leaf 1."));
+            startSeedScan();
+            return;
+        }
+
+        tracked = WalletScanner::reconcileTrackedOutputs(tracked, chainOutputs);
 
         walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(tracked));
         walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(tracked, m_chainHeight));
@@ -4363,14 +4466,30 @@ void GrinWalletController::connectNodeClient()
 
 void GrinWalletController::refreshStateFromStorage()
 {
-    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
-    const QJsonObject balances = walletState.value(QStringLiteral("balances")).toObject();
+    QJsonObject document = loadDocument();
+    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    const QJsonObject storedBalances = walletState.value(QStringLiteral("balances")).toObject();
+    m_scanHeight = static_cast<qulonglong>(walletState.value(QStringLiteral("scan_height")).toInt());
+
+    // Always recompute balances from outputs so UI does not depend on stale persisted values.
+    const qulonglong effectiveHeight = m_chainHeight > 0 ? m_chainHeight : m_scanHeight;
+    const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+
+    const QJsonObject recalculatedBalances = WalletScanner::balancesFromOutputs(outputs, effectiveHeight);
+    const QJsonObject balances = recalculatedBalances.isEmpty() ? storedBalances : recalculatedBalances;
+
+    if (balances != storedBalances) {
+        walletState.insert(QStringLiteral("balances"), balances);
+        document.insert(QStringLiteral("wallet_state"), walletState);
+        saveDocument(document);
+    }
 
     m_totalBalance = amountStringFromJson(balances, QStringLiteral("total"));
     m_spendableBalance = amountStringFromJson(balances, QStringLiteral("spendable"));
     m_lockedBalance = amountStringFromJson(balances, QStringLiteral("locked"));
     m_immatureBalance = amountStringFromJson(balances, QStringLiteral("immature"));
-    m_scanHeight = static_cast<qulonglong>(walletState.value(QStringLiteral("scan_height")).toInt());
+    m_awaitingConfirmationBalance = amountStringFromJson(balances, QStringLiteral("awaiting_confirmation"));
+    m_awaitingFinalizationBalance = amountStringFromJson(balances, QStringLiteral("awaiting_finalization"));
     emit statusChanged();
 }
 
@@ -4762,7 +4881,8 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
 
             outputs[i].locked = true;
             outputs[i].pending = false;
-            outputs[i].workflowId = workflowId;
+            // Preserve the UTXO's original workflowId (e.g. from the receive/invoice
+            // that created it). The send workflow tracks inputs via selected_input_commits.
             selectedCommitments.append(outputs.at(i).commitment);
             selectedInputCoinbase.insert(outputs.at(i).commitment, outputs.at(i).coinbase);
             break;
@@ -5718,8 +5838,11 @@ QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QLis
             if (primaryCommitment.isEmpty()) {
                 primaryCommitment = output.commitment;
             }
-            if (confirmedHeight == 0 || (output.height > 0 && output.height < confirmedHeight)) {
-                confirmedHeight = output.height;
+            // Only use unspent outputs for height inference: spent = old input UTXOs
+            if (!output.spent && output.height > 0) {
+                if (confirmedHeight == 0 || output.height < confirmedHeight) {
+                    confirmedHeight = output.height;
+                }
             }
             anySpent = anySpent || output.spent;
             anyPending = anyPending || output.pending;
@@ -5914,7 +6037,9 @@ void GrinWalletController::finalizeBroadcastedWorkflow(const QString &workflowId
         }
 
         if (matchesSelectedInput) {
-            outputs[i].workflowId = workflowId;
+            // Preserve original workflowId on input UTXOs so the receive/invoice
+            // transaction that created them keeps its own identity and confirmed height.
+            // Do NOT overwrite workflowId here.
             outputs[i].pending = false;
             outputs[i].locked = false;
             outputs[i].spent = true;
@@ -5999,17 +6124,40 @@ void GrinWalletController::requestWalletScan()
         return;
     }
 
-    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    QJsonObject document = loadDocument();
+    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     if (outputs.isEmpty()) {
-        QJsonObject document = loadDocument();
-        QJsonObject state = document.value(QStringLiteral("wallet_state")).toObject();
-        state.insert(QStringLiteral("scan_height"), static_cast<int>(m_chainHeight));
-        state.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-        document.insert(QStringLiteral("wallet_state"), state);
+        walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_chainHeight));
+        walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
+        walletState.insert(QStringLiteral("restore_leaf_index"), 0);
+        document.insert(QStringLiteral("wallet_state"), walletState);
         saveDocument(document);
         refreshStateFromStorage();
         setLastInfo(QStringLiteral("Wallet has no tracked outputs yet. Starting seed scan."));
+        m_syncStatus = QStringLiteral("Scanning wallet outputs...");
+        emit statusChanged();
+        m_walletScanInFlight = true;
+        startSeedScan();
+        return;
+    }
+
+    int unspentOnChainCount = 0;
+    for (int i = 0; i < outputs.size(); ++i) {
+        if (!outputs.at(i).spent && outputs.at(i).onChain) {
+            ++unspentOnChainCount;
+        }
+    }
+
+    // Node 5.4.0 can crash on get_outputs with large commitment lists.
+    // Use seed scan as the primary sync mechanism and auto-heal stale index when all tracked outputs are off-chain.
+    if (unspentOnChainCount == 0) {
+        walletState.insert(QStringLiteral("restore_leaf_index"), 0);
+        document.insert(QStringLiteral("wallet_state"), walletState);
+        saveDocument(document);
+        setLastInfo(QStringLiteral("All tracked outputs are currently off-chain. Restarting seed scan from leaf 1."));
+    } else {
+        setLastInfo(QStringLiteral("Refreshing tracked outputs via seed scan."));
     }
 
     m_syncStatus = QStringLiteral("Scanning wallet outputs...");

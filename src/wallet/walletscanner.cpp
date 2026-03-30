@@ -88,12 +88,9 @@ QList<WalletOutput> WalletScanner::reconcileTrackedOutputs(const QList<WalletOut
                                                            const QList<OutputPrintable> &chainOutputs)
 {
     QList<WalletOutput> reconciled = trackedOutputs;
-    for (int i = 0; i < reconciled.size(); ++i) {
-        reconciled[i].onChain = false;
-        reconciled[i].spent = true;
-        reconciled[i].height = 0;
-    }
 
+    // Only update outputs that ARE found on chain
+    // Outputs not found keep their previous state (may be pending, local, or unconfirmed)
     for (int i = 0; i < chainOutputs.size(); ++i) {
         const OutputPrintable &chainOutput = chainOutputs.at(i);
         const QString commitHex = chainOutput.commit().hex();
@@ -131,10 +128,6 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
         if (!rewound.success) {
             continue;
         }
-        if (!rewound.keyPath.startsWith(QStringLiteral("m/0/0/"))
-            && rewound.keyPath != QStringLiteral("m/0/0")) {
-            continue;
-        }
 
         WalletOutput output;
         output.commitment = chainOutput.commit().hex();
@@ -164,31 +157,92 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
 
 QJsonObject WalletScanner::balancesFromOutputs(const QList<WalletOutput> &outputs, qulonglong chainHeight)
 {
+    // Balance categories following grin-wallet reference implementation
+    // See libwallet/src/internal/updater.rs::retrieve_info()
+    
     quint64 total = 0;
     quint64 spendable = 0;
     quint64 locked = 0;
     quint64 immature = 0;
+    quint64 awaiting_confirmation = 0;
+    quint64 awaiting_finalization = 0;
 
     for (int i = 0; i < outputs.size(); ++i) {
         const WalletOutput &output = outputs.at(i);
+        const quint64 amount = amountToNanogrin(output.amount);
+        
+        // Skip spent outputs - they don't count toward any balance
         if (output.spent) {
             continue;
         }
 
-        const quint64 amount = amountToNanogrin(output.amount);
         total += amount;
 
+        // Priority 1: Check if output is locked (in-flight transaction)
         if (output.locked) {
             locked += amount;
             continue;
         }
 
-        const bool coinbaseMature = !output.coinbase || (output.height > 0 && chainHeight >= output.height + 1000);
-        const bool confirmed = output.onChain && output.height > 0 && chainHeight >= output.height + 10;
-        if (coinbaseMature && confirmed) {
-            spendable += amount;
-        } else {
+        // Priority 2: Check if output is pending (not yet on-chain)
+        if (output.pending) {
+            // Pending outputs are awaiting confirmation
+            if (!output.onChain) {
+                awaiting_confirmation += amount;
+            } else {
+                // Rare case: on-chain but pending flag still set
+                awaiting_finalization += amount;
+            }
+            continue;
+        }
+
+        // Priority 3: If not on-chain yet, definitely immature (local output)
+        if (!output.onChain) {
             immature += amount;
+            continue;
+        }
+
+        // For on-chain outputs, check maturity and confirmation
+        // Priority 4: Check coinbase maturity (1000 block delay)
+        const bool isCoinbase = output.coinbase;
+        bool coinbaseMature = true;
+        
+        if (isCoinbase && output.height > 0) {
+            // Coinbase needs 1000 block maturity
+            // But if chainHeight is 0 (node not synced), assume it's mature since it's on-chain
+            if (chainHeight > 0) {
+                coinbaseMature = chainHeight >= output.height + 1000;
+            } else {
+                // When chainHeight is unknown but output is on-chain, assume mature
+                coinbaseMature = true;
+            }
+        }
+        
+        // Priority 5: Check if confirmed on-chain (10 block confirmations)
+        // Reference formula: num_confirmations = 1 + (chainHeight - height) >= 10
+        //   => chainHeight >= height + 9
+        bool confirmed = false;
+        if (output.height > 0 && chainHeight > 0) {
+            confirmed = chainHeight >= output.height + 9;
+        } else if (output.height > 0 && chainHeight == 0) {
+            // If chainHeight is 0 but output is on-chain, assume it's confirmed
+            // since it was persisted
+            confirmed = true;
+        } else if (!isCoinbase && output.height == 0) {
+            // Fallback for node payloads where height is not provided for tx outputs.
+            confirmed = true;
+        }
+
+        // grin-wallet style split:
+        // - coinbase that is not mature -> immature
+        // - regular tx output that is on-chain but <10 conf -> awaiting_confirmation
+        // - mature + confirmed -> spendable
+        if (!coinbaseMature) {
+            immature += amount;
+        } else if (!confirmed) {
+            awaiting_confirmation += amount;
+        } else {
+            spendable += amount;
         }
     }
 
@@ -197,5 +251,9 @@ QJsonObject WalletScanner::balancesFromOutputs(const QList<WalletOutput> &output
     balances.insert(QStringLiteral("spendable"), formatNanogrin(spendable));
     balances.insert(QStringLiteral("locked"), formatNanogrin(locked));
     balances.insert(QStringLiteral("immature"), formatNanogrin(immature));
+    // Extended categories for detailed reporting
+    balances.insert(QStringLiteral("awaiting_confirmation"), formatNanogrin(awaiting_confirmation));
+    balances.insert(QStringLiteral("awaiting_finalization"), formatNanogrin(awaiting_finalization));
+
     return balances;
 }

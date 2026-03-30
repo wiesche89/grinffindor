@@ -42,15 +42,27 @@ quint64 amountToNanogrin(const QString &amount)
 
 bool isSpendable(const WalletOutput &output, qulonglong chainHeight)
 {
-    if (output.spent || output.locked || !output.onChain || output.height == 0) {
+    if (output.spent || output.locked || !output.onChain || output.pending) {
         return false;
     }
-    if (chainHeight < output.height + 10) {
-        return false;
+
+    if (output.height > 0) {
+        // Reference formula: 1 + (chainHeight - height) >= 10 => chainHeight >= height + 9
+        if (chainHeight > 0 && chainHeight < output.height + 9) {
+            return false;
+        }
+        if (output.coinbase && chainHeight > 0 && chainHeight < output.height + 1000) {
+            return false;
+        }
+    } else {
+        // Fallback for payloads missing height:
+        // - coinbase without height is never considered spendable.
+        // - non-coinbase on-chain outputs are treated as spendable.
+        if (output.coinbase) {
+            return false;
+        }
     }
-    if (output.coinbase && chainHeight < output.height + 1000) {
-        return false;
-    }
+
     return true;
 }
 
