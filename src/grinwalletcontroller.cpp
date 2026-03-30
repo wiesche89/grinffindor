@@ -2953,11 +2953,10 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     const WalletCryptoBackend::ParticipantContext senderContext =
         WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("sender"));
     slate.state = SlateV4::Standard1;
-    slate.amount = amount.trimmed();
+    slate.amount = formatNanogrin(requestedAmount);
     slate.fee = QStringLiteral("%1.%2")
         .arg(QString::number(selection.fee / 1000000000ULL))
         .arg(QString::number(selection.fee % 1000000000ULL), 9, QLatin1Char('0'));
-    slate.offset = WalletCryptoBackend::createOffset(m_seedFingerprint, slate.id);
     slate.signatures.append(WalletCryptoBackend::createParticipantData(senderContext));
     const QString localSlatepackAddress = currentSlatepackAddress();
     const QString localPaymentProofAddress = currentPaymentProofAddress();
@@ -2985,12 +2984,14 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     }
     localContext.insert(QStringLiteral("selected_input_commits"), selectedCommitments);
     localContext.insert(QStringLiteral("selected_input_coinbase"), selectedInputCoinbase);
+
+    // Declare changeOutput outside the block so its blinding factor is available for offset computation.
+    WalletOutput changeOutput;
+    SlateV4::Commit changeCommit;
     if (selection.change > 0) {
         const QString changeAmount = QStringLiteral("%1.%2")
             .arg(QString::number(selection.change / 1000000000ULL))
             .arg(QString::number(selection.change % 1000000000ULL), 9, QLatin1Char('0'));
-        WalletOutput changeOutput;
-        SlateV4::Commit changeCommit;
         QString outputError;
         if (buildOwnedOutput(QStringLiteral("change"), changeAmount, &changeOutput, &changeCommit, &outputError)) {
             storeOwnedOutput(changeOutput);
@@ -3004,19 +3005,118 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
         }
     }
     storeWorkflowContext(workflowId, localContext);
+
+    // Compute S1 kernel offset per grin-wallet reference:
+    //   offset = change_blind - xs_sender_aggsig_secret - sum(input_blinds)
+    // This guarantees: sum(output_blinds) - sum(input_blinds) = kernel_excess + offset
+    // where kernel_excess = xs_sender_pubkey + xs_receiver_pubkey (from aggsig).
+    {
+        // All negatives: xs_sender aggsig key + each input's blinding factor
+        QStringList negatives;
+        negatives << senderContext.blindSecret;
+
+        if (!m_sessionMnemonic.trimmed().isEmpty()) {
+            const WalletKeychain inputKeychain(m_sessionMnemonic);
+            if (inputKeychain.isValid()) {
+                for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
+                    const WalletOutput normInput =
+                        normalizedTrackedOutput(selection.selectedOutputs.at(i), inputKeychain);
+                    if (!normInput.blindingFactor.isEmpty()) {
+                        negatives << normInput.blindingFactor;
+                        qDebug() << "[S1Offset] input blind"
+                                 << "commitment=" << normInput.commitment.left(16)
+                                 << "source="     << normInput.source;
+                    } else {
+                        qDebug() << "[S1Offset] input blind missing"
+                                 << "commitment=" << selection.selectedOutputs.at(i).commitment.left(16)
+                                 << "source="     << selection.selectedOutputs.at(i).source;
+                    }
+                }
+            }
+        }
+
+        QString offsetError;
+        QString computedOffset;
+        if (!changeOutput.blindingFactor.isEmpty()) {
+            // offset = change_blind - xs_sender - sum(inputs)
+            computedOffset = WalletCryptoBackend::combineBlindingFactors(
+                QStringList() << changeOutput.blindingFactor, negatives, &offsetError);
+        } else {
+            // No change output: offset = -(xs_sender + sum(inputs))
+            const QString sumToNegate =
+                WalletCryptoBackend::combineBlindingFactors(negatives, QStringList(), &offsetError);
+            if (!sumToNegate.isEmpty()) {
+                computedOffset = WalletCryptoBackend::negateScalar(sumToNegate, &offsetError);
+            }
+        }
+
+        if (!computedOffset.isEmpty()) {
+            slate.offset = computedOffset;
+            qDebug() << "[S1Offset] offset computed correctly"
+                     << "workflowId="  << workflowId
+                     << "hasChange="   << !changeOutput.blindingFactor.isEmpty()
+                     << "inputCount="  << (negatives.size() - 1)
+                     << "offset="      << computedOffset.left(16);
+        } else {
+            // Fallback: deterministic offset — transaction will fail node validation.
+            // Should not happen when wallet is unlocked and outputs are tracked.
+            slate.offset = WalletCryptoBackend::createOffset(m_seedFingerprint, slate.id);
+            qDebug() << "[S1Offset] fallback to derived offset"
+                     << "workflowId=" << workflowId
+                     << "error="      << offsetError;
+        }
+    }
+    // Populate slate.commitments for S1 per reference:
+    // sender inputs as plain commits (no proof), change output with proof.
+    // This allows the receiver to verify the fee and build the full tx view.
+    {
+        QList<SlateV4::Commit> s1Commits;
+        const QJsonObject s1CoinbaseMap =
+            localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
+        for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
+            const WalletOutput &inp = selection.selectedOutputs.at(i);
+            SlateV4::Commit c;
+            c.feature = s1CoinbaseMap.value(inp.commitment).toBool(inp.coinbase) ? 1 : 0;
+            c.commitment = inp.commitment;
+            // no proof — marks this as an input
+            s1Commits.append(c);
+        }
+        if (!changeCommit.commitment.isEmpty()) {
+            s1Commits.append(changeCommit);  // has proof — marks this as an output
+        }
+        slate.commitments = sortedCompactCommitments(s1Commits);
+    }
+
     slate.metadata.insert(QStringLiteral("crypto_backend"), WalletCryptoBackend::describeBackend());
     slate.metadata.insert(QStringLiteral("crypto_real"), WalletCryptoBackend::supportsRealGrinTransactions());
-    const QString decoded = QString::fromUtf8(QJsonDocument(slate.toJson()).toJson(QJsonDocument::Indented));
+
+    // Keep internal metadata locally, but emit a compact, reference-like external S1.
+    SlateV4 outboundSlate = slate;
+    outboundSlate.metadata = QJsonObject();
+    outboundSlate.metadata.insert(QStringLiteral("external_binary"), true);
+    outboundSlate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
+    outboundSlate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
+    if (!localSlatepackAddress.trimmed().isEmpty()) {
+        outboundSlate.metadata.insert(QStringLiteral("slatepack_sender"), localSlatepackAddress);
+    }
+    // Compact S1: no tx elements/proofs in the outbound packet.
+    outboundSlate.commitments.clear();
+    outboundSlate.hasPaymentProof = false;
+    outboundSlate.paymentProof = SlateV4::PaymentProof();
+
+    const QString decoded = QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented));
     QString armoredSlatepack;
     QString writerError;
     if (!BinarySlateV4Writer::encodeSlatepack(
-            slate,
+            outboundSlate,
             &armoredSlatepack,
             &writerError,
             localSlatepackAddress,
             QStringList(),
             currentSlatepackSecret())) {
-        armoredSlatepack = encodeSlatepackArmor(decoded, localSlatepackAddress);
+        armoredSlatepack = encodeSlatepackArmor(
+            QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented)),
+            localSlatepackAddress);
     }
     persistWorkflowTransaction(slate, false);
     setWorkflow(slate.workflowId(), slate.modeCode(), slate.stateCode(), armoredSlatepack, decoded);
@@ -3056,6 +3156,10 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
             : outputError);
         return;
     }
+    // Include receiver output commit in I1 per reference format.
+    // This lets the payer verify the amount and include the output in the binary slate.
+    slate.commitments.append(invoiceCommit);
+
     const QString localSlatepackAddress = currentSlatepackAddress();
     slate.hasPaymentProof = false;
     slate.paymentProof = SlateV4::PaymentProof();
@@ -3082,17 +3186,33 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
              << "proofLen=" << invoiceCommit.proof.length()
              << "childIndex=" << invoiceOutput.childIndex
              << "keyPath=" << invoiceOutput.keyPath;
-    const QString decoded = QString::fromUtf8(QJsonDocument(slate.toJson()).toJson(QJsonDocument::Indented));
+    // Keep full local invoice context internally, but emit compact external I1.
+    SlateV4 outboundSlate = slate;
+    outboundSlate.metadata = QJsonObject();
+    outboundSlate.metadata.insert(QStringLiteral("external_binary"), true);
+    outboundSlate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
+    outboundSlate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
+    if (!localSlatepackAddress.trimmed().isEmpty()) {
+        outboundSlate.metadata.insert(QStringLiteral("slatepack_sender"), localSlatepackAddress);
+    }
+    // Compact I1: do not include tx elements/proofs in the outbound packet.
+    outboundSlate.commitments.clear();
+    outboundSlate.hasPaymentProof = false;
+    outboundSlate.paymentProof = SlateV4::PaymentProof();
+
+    const QString decoded = QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented));
     QString armoredSlatepack;
     QString writerError;
     if (!BinarySlateV4Writer::encodeSlatepack(
-            slate,
+            outboundSlate,
             &armoredSlatepack,
             &writerError,
             localSlatepackAddress,
             QStringList(),
             currentSlatepackSecret())) {
-        armoredSlatepack = encodeSlatepackArmor(decoded, localSlatepackAddress);
+        armoredSlatepack = encodeSlatepackArmor(
+            QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented)),
+            localSlatepackAddress);
     }
     persistWorkflowTransaction(slate, false);
     setWorkflow(slate.workflowId(), slate.modeCode(), slate.stateCode(), armoredSlatepack, decoded);
@@ -3269,6 +3389,7 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
 
     if (localRoleTag == QStringLiteral("receiver")
         && (slate.commitments.isEmpty()
+            || state == QStringLiteral("S1")
             || (mode == QStringLiteral("invoice") && state == QStringLiteral("I2")))) {
         WalletOutput receiveOutput;
         SlateV4::Commit receiveCommit;
@@ -3381,10 +3502,15 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                 }
 
                 WalletOutput receiverOutput;
-                if (!slate.commitments.isEmpty()) {
-                    receiverOutput.commitment = slate.commitments.first().commitment;
-                    receiverOutput.proof = slate.commitments.first().proof;
-                    receiverOutput.amount = slate.amount;
+                // Find the receiver output: first commit WITH a proof that is not the change output.
+                for (int ci = 0; ci < slate.commitments.size(); ++ci) {
+                    const SlateV4::Commit &c = slate.commitments.at(ci);
+                    if (!c.proof.trimmed().isEmpty() && c.commitment != localContext.value(QStringLiteral("change_commit")).toString()) {
+                        receiverOutput.commitment = c.commitment;
+                        receiverOutput.proof = c.proof;
+                        receiverOutput.amount = slate.amount;
+                        break;
+                    }
                 }
 
                 WalletOutput changeOutput;
@@ -3479,10 +3605,18 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
             }
 
             WalletOutput receiverOutput;
-            if (!slate.commitments.isEmpty()) {
-                receiverOutput.commitment = slate.commitments.first().commitment;
-                receiverOutput.proof = slate.commitments.first().proof;
-                receiverOutput.amount = slate.amount;
+            // Find the receiver output: first commit WITH a proof that is not the change output.
+            {
+                const QString knownChangeCommit = localContext.value(QStringLiteral("change_commit")).toString();
+                for (int ci = 0; ci < slate.commitments.size(); ++ci) {
+                    const SlateV4::Commit &c = slate.commitments.at(ci);
+                    if (!c.proof.trimmed().isEmpty() && c.commitment != knownChangeCommit) {
+                        receiverOutput.commitment = c.commitment;
+                        receiverOutput.proof = c.proof;
+                        receiverOutput.amount = slate.amount;
+                        break;
+                    }
+                }
             }
 
             WalletOutput changeOutput;
