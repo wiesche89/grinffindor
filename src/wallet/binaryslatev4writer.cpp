@@ -25,6 +25,8 @@ const int kAgeFileKeySize = 16;
 const int kAgePayloadNonceSize = 16;
 const int kAgeChunkSize = 64 * 1024;
 const int kChaChaOverhead = 16;
+const quint64 kFeeFieldsMask = ((1ULL << 40) - 1ULL);
+const quint8 kFeeFieldsShift = 0;
 const char kBech32Charset[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 void appendU8(QByteArray &out, quint8 value)
@@ -110,7 +112,8 @@ quint64 parseNanogrin(const QString &amount)
 
 quint64 encodeFeeFields(const QString &fee)
 {
-    return parseNanogrin(fee);
+    const quint64 parsedFee = parseNanogrin(fee);
+    return (static_cast<quint64>(kFeeFieldsShift) << 40) | (parsedFee & kFeeFieldsMask);
 }
 
 quint8 stageByte(SlateV4::State state)
@@ -373,10 +376,24 @@ bool chacha20Poly1305Encrypt(const QByteArray &key,
 
 QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
 {
-    QByteArray scalar = QCryptographicHash::hash(walletSecret, QCryptographicHash::Sha512).left(32);
-    if (scalar.size() != 32) {
+    if (walletSecret.size() != 32) {
         return QByteArray();
     }
+    // Use BLAKE2b-512 to match Monocypher's crypto_eddsa_key_pair which uses
+    // crypto_blake2b internally (not SHA-512). The X25519 scalar must be derived
+    // the same way so that our x25519 public key matches what recipients compute
+    // from our Ed25519 slatepack address via the birational map.
+    QByteArray expanded(64, Qt::Uninitialized);
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+    crypto_blake2b(
+        reinterpret_cast<uint8_t *>(expanded.data()),
+        64,
+        reinterpret_cast<const uint8_t *>(walletSecret.constData()),
+        static_cast<size_t>(walletSecret.size()));
+#else
+    return QByteArray();
+#endif
+    QByteArray scalar = expanded.left(32);
     scalar[0] = static_cast<char>(static_cast<unsigned char>(scalar[0]) & 248U);
     scalar[31] = static_cast<char>((static_cast<unsigned char>(scalar[31]) & 127U) | 64U);
     return scalar;
@@ -799,7 +816,8 @@ bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
 
     QByteArray outputPayload = slatepackPayload;
     QString outputFormat = QStringLiteral("binary-raw");
-    if (!recipients.isEmpty() && !preserveExternalBinary) {
+    const bool encryptionEnabled = false;
+    if (encryptionEnabled && !recipients.isEmpty() && !preserveExternalBinary) {
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
         QByteArray encryptedPayload;
         if (!encryptAgePayload(slatePayload, sender, recipients, senderSecret, &encryptedPayload, errorOut)) {
@@ -813,9 +831,30 @@ bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
         }
         return false;
 #endif
-    } else if (!sender.trimmed().isEmpty() && !preserveExternalBinary) {
-        outputPayload = serializeJsonEnvelope(slatePayload, 0, sender);
-        outputFormat = QStringLiteral("json-plain");
+    } else if (!recipients.isEmpty() && !preserveExternalBinary) {
+        qDebug() << "[BinarySlateWriter] encryption disabled; emitting plaintext binary slatepack"
+                 << "workflowId=" << slate.workflowId()
+                 << "recipientCount=" << recipients.size();
+    }
+
+    if (!sender.trimmed().isEmpty() && !preserveExternalBinary) {
+        // Keep sender in optional binary header fields for plaintext mode compatibility.
+        quint16 plainOptFlags = 0;
+        const QByteArray plainOptFields = buildBinaryEnvelopeOptionalFields(
+            sender,
+            QStringList(),
+            &plainOptFlags);
+
+        outputPayload.clear();
+        appendU8(outputPayload, 1);
+        appendU8(outputPayload, 0);
+        appendU8(outputPayload, 0);
+        appendU16(outputPayload, plainOptFlags);
+        appendU32(outputPayload, static_cast<quint32>(plainOptFields.size()));
+        outputPayload.append(plainOptFields);
+        appendU64(outputPayload, static_cast<quint64>(slatePayload.size()));
+        outputPayload.append(slatePayload);
+        outputFormat = QStringLiteral("binary-plain-sender");
     }
 
     qDebug() << "[BinarySlateWriter]"

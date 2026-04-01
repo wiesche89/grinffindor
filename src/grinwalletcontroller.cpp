@@ -603,6 +603,23 @@ void flushStorage()
 #endif
 }
 
+QString prettyJson(const QJsonObject &object)
+{
+    return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Indented));
+}
+
+void logWorkflowJson(const QString &label,
+                     const QString &workflowId,
+                     const QString &state,
+                     const QJsonObject &object)
+{
+    qDebug().noquote() << QStringLiteral("[WorkflowJson] %1 workflowId=%2 state=%3\n%4")
+                              .arg(label,
+                                   workflowId,
+                                   state,
+                                   prettyJson(object));
+}
+
 QJsonObject defaultWalletState()
 {
     QJsonObject balances;
@@ -1479,7 +1496,6 @@ QString displayAmountForTransactionEntry(const QJsonObject &entry, const QList<W
 WalletOutput normalizedTrackedOutput(const WalletOutput &output, const WalletKeychain &keychain)
 {
     if (!keychain.isValid()
-        || output.source != QStringLiteral("scan")
         || output.keyPath.isEmpty()
         || !output.keyPath.startsWith(QStringLiteral("m/0/0/"))) {
         return output;
@@ -1496,6 +1512,62 @@ WalletOutput normalizedTrackedOutput(const WalletOutput &output, const WalletKey
     return normalized;
 }
 
+void logStandardSenderBlindOffsetDiagnostics(const QString &workflowId,
+                                             const SlateV4 &slate,
+                                             const QJsonObject &localContext,
+                                             const QList<WalletOutput> &selectedInputs,
+                                             const WalletOutput &receiverOutput,
+                                             const WalletOutput &changeOutput)
+{
+    const QString localSenderOffset = localContext.value(QStringLiteral("standard_sender_offset")).toString().trimmed();
+    const QString importedSlateOffset = localContext.value(QStringLiteral("incoming_s2_offset")).toString().trimmed();
+    const QString finalTxOffsetUsedForKernelExcess = slate.offset.trimmed();
+
+    const QString receiverBlind = receiverOutput.blindingFactor.trimmed();
+    const QString changeBlind = changeOutput.blindingFactor.trimmed();
+
+    const QJsonObject senderContextJson =
+        localContext.value(QStringLiteral("standard_context_participant")).toObject();
+    const QString senderBlindSecret = senderContextJson.value(QStringLiteral("sec_key")).toString().trimmed();
+    const QString senderBlindPublic = senderContextJson.value(QStringLiteral("pub_key")).toString().trimmed();
+
+    QString receiverExcessContributionPublic;
+    for (int i = 0; i < slate.signatures.size(); ++i) {
+        const QString participantXs = slate.signatures.at(i).xs.trimmed();
+        if (!participantXs.isEmpty() && participantXs != senderBlindPublic) {
+            receiverExcessContributionPublic = participantXs;
+            break;
+        }
+    }
+
+    QString combinedExcessPublicError;
+    const QString kernelExcessPublic = WalletCryptoBackend::combinedBlindPublicKeyHex(slate, &combinedExcessPublicError);
+    QString kernelExcessCommitmentError;
+    const QString kernelExcessCommitment = WalletCryptoBackend::calculateExcessCommitment(slate, &kernelExcessCommitmentError);
+
+    qWarning() << "[OffsetBlindDiag]"
+               << "workflowId=" << workflowId
+               << "localSenderOffset=" << localSenderOffset
+               << "importedSlateOffset=" << importedSlateOffset
+               << "finalTxOffsetUsedForKernelExcess=" << finalTxOffsetUsedForKernelExcess;
+
+    qWarning() << "[OffsetBlindDiag]"
+               << "inputBlindCount=" << selectedInputs.size()
+               << "outputBlindCountKnownLocal="
+               << ((receiverBlind.isEmpty() ? 0 : 1) + (changeBlind.isEmpty() ? 0 : 1))
+               << "change_blind=" << changeBlind
+               << "receiver_blind=" << receiverBlind;
+
+    qWarning() << "[OffsetBlindDiag]"
+               << "kernel_excess_secret_local_sender=" << senderBlindSecret
+               << "kernel_excess_public_local_sender=" << senderBlindPublic
+               << "receiver_excess_contribution_public=" << receiverExcessContributionPublic
+               << "kernel_excess_public_combined=" << kernelExcessPublic
+               << "kernel_excess_commitment=" << kernelExcessCommitment
+               << "combinedExcessPublicError=" << combinedExcessPublicError
+               << "kernelExcessCommitmentError=" << kernelExcessCommitmentError;
+}
+
 QString syntheticWorkflowIdForCommitment(const QString &commitment)
 {
     return QStringLiteral("rescan-%1").arg(commitment.left(24));
@@ -1504,6 +1576,11 @@ QString syntheticWorkflowIdForCommitment(const QString &commitment)
 QString invoiceContextKey(const QString &suffix)
 {
     return QStringLiteral("invoice_context_%1").arg(suffix);
+}
+
+QString standardContextKey(const QString &suffix)
+{
+    return QStringLiteral("standard_context_%1").arg(suffix);
 }
 
 WalletCryptoBackend::ParticipantContext participantContextFromJson(const QJsonObject &json,
@@ -2152,6 +2229,7 @@ GrinWalletController::GrinWalletController(QObject *parent) :
     m_walletScanInFlight(false),
     m_seedScanActive(false),
     m_seedScanNextIndex(1),
+    m_pendingBroadcastInputLookup(false),
     m_broadcastStatusRefreshInFlight(false),
     m_kernelStatusCheckInFlight(false)
 {
@@ -2921,6 +2999,14 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     QJsonObject document = loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+    if (!m_sessionMnemonic.trimmed().isEmpty()) {
+        const WalletKeychain keychain(m_sessionMnemonic);
+        if (keychain.isValid()) {
+            for (int i = 0; i < outputs.size(); ++i) {
+                outputs[i] = normalizedTrackedOutput(outputs.at(i), keychain);
+            }
+        }
+    }
     const qulonglong effectiveHeight = m_chainHeight > 0 ? m_chainHeight : m_scanHeight;
     const WalletSelection::Result selection =
         WalletSelection::selectSpendableOutputs(outputs, requestedAmount, effectiveHeight);
@@ -2941,7 +3027,7 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
 
     SlateV4 slate;
     alignSlateVersionWithNode(&slate);
-    const QString workflowId = generateWorkflowId();
+    const QString workflowId = slate.id;
     // Do NOT set workflowId on input UTXOs here – they belong to the workflow that
     // received them. The send workflow tracks its inputs via selected_input_commits.
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
@@ -2951,7 +3037,7 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     refreshStateFromStorage();
 
     const WalletCryptoBackend::ParticipantContext senderContext =
-        WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("sender"));
+        WalletCryptoBackend::createRandomParticipant(QStringLiteral("sender"));
     slate.state = SlateV4::Standard1;
     slate.amount = formatNanogrin(requestedAmount);
     slate.fee = QStringLiteral("%1.%2")
@@ -2975,6 +3061,12 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     localContext.insert(QStringLiteral("selected_inputs"), selection.selectedOutputs.size());
     localContext.insert(QStringLiteral("selected_total"), QString::number(selection.totalSelected));
     localContext.insert(QStringLiteral("change_amount"), QString::number(selection.change));
+    localContext.insert(QStringLiteral("amount_nano"), QString::number(requestedAmount));
+    localContext.insert(QStringLiteral("amount_display"), slate.amount);
+    localContext.insert(QStringLiteral("fee_nano"), QString::number(selection.fee));
+    localContext.insert(QStringLiteral("fee_amount_display"), slate.fee);
+    localContext.insert(standardContextKey(QStringLiteral("participant")),
+                        participantContextToJson(senderContext));
     QJsonArray selectedCommitments;
     QJsonObject selectedInputCoinbase;
     for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
@@ -3004,68 +3096,42 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
             setLastInfo(QStringLiteral("Change output fallback used: %1").arg(outputError));
         }
     }
-    storeWorkflowContext(workflowId, localContext);
-
-    // Compute S1 kernel offset per grin-wallet reference:
-    //   offset = change_blind - xs_sender_aggsig_secret - sum(input_blinds)
-    // This guarantees: sum(output_blinds) - sum(input_blinds) = kernel_excess + offset
-    // where kernel_excess = xs_sender_pubkey + xs_receiver_pubkey (from aggsig).
-    {
-        // All negatives: xs_sender aggsig key + each input's blinding factor
-        QStringList negatives;
-        negatives << senderContext.blindSecret;
-
-        if (!m_sessionMnemonic.trimmed().isEmpty()) {
-            const WalletKeychain inputKeychain(m_sessionMnemonic);
-            if (inputKeychain.isValid()) {
-                for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
-                    const WalletOutput normInput =
-                        normalizedTrackedOutput(selection.selectedOutputs.at(i), inputKeychain);
-                    if (!normInput.blindingFactor.isEmpty()) {
-                        negatives << normInput.blindingFactor;
-                        qDebug() << "[S1Offset] input blind"
-                                 << "commitment=" << normInput.commitment.left(16)
-                                 << "source="     << normInput.source;
-                    } else {
-                        qDebug() << "[S1Offset] input blind missing"
-                                 << "commitment=" << selection.selectedOutputs.at(i).commitment.left(16)
-                                 << "source="     << selection.selectedOutputs.at(i).source;
-                    }
-                }
-            }
-        }
-
-        QString offsetError;
-        QString computedOffset;
-        if (!changeOutput.blindingFactor.isEmpty()) {
-            // offset = change_blind - xs_sender - sum(inputs)
-            computedOffset = WalletCryptoBackend::combineBlindingFactors(
-                QStringList() << changeOutput.blindingFactor, negatives, &offsetError);
-        } else {
-            // No change output: offset = -(xs_sender + sum(inputs))
-            const QString sumToNegate =
-                WalletCryptoBackend::combineBlindingFactors(negatives, QStringList(), &offsetError);
-            if (!sumToNegate.isEmpty()) {
-                computedOffset = WalletCryptoBackend::negateScalar(sumToNegate, &offsetError);
-            }
-        }
-
-        if (!computedOffset.isEmpty()) {
-            slate.offset = computedOffset;
-            qDebug() << "[S1Offset] offset computed correctly"
-                     << "workflowId="  << workflowId
-                     << "hasChange="   << !changeOutput.blindingFactor.isEmpty()
-                     << "inputCount="  << (negatives.size() - 1)
-                     << "offset="      << computedOffset.left(16);
-        } else {
-            // Fallback: deterministic offset — transaction will fail node validation.
-            // Should not happen when wallet is unlocked and outputs are tracked.
-            slate.offset = WalletCryptoBackend::createOffset(m_seedFingerprint, slate.id);
-            qDebug() << "[S1Offset] fallback to derived offset"
-                     << "workflowId=" << workflowId
-                     << "error="      << offsetError;
+    // Match current grin-wallet standard send semantics:
+    // sender contributes its offset share already in S1 via
+    //   offset = 0 - sender_sec_key - inputs + change
+    QStringList s1PositiveBlinds;
+    if (!changeOutput.blindingFactor.trimmed().isEmpty()) {
+        s1PositiveBlinds.append(changeOutput.blindingFactor.trimmed());
+    }
+    QStringList s1NegativeBlinds;
+    s1NegativeBlinds.append(senderContext.blindSecret.trimmed());
+    for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
+        const QString inputBlind = selection.selectedOutputs.at(i).blindingFactor.trimmed();
+        if (!inputBlind.isEmpty()) {
+            s1NegativeBlinds.append(inputBlind);
         }
     }
+    QString s1OffsetError;
+    const QString s1Offset = WalletCryptoBackend::combineBlindingFactors(
+        s1PositiveBlinds,
+        s1NegativeBlinds,
+        &s1OffsetError);
+    if (s1Offset.isEmpty()) {
+        setLastError(s1OffsetError.isEmpty()
+                         ? QStringLiteral("Failed to compute standard sender offset.")
+                         : s1OffsetError);
+        return;
+    }
+    slate.offset = s1Offset;
+
+    localContext.insert(QStringLiteral("standard_sender_offset"), slate.offset);
+
+    storeWorkflowContext(workflowId, localContext);
+
+    qDebug() << "[S1Offset] prepared standard sender offset"
+             << "workflowId=" << workflowId
+             << "offset=" << slate.offset
+             << "hasChange=" << !changeOutput.blindingFactor.isEmpty();
     // Populate slate.commitments for S1 per reference:
     // sender inputs as plain commits (no proof), change output with proof.
     // This allows the receiver to verify the fee and build the full tx view.
@@ -3103,6 +3169,9 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
     outboundSlate.commitments.clear();
     outboundSlate.hasPaymentProof = false;
     outboundSlate.paymentProof = SlateV4::PaymentProof();
+
+    logWorkflowJson(QStringLiteral("S1-local"), workflowId, slate.stateCode(), slate.toJson());
+    logWorkflowJson(QStringLiteral("S1-outbound"), workflowId, outboundSlate.stateCode(), outboundSlate.toJson());
 
     const QString decoded = QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented));
     QString armoredSlatepack;
@@ -3264,6 +3333,8 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
     SlateV4 slate = SlateV4::fromJson(document.object());
     alignSlateVersionWithNode(&slate);
     const SlateV4 incomingSlate = slate;
+    qDebug().noquote() << QStringLiteral("[WorkflowJson] incoming-slatepack\n%1").arg(decoded);
+    logWorkflowJson(QStringLiteral("incoming-slate"), slate.workflowId(), slate.stateCode(), slate.toJson());
     qDebug() << "[WorkflowProcess] decoded"
              << "id=" << slate.id
              << "state=" << slate.stateCode()
@@ -3293,9 +3364,40 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         return;
     }
 
-    const QString workflowId = slate.workflowId();
+    QString workflowId = slate.workflowId();
     const QString mode = slate.modeCode();
     const QString state = slate.stateCode();
+    auto resolveWorkflowIdBySlateId = [&slate]() -> QString {
+        if (slate.id.trimmed().isEmpty()) {
+            return QString();
+        }
+        const QJsonArray transactions = loadDocument()
+                                            .value(QStringLiteral("wallet_state"))
+                                            .toObject()
+                                            .value(QStringLiteral("transactions"))
+                                            .toArray();
+        for (int i = 0; i < transactions.size(); ++i) {
+            const QJsonObject tx = transactions.at(i).toObject();
+            if (tx.value(QStringLiteral("slate_id")).toString() == slate.id) {
+                const QString resolvedWorkflowId =
+                    tx.value(QStringLiteral("workflow_id")).toString().trimmed();
+                if (!resolvedWorkflowId.isEmpty()) {
+                    return resolvedWorkflowId;
+                }
+            }
+        }
+        return QString();
+    };
+    if (workflowId.isEmpty()) {
+        const QString resolvedWorkflowId = resolveWorkflowIdBySlateId();
+        if (!resolvedWorkflowId.isEmpty()) {
+            workflowId = resolvedWorkflowId;
+            slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
+            qDebug() << "[WorkflowProcess] workflow id restored from slate id"
+                     << "slateId=" << slate.id
+                     << "workflowId=" << workflowId;
+        }
+    }
     if (workflowId.isEmpty() || mode == QStringLiteral("unknown") || state == QStringLiteral("NA")) {
         setLastError(QStringLiteral("Incoming Slatepack is missing workflow metadata."));
         return;
@@ -3317,6 +3419,20 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
     if (localRoleTag.isEmpty()) {
         setLastError(QStringLiteral("Unsupported workflow transition."));
         return;
+    }
+
+    if (localRoleTag == QStringLiteral("sender")
+        && workflowContext(workflowId).isEmpty()
+        && !slate.id.trimmed().isEmpty()) {
+        const QString resolvedWorkflowId = resolveWorkflowIdBySlateId();
+        if (!resolvedWorkflowId.isEmpty() && resolvedWorkflowId != workflowId) {
+            qDebug() << "[WorkflowProcess] workflow id aliased"
+                     << "incomingWorkflowId=" << workflowId
+                     << "resolvedWorkflowId=" << resolvedWorkflowId
+                     << "slateId=" << slate.id;
+            workflowId = resolvedWorkflowId;
+            slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
+        }
     }
 
     const QString localSlatepackAddress = currentSlatepackAddress();
@@ -3387,6 +3503,18 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         signatureOverride = &signatureOverrideContext;
     }
 
+    if (mode == QStringLiteral("send")
+        && state == QStringLiteral("S2")
+        && localRoleTag == QStringLiteral("sender")) {
+        if (!prepareStandardSenderContext(workflowId, &slate, &signatureOverrideContext, &cryptoError)) {
+            setLastError(cryptoError.isEmpty()
+                ? QStringLiteral("Failed to prepare standard sender context.")
+                : cryptoError);
+            return;
+        }
+        signatureOverride = &signatureOverrideContext;
+    }
+
     if (localRoleTag == QStringLiteral("receiver")
         && (slate.commitments.isEmpty()
             || state == QStringLiteral("S1")
@@ -3421,9 +3549,38 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         slate.metadata.insert(QStringLiteral("receiver_child_index"), static_cast<int>(receiveOutput.childIndex));
         slate.metadata.insert(QStringLiteral("receiver_key_path"), receiveOutput.keyPath);
 
+        if (localRoleTag == QStringLiteral("receiver")
+            && !receiveOutput.blindingFactor.trimmed().isEmpty()) {
+            WalletCryptoBackend::ParticipantContext receiverContextFromBlind =
+                WalletCryptoBackend::createParticipantFromBlindSecret(
+                    receiveOutput.blindingFactor,
+                    m_seedFingerprint,
+                    workflowId,
+                    QStringLiteral("receiver"));
+            if (!receiverContextFromBlind.blindSecret.isEmpty()
+                && !receiverContextFromBlind.nonceSecret.isEmpty()
+                && !receiverContextFromBlind.blindPublic.isEmpty()
+                && !receiverContextFromBlind.noncePublic.isEmpty()) {
+                signatureOverrideContext = receiverContextFromBlind;
+                signatureOverride = &signatureOverrideContext;
+                qDebug() << "[WorkflowSign] receiver aggsig context bound to receiver output blind"
+                         << "workflowId=" << workflowId
+                         << "receiverBlindPub=" << receiverContextFromBlind.blindPublic
+                         << "receiverCommit=" << receiveOutput.commitment.left(16);
+            }
+        }
+
         if (mode == QStringLiteral("invoice") && state == QStringLiteral("I2")) {
-            const WalletCryptoBackend::ParticipantContext receiverContext =
-                WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("receiver"));
+            WalletCryptoBackend::ParticipantContext receiverContext =
+                WalletCryptoBackend::createParticipantFromBlindSecret(
+                    receiveOutput.blindingFactor,
+                    m_seedFingerprint,
+                    workflowId,
+                    QStringLiteral("receiver"));
+            if (receiverContext.blindSecret.isEmpty()) {
+                receiverContext =
+                    WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("receiver"));
+            }
             if (!receiveOutput.blindingFactor.isEmpty() && !receiverContext.blindSecret.isEmpty()) {
                 QString offsetError;
                 const QString adjustedOffset = WalletCryptoBackend::combineBlindingFactors(
@@ -3495,10 +3652,24 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
             if (!selectedCommitments.isEmpty()) {
                 const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
                 const QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
+                const QJsonObject selectedInputCoinbase =
+                    localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
                 QList<WalletOutput> selectedInputs;
                 for (int i = 0; i < selectedCommitments.size(); ++i) {
-                    selectedInputs.append(findTrackedOutputByCommitment(
-                        trackedOutputs, selectedCommitments.at(i).toString()));
+                    const QString selectedCommitment = selectedCommitments.at(i).toString();
+                    WalletOutput selectedInput =
+                        findTrackedOutputByCommitment(trackedOutputs, selectedCommitment);
+                    if (selectedInput.commitment.isEmpty() && !selectedCommitment.trimmed().isEmpty()) {
+                        selectedInput.commitment = selectedCommitment;
+                        selectedInput.coinbase = selectedInputCoinbase.value(selectedCommitment).toBool(false);
+                        qDebug() << "[WorkflowSign] invoice I2 selected input restored from context"
+                                 << "workflowId=" << workflowId
+                                 << "commitment=" << selectedCommitment.left(16)
+                                 << "coinbase=" << selectedInput.coinbase;
+                    }
+                    if (!selectedInput.commitment.isEmpty()) {
+                        selectedInputs.append(selectedInput);
+                    }
                 }
 
                 WalletOutput receiverOutput;
@@ -3598,10 +3769,24 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         if (!selectedCommitments.isEmpty()) {
             const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
             const QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
+            const QJsonObject selectedInputCoinbase =
+                localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
             QList<WalletOutput> selectedInputs;
             for (int i = 0; i < selectedCommitments.size(); ++i) {
-                selectedInputs.append(findTrackedOutputByCommitment(
-                    trackedOutputs, selectedCommitments.at(i).toString()));
+                const QString selectedCommitment = selectedCommitments.at(i).toString();
+                WalletOutput selectedInput =
+                    findTrackedOutputByCommitment(trackedOutputs, selectedCommitment);
+                if (selectedInput.commitment.isEmpty() && !selectedCommitment.trimmed().isEmpty()) {
+                    selectedInput.commitment = selectedCommitment;
+                    selectedInput.coinbase = selectedInputCoinbase.value(selectedCommitment).toBool(false);
+                    qDebug() << "[WorkflowSign] final selected input restored from context"
+                             << "workflowId=" << workflowId
+                             << "commitment=" << selectedCommitment.left(16)
+                             << "coinbase=" << selectedInput.coinbase;
+                }
+                if (!selectedInput.commitment.isEmpty()) {
+                    selectedInputs.append(selectedInput);
+                }
             }
 
             WalletOutput receiverOutput;
@@ -3630,17 +3815,46 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                 }
             }
 
-            const WalletTxBuilder::BuildResult txBuild = WalletTxBuilder::buildTransactionSkeleton(
+            WalletTxBuilder::BuildResult txBuild = WalletTxBuilder::buildTransactionSkeleton(
                 slate,
                 selectedInputs,
                 receiverOutput.commitment.isEmpty() ? 0 : &receiverOutput,
                 changeOutput.commitment.isEmpty() ? 0 : &changeOutput);
+
+            if (externalBinary && mode == QStringLiteral("send") && nextState == QStringLiteral("S3")) {
+                logStandardSenderBlindOffsetDiagnostics(workflowId,
+                                                       slate,
+                                                       localContext,
+                                                       selectedInputs,
+                                                       receiverOutput,
+                                                       changeOutput);
+            }
             if (txBuild.success) {
                 slate.metadata.insert(QStringLiteral("tx_skeleton"), txBuild.transaction.toJson());
                 slate.metadata.insert(QStringLiteral("tx_ready"), true);
+                slate.metadata.remove(QStringLiteral("tx_build_error"));
+                qDebug() << "[WorkflowSign] external send S3 tx skeleton built"
+                         << "workflowId=" << workflowId
+                         << "selectedInputCount=" << selectedInputs.size()
+                         << "hasReceiverOutput=" << !receiverOutput.commitment.isEmpty()
+                         << "hasChangeOutput=" << !changeOutput.commitment.isEmpty()
+                         << "finalTxOffset=" << txBuild.transaction.offset().hex()
+                         << "finalTxKernelExcess="
+                         << (txBuild.transaction.body().kernels().isEmpty()
+                             ? QString()
+                             : txBuild.transaction.body().kernels().at(0).excess())
+                         << "outputCount="
+                         << txBuild.transaction.body().outputs().size();
                 finalizeWorkflowOutputs(slate, false);
             } else {
+                slate.metadata.insert(QStringLiteral("tx_ready"), false);
                 slate.metadata.insert(QStringLiteral("tx_build_error"), txBuild.error);
+                qDebug() << "[WorkflowSign] external send S3 tx skeleton failed"
+                         << "workflowId=" << workflowId
+                         << "selectedInputCount=" << selectedInputs.size()
+                         << "hasReceiverOutput=" << !receiverOutput.commitment.isEmpty()
+                         << "hasChangeOutput=" << !changeOutput.commitment.isEmpty()
+                         << "error=" << txBuild.error;
             }
         } else if (externalBinary && nextState == QStringLiteral("I3")) {
             WalletOutput receiverOutput;
@@ -3685,16 +3899,18 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
     }
 
     QString updatedSlatepack;
-    const QStringList outgoingRecipients = outgoingSlatepackRecipients(slate);
+    const QStringList outgoingRecipients;
     const QString outgoingSender = localSlatepackAddress;
     if (!outgoingSender.trimmed().isEmpty()) {
         slate.metadata.insert(QStringLiteral("slatepack_sender"), outgoingSender);
     }
     const QString updatedDecoded = QString::fromUtf8(QJsonDocument(slate.toJson()).toJson(QJsonDocument::Indented));
+    logWorkflowJson(QStringLiteral("outgoing-slate"), workflowId, nextState, slate.toJson());
     qDebug() << "[SlatepackEncode]"
              << "workflowId=" << workflowId
              << "state=" << nextState
              << "externalBinary=" << externalBinary
+             << "forcedMode=" << 0
              << "senderMetadata=" << slate.metadata.value(QStringLiteral("slatepack_sender")).toString()
              << "localSender=" << localSlatepackAddress
              << "recipientCount=" << outgoingRecipients.size()
@@ -3727,14 +3943,15 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
     persistWorkflowTransaction(slate, false);
     setWorkflow(workflowId, mode, nextState, updatedSlatepack, updatedDecoded);
 
-    const bool autoBroadcastExternalInvoice =
+    const bool autoBroadcastExternalFinal =
         externalBinary
-        && nextState == QStringLiteral("I3")
+        && (nextState == QStringLiteral("I3") || nextState == QStringLiteral("S3"))
         && slate.metadata.value(QStringLiteral("tx_ready")).toBool()
         && slate.metadata.value(QStringLiteral("tx_skeleton")).isObject();
-    if (autoBroadcastExternalInvoice) {
-        qDebug() << "[WorkflowBroadcast] auto broadcast external invoice I3"
+    if (autoBroadcastExternalFinal) {
+        qDebug() << "[WorkflowBroadcast] auto broadcast external final slate"
                  << "workflowId=" << workflowId
+                 << "state=" << nextState
                  << "txReady=" << slate.metadata.value(QStringLiteral("tx_ready")).toBool()
                  << "skeletonOutputs="
                  << slate.metadata.value(QStringLiteral("tx_skeleton")).toObject()
@@ -3744,6 +3961,16 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         if (!m_pendingBroadcastWorkflowId.isEmpty()) {
             setLastInfo(QStringLiteral("Workflow %1 advanced to %2 and is being broadcast to the node.")
                             .arg(workflowId, nextState));
+            return;
+        }
+    }
+
+    if (externalBinary
+        && (nextState == QStringLiteral("I3") || nextState == QStringLiteral("S3"))
+        && !slate.metadata.value(QStringLiteral("tx_ready")).toBool()) {
+        const QString txBuildError = slate.metadata.value(QStringLiteral("tx_build_error")).toString();
+        if (!txBuildError.trimmed().isEmpty()) {
+            setLastError(QStringLiteral("Final transaction build failed: %1").arg(txBuildError));
             return;
         }
     }
@@ -3845,7 +4072,7 @@ void GrinWalletController::broadcastCurrentWorkflowTransaction()
         entry.remove(QStringLiteral("broadcast_error"));
     });
     m_pendingBroadcastWorkflowId = slate.workflowId();
-    m_nodeApi->pushTransactionAsync(Transaction::fromJson(txSkeleton), true);
+    beginBroadcastWithInputPreflight(slate.workflowId(), txSkeleton);
 }
 
 void GrinWalletController::broadcastTransaction(const QString &workflowId)
@@ -3896,11 +4123,53 @@ void GrinWalletController::broadcastTransaction(const QString &workflowId)
             entry.remove(QStringLiteral("broadcast_error"));
         });
         m_pendingBroadcastWorkflowId = workflowId;
-        m_nodeApi->pushTransactionAsync(Transaction::fromJson(txSkeleton), true);
+        beginBroadcastWithInputPreflight(workflowId, txSkeleton);
         return;
     }
 
     setLastError(QStringLiteral("Transaction not found in wallet history."));
+}
+
+void GrinWalletController::beginBroadcastWithInputPreflight(const QString &workflowId,
+                                                            const QJsonObject &txSkeleton)
+{
+    if (!m_nodeApi) {
+        setLastError(QStringLiteral("Node client is not configured."));
+        return;
+    }
+
+    logWorkflowJson(QStringLiteral("broadcast-tx-skeleton"), workflowId, QStringLiteral("broadcast"), txSkeleton);
+
+    const Transaction tx = Transaction::fromJson(txSkeleton);
+    const QVector<Input> inputs = tx.body().inputs();
+    if (inputs.isEmpty()) {
+        qWarning() << "[WorkflowBroadcast] preflight failed"
+                   << "workflowId=" << workflowId
+                   << "reason=no-inputs";
+        m_pendingBroadcastWorkflowId.clear();
+        updateTransactionEntry(workflowId, [](QJsonObject &entry) {
+            entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
+            entry.insert(QStringLiteral("broadcasted"), false);
+            entry.insert(QStringLiteral("broadcast_error"), QStringLiteral("Transaction has no inputs."));
+            entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+        });
+        setLastError(QStringLiteral("Transaction has no inputs."));
+        return;
+    }
+
+    QJsonArray commits;
+    for (int i = 0; i < inputs.size(); ++i) {
+        commits.append(inputs.at(i).commit().hex());
+    }
+
+    m_pendingBroadcastInputLookup = true;
+    m_pendingBroadcastTxSkeleton = txSkeleton;
+    m_pendingBroadcastInputCommits = commits;
+
+    qDebug() << "[WorkflowBroadcast] preflight get_outputs"
+             << "workflowId=" << workflowId
+             << "inputCount=" << commits.size();
+    m_nodeApi->getOutputCommitmentsAsync(commits);
 }
 
 void GrinWalletController::cancelTransaction(const QString &workflowId)
@@ -4329,6 +4598,169 @@ void GrinWalletController::connectNodeClient()
         setLastInfo(QStringLiteral("Wallet scan updated %1 tracked outputs from node data.")
                         .arg(QString::number(tracked.size())));
         m_walletScanInFlight = false;
+    });
+
+    connect(m_nodeApi, &NodeForeignApi::getOutputCommitmentsFinished, this, [this](const Result<QList<OutputPrintable> > &result) {
+        if (!m_pendingBroadcastInputLookup) {
+            return;
+        }
+
+        m_pendingBroadcastInputLookup = false;
+        const QString workflowId = m_pendingBroadcastWorkflowId;
+        if (workflowId.isEmpty()) {
+            m_pendingBroadcastTxSkeleton = QJsonObject();
+            m_pendingBroadcastInputCommits = QJsonArray();
+            return;
+        }
+
+        if (result.hasError()) {
+            const QString message = QStringLiteral("Pre-broadcast input lookup failed: %1")
+                                        .arg(result.errorMessage());
+            qWarning() << "[WorkflowBroadcast] preflight lookup failed"
+                       << "workflowId=" << workflowId
+                       << "error=" << result.errorMessage();
+            m_pendingBroadcastWorkflowId.clear();
+            m_pendingBroadcastTxSkeleton = QJsonObject();
+            m_pendingBroadcastInputCommits = QJsonArray();
+            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
+                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
+                entry.insert(QStringLiteral("broadcasted"), false);
+                entry.insert(QStringLiteral("broadcast_error"), message);
+                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+            });
+            setLastError(message);
+            return;
+        }
+
+        QSet<QString> foundCommitments;
+        QHash<QString, OutputPrintable::OutputType> outputTypes;
+        const QList<OutputPrintable> foundOutputs = result.value();
+        for (int i = 0; i < foundOutputs.size(); ++i) {
+            const QString commitHex = foundOutputs.at(i).commit().hex();
+            foundCommitments.insert(commitHex);
+            outputTypes.insert(commitHex, foundOutputs.at(i).outputType());
+        }
+
+        QString missingCommit;
+        for (int i = 0; i < m_pendingBroadcastInputCommits.size(); ++i) {
+            const QString commit = m_pendingBroadcastInputCommits.at(i).toString();
+            if (!foundCommitments.contains(commit)) {
+                missingCommit = commit;
+                break;
+            }
+        }
+
+        if (!missingCommit.isEmpty()) {
+            const QString message = QStringLiteral("Node preflight rejected input commit %1. Wallet state may be stale or the output is already spent.")
+                                        .arg(missingCommit);
+            qWarning() << "[WorkflowBroadcast] preflight missing input"
+                       << "workflowId=" << workflowId
+                       << "missingCommit=" << missingCommit;
+            m_pendingBroadcastWorkflowId.clear();
+            m_pendingBroadcastTxSkeleton = QJsonObject();
+            m_pendingBroadcastInputCommits = QJsonArray();
+            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
+                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
+                entry.insert(QStringLiteral("broadcasted"), false);
+                entry.insert(QStringLiteral("broadcast_error"), message);
+                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+            });
+            setLastError(message);
+            return;
+        }
+
+        Transaction tx = Transaction::fromJson(m_pendingBroadcastTxSkeleton);
+        TransactionBody body = tx.body();
+        QVector<Input> inputs = body.inputs();
+        bool adjustedInputFeatures = false;
+        for (int i = 0; i < inputs.size(); ++i) {
+            Input input = inputs.at(i);
+            const QString commitHex = input.commit().hex();
+            const OutputFeatures::Feature expectedFeature =
+                outputTypes.value(commitHex) == OutputPrintable::OutputType::OutputTypeCoinbase
+                    ? OutputFeatures::Coinbase
+                    : OutputFeatures::Plain;
+            if (input.features() != expectedFeature) {
+                input.setFeatures(expectedFeature);
+                inputs[i] = input;
+                adjustedInputFeatures = true;
+                qDebug() << "[WorkflowBroadcast] preflight adjusted input feature"
+                         << "workflowId=" << workflowId
+                         << "commit=" << commitHex.left(16)
+                         << "feature=" << (expectedFeature == OutputFeatures::Coinbase ? "Coinbase" : "Plain");
+            }
+        }
+        if (adjustedInputFeatures) {
+            body.setInputs(inputs);
+            tx.setBody(body);
+        }
+
+        QString validationError;
+        if (!WalletCryptoBackend::validateTransactionBody(tx, &validationError)) {
+            const QString message = QStringLiteral("Local pre-broadcast body validation failed: %1")
+                                        .arg(validationError);
+            qWarning() << "[WorkflowBroadcast] local preflight body validation failed"
+                       << "workflowId=" << workflowId
+                       << "error=" << validationError;
+            m_pendingBroadcastWorkflowId.clear();
+            m_pendingBroadcastTxSkeleton = QJsonObject();
+            m_pendingBroadcastInputCommits = QJsonArray();
+            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
+                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
+                entry.insert(QStringLiteral("broadcasted"), false);
+                entry.insert(QStringLiteral("broadcast_error"), message);
+                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+            });
+            setLastError(message);
+            return;
+        }
+
+        if (!WalletCryptoBackend::validateTransactionKernelSums(tx, &validationError)) {
+            const QString message = QStringLiteral("Local pre-broadcast kernel sum/offset validation failed: %1")
+                                        .arg(validationError);
+            qWarning() << "[WorkflowBroadcast] local preflight kernel sums failed"
+                       << "workflowId=" << workflowId
+                       << "error=" << validationError;
+            m_pendingBroadcastWorkflowId.clear();
+            m_pendingBroadcastTxSkeleton = QJsonObject();
+            m_pendingBroadcastInputCommits = QJsonArray();
+            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
+                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
+                entry.insert(QStringLiteral("broadcasted"), false);
+                entry.insert(QStringLiteral("broadcast_error"), message);
+                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+            });
+            setLastError(message);
+            return;
+        }
+
+        if (!WalletCryptoBackend::validateTransactionKernelSignatures(tx, &validationError)) {
+            const QString message = QStringLiteral("Local pre-broadcast kernel signature validation failed: %1")
+                                        .arg(validationError);
+            qWarning() << "[WorkflowBroadcast] local preflight kernel signature failed"
+                       << "workflowId=" << workflowId
+                       << "error=" << validationError;
+            m_pendingBroadcastWorkflowId.clear();
+            m_pendingBroadcastTxSkeleton = QJsonObject();
+            m_pendingBroadcastInputCommits = QJsonArray();
+            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
+                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
+                entry.insert(QStringLiteral("broadcasted"), false);
+                entry.insert(QStringLiteral("broadcast_error"), message);
+                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+            });
+            setLastError(message);
+            return;
+        }
+
+        logWorkflowJson(QStringLiteral("broadcast-tx-final"), workflowId, QStringLiteral("broadcast"), tx.toJson());
+
+        qDebug() << "[WorkflowBroadcast] preflight passed"
+                 << "workflowId=" << workflowId
+                 << "foundInputs=" << foundOutputs.size();
+        m_pendingBroadcastTxSkeleton = QJsonObject();
+        m_pendingBroadcastInputCommits = QJsonArray();
+        m_nodeApi->pushTransactionAsync(tx, true);
     });
 
     connect(m_nodeApi, &NodeForeignApi::getUnspentOutputsFinished, this, [this](const Result<OutputListing> &result) {
@@ -4796,6 +5228,27 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     }
 
     QJsonObject localContext = workflowContext(workflowId);
+    auto resolveWorkflowAmountNano = [&workflowId, &localContext, &amount]() -> quint64 {
+        quint64 resolvedAmount = amountToNanogrin(amount);
+        if (resolvedAmount == 0) {
+            resolvedAmount = localContext.value(QStringLiteral("amount_nano")).toVariant().toULongLong();
+        }
+        if (resolvedAmount == 0) {
+            const QJsonArray transactions = loadDocument()
+                                                .value(QStringLiteral("wallet_state"))
+                                                .toObject()
+                                                .value(QStringLiteral("transactions"))
+                                                .toArray();
+            for (int i = 0; i < transactions.size(); ++i) {
+                const QJsonObject tx = transactions.at(i).toObject();
+                if (tx.value(QStringLiteral("workflow_id")).toString() == workflowId) {
+                    resolvedAmount = amountToNanogrin(tx.value(QStringLiteral("amount")).toString());
+                    break;
+                }
+            }
+        }
+        return resolvedAmount;
+    };
     if (!localContext.value(QStringLiteral("selected_input_commits")).toArray().isEmpty()) {
         const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
         const QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
@@ -4808,20 +5261,29 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         }
         const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
         const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
+        bool hasMatchingSelection = false;
         bool hasMatchingLocks = false;
         for (int i = 0; i < selectedCommitments.size(); ++i) {
             const WalletOutput output =
                 findTrackedOutputByCommitment(outputs, selectedCommitments.at(i).toString());
-            if (!output.commitment.isEmpty() && output.locked && output.workflowId == workflowId) {
-                hasMatchingLocks = true;
-                break;
+            if (!output.commitment.isEmpty()) {
+                hasMatchingSelection = true;
+                if (output.locked) {
+                    hasMatchingLocks = true;
+                    break;
+                }
             }
         }
 
-        if (!hasMatchingLocks) {
+        // Inputs selected for a SEND workflow intentionally keep their original
+        // workflow id (the workflow that created the UTXO). Requiring
+        // output.workflowId == workflowId here can incorrectly discard a valid
+        // S1 selection before S3 finalization.
+        if (!hasMatchingSelection) {
             qDebug() << "[WorkflowSelectionContext] stale selection discarded"
                      << "workflowId=" << workflowId
                      << "hasTransactionEntry=" << hasTransactionEntry
+                     << "hasMatchingSelection=" << hasMatchingSelection
                      << "hasMatchingLocks=" << hasMatchingLocks
                      << "selectedInputs=" << selectedCommitments.size();
             localContext.remove(QStringLiteral("selected_inputs"));
@@ -4917,7 +5379,23 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
                  << "workflowId=" << workflowId
                  << "selectedInputs=" << selectedCommitments.size()
                  << "coinbaseMapSize=" << selectedInputCoinbase.size();
-        const quint64 amountNano = localContext.value(QStringLiteral("amount_nano")).toVariant().toULongLong();
+        quint64 amountNano = localContext.value(QStringLiteral("amount_nano")).toVariant().toULongLong();
+        if (amountNano == 0) {
+            amountNano = resolveWorkflowAmountNano();
+            if (amountNano > 0) {
+                localContext.insert(QStringLiteral("amount_nano"), QString::number(amountNano));
+                if (localContext.value(QStringLiteral("amount_display")).toString().trimmed().isEmpty()) {
+                    localContext.insert(QStringLiteral("amount_display"), formatNanogrin(amountNano));
+                }
+                storeWorkflowContext(workflowId, localContext);
+            }
+        }
+        if (amountNano == 0) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Workflow amount context is missing. Restart the send workflow from S1.");
+            }
+            return false;
+        }
         const quint64 feeWithoutChange =
             WalletSelection::estimateFee(selectedCommitments.size(), 1, 1);
         const quint64 feeWithChange =
@@ -4985,7 +5463,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         }
     }
 
-    const quint64 requestedAmount = amountToNanogrin(amount);
+    quint64 requestedAmount = resolveWorkflowAmountNano();
     if (requestedAmount == 0) {
         if (errorOut) {
             *errorOut = QStringLiteral("Workflow amount must be greater than zero.");
@@ -5260,6 +5738,154 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     return true;
 }
 
+bool GrinWalletController::prepareStandardSenderContext(
+    const QString &workflowId,
+    SlateV4 *slate,
+    WalletCryptoBackend::ParticipantContext *signatureOverrideOut,
+    QString *errorOut)
+{
+    if (!slate || !signatureOverrideOut) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Standard sender context target is missing.");
+        }
+        return false;
+    }
+
+    QJsonObject localContext = workflowContext(workflowId);
+    WalletCryptoBackend::ParticipantContext senderAggsig =
+        participantContextFromJson(localContext.value(standardContextKey(QStringLiteral("participant"))).toObject(),
+                                   QStringLiteral("sender"));
+    if (senderAggsig.blindSecret.isEmpty()
+        || senderAggsig.nonceSecret.isEmpty()
+        || senderAggsig.blindPublic.isEmpty()
+        || senderAggsig.noncePublic.isEmpty()) {
+        senderAggsig = WalletCryptoBackend::createRandomParticipant(QStringLiteral("sender"));
+        localContext.insert(standardContextKey(QStringLiteral("participant")),
+                            participantContextToJson(senderAggsig));
+        storeWorkflowContext(workflowId, localContext);
+    }
+
+    const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
+    const QJsonObject selectedInputCoinbase =
+        localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
+    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
+    if (!m_sessionMnemonic.trimmed().isEmpty()) {
+        const WalletKeychain keychain(m_sessionMnemonic);
+        if (keychain.isValid()) {
+            for (int i = 0; i < trackedOutputs.size(); ++i) {
+                trackedOutputs[i] = normalizedTrackedOutput(trackedOutputs.at(i), keychain);
+            }
+        }
+    }
+
+    const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
+    const WalletOutput changeOutput = changeCommit.isEmpty()
+        ? WalletOutput()
+        : findTrackedOutputByCommitment(trackedOutputs, changeCommit);
+
+    QString canonicalOffset = localContext.value(QStringLiteral("standard_sender_offset")).toString().trimmed();
+    if (canonicalOffset.isEmpty()) {
+        canonicalOffset = slate->offset.trimmed();
+        if (canonicalOffset.isEmpty()) {
+            canonicalOffset = localContext.value(QStringLiteral("incoming_s2_offset")).toString().trimmed();
+        }
+        if (canonicalOffset.isEmpty()) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Failed to recover canonical standard sender offset.");
+            }
+            return false;
+        }
+
+        localContext.insert(QStringLiteral("standard_sender_offset"), canonicalOffset);
+        storeWorkflowContext(workflowId, localContext);
+    }
+
+    const QString incomingOffset = slate->offset.trimmed();
+    localContext.insert(QStringLiteral("incoming_s2_offset"), incomingOffset);
+
+    QString effectiveOffset = canonicalOffset;
+    const bool externalBinary = slate->metadata.value(QStringLiteral("external_binary")).toBool();
+    if (!incomingOffset.isEmpty()) {
+        if (incomingOffset != canonicalOffset) {
+            if (externalBinary) {
+                effectiveOffset = incomingOffset;
+                qDebug() << "[StandardSenderOffset] imported S2 offset extends local S1 offset"
+                         << "workflowId=" << workflowId
+                         << "incomingOffset=" << incomingOffset
+                         << "localS1Offset=" << canonicalOffset;
+            } else {
+                qWarning() << "[StandardSenderOffset] imported S2 offset differs; keeping local S1 offset"
+                           << "workflowId=" << workflowId
+                           << "incomingOffset=" << incomingOffset
+                           << "localS1Offset=" << canonicalOffset;
+            }
+        } else {
+            qDebug() << "[StandardSenderOffset] imported S2 offset matches local S1 offset"
+                     << "workflowId=" << workflowId
+                     << "offset=" << canonicalOffset;
+        }
+    } else {
+        qWarning() << "[StandardSenderOffset] imported S2 offset is empty, using local S1 offset"
+                   << "workflowId=" << workflowId
+                   << "localS1Offset=" << canonicalOffset;
+    }
+
+    slate->offset = effectiveOffset;
+    localContext.insert(QStringLiteral("standard_sender_offset"), canonicalOffset);
+    storeWorkflowContext(workflowId, localContext);
+
+    *signatureOverrideOut = senderAggsig;
+    qDebug() << "[StandardSenderOffset]"
+             << "workflowId=" << workflowId
+             << "selectedInputs=" << selectedCommitments.size()
+             << "offset=" << slate->offset
+             << "blindPublic=" << senderAggsig.blindPublic;
+
+    QList<SlateV4::Commit> rebuiltCommitments = slate->commitments;
+    for (int i = 0; i < selectedCommitments.size(); ++i) {
+        const WalletOutput input = findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
+        if (input.commitment.isEmpty()) {
+            continue;
+        }
+        bool exists = false;
+        for (int j = 0; j < rebuiltCommitments.size(); ++j) {
+            if (rebuiltCommitments.at(j).commitment == input.commitment) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            SlateV4::Commit commit;
+            commit.feature = selectedInputCoinbase.value(input.commitment).toBool(input.coinbase) ? 1 : 0;
+            commit.commitment = input.commitment;
+            rebuiltCommitments.append(commit);
+        }
+    }
+
+    if (!changeCommit.isEmpty()) {
+        if (!changeOutput.commitment.isEmpty()) {
+            bool exists = false;
+            for (int i = 0; i < rebuiltCommitments.size(); ++i) {
+                if (rebuiltCommitments.at(i).commitment == changeOutput.commitment) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                SlateV4::Commit commit;
+                commit.feature = 0;
+                commit.commitment = changeOutput.commitment;
+                commit.proof = changeOutput.proof;
+                rebuiltCommitments.append(commit);
+            }
+        }
+    }
+
+    slate->commitments = sortedCompactCommitments(rebuiltCommitments);
+    return true;
+}
+
 void GrinWalletController::compactInvoiceSlateForReturn(const QString &workflowId, SlateV4 *slate)
 {
     if (!slate) {
@@ -5520,9 +6146,21 @@ void GrinWalletController::compactStandardSlateForReturn(const QString &workflow
         return;
     }
 
-    const WalletCryptoBackend::ParticipantContext receiverContext =
-        WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("receiver"));
-    const QString receiverBlind = slate->metadata.value(QStringLiteral("receiver_blind")).toString();
+    const QString receiverBlind = slate->metadata.value(QStringLiteral("receiver_blind")).toString().trimmed();
+    WalletCryptoBackend::ParticipantContext receiverContext;
+    if (!receiverBlind.isEmpty()) {
+        receiverContext = WalletCryptoBackend::createParticipantFromBlindSecret(
+            receiverBlind,
+            m_seedFingerprint,
+            workflowId,
+            QStringLiteral("receiver"));
+    }
+    if (receiverContext.blindSecret.isEmpty()
+        || receiverContext.nonceSecret.isEmpty()
+        || receiverContext.blindPublic.isEmpty()
+        || receiverContext.noncePublic.isEmpty()) {
+        receiverContext = WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("receiver"));
+    }
 
     if (!receiverBlind.isEmpty() && !receiverContext.blindSecret.isEmpty()) {
         QStringList positiveBlinds;
@@ -5563,6 +6201,7 @@ void GrinWalletController::compactStandardSlateForReturn(const QString &workflow
              << "offset=" << slate->offset
              << "amountLength=" << slate->amount.length()
              << "feeLength=" << slate->fee.length();
+    logWorkflowJson(QStringLiteral("S2-compacted"), workflowId, slate->stateCode(), slate->toJson());
 }
 
 bool GrinWalletController::ensureReceiverOutputContext(const QString &workflowId,

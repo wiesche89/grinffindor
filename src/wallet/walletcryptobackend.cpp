@@ -1,6 +1,8 @@
 #include "walletcryptobackend.h"
 #include "walletblake2b.h"
 
+#include "../submodules/grin-node-api/src/attributes/transaction.h"
+
 #include <QCryptographicHash>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -260,6 +262,28 @@ QByteArray deriveSigningBaseSecret(const QString &walletFingerprint, const QStri
     return deriveValidSecretBytes(QStringLiteral("blind-base"), walletFingerprint, workflowId + QLatin1Char(':') + roleTag);
 }
 
+QByteArray deriveAggsigSecnonce(const QString &walletFingerprint,
+                                const QString &workflowId,
+                                const QString &roleTag)
+{
+    const QByteArray seed = hashBytes(
+        QStringLiteral("nonce-seed:%1:%2:%3")
+            .arg(walletFingerprint, workflowId, roleTag)
+            .toUtf8());
+    if (seed.size() != 32) {
+        return QByteArray();
+    }
+
+    unsigned char secnonce[32];
+    if (secp256k1_aggsig_export_secnonce_single(
+            walletSecpContext(),
+            secnonce,
+            reinterpret_cast<const unsigned char *>(seed.constData())) != 1) {
+        return QByteArray();
+    }
+    return QByteArray(reinterpret_cast<const char *>(secnonce), sizeof(secnonce));
+}
+
 QByteArray paymentProofMessage(const SlateV4 &slate)
 {
     return QStringLiteral("%1|%2|%3|%4|%5")
@@ -355,6 +379,364 @@ bool addScalars(const QByteArray &left, const QByteArray &right, QByteArray *sum
     }
     *sumOut = sum;
     return true;
+}
+
+bool parseCommitmentHex(const QString &hex, secp256k1_pedersen_commitment *commitmentOut)
+{
+    if (!commitmentOut) {
+        return false;
+    }
+
+    const QByteArray bytes = fromHex(hex.trimmed());
+    if (bytes.size() != 33) {
+        return false;
+    }
+
+    return secp256k1_pedersen_commitment_parse(walletSecpContext(),
+                                               commitmentOut,
+                                               reinterpret_cast<const unsigned char *>(bytes.constData())) == 1;
+}
+
+bool buildZeroValueCommitment(const QString &blindHex, secp256k1_pedersen_commitment *commitmentOut)
+{
+    if (!commitmentOut) {
+        return false;
+    }
+
+    const QByteArray blind = fromHex(blindHex.trimmed());
+    if (blind.size() != 32) {
+        return false;
+    }
+
+    if (secp256k1_ec_seckey_verify(walletSecpContext(),
+                                   reinterpret_cast<const unsigned char *>(blind.constData())) != 1) {
+        return false;
+    }
+
+    return secp256k1_pedersen_commit(walletSecpContext(),
+                                     commitmentOut,
+                                     reinterpret_cast<const unsigned char *>(blind.constData()),
+                                     0,
+                                     &secp256k1_generator_const_h,
+                                     &secp256k1_generator_const_g) == 1;
+}
+
+bool buildValueOnlyCommitment(quint64 value, secp256k1_pedersen_commitment *commitmentOut)
+{
+    if (!commitmentOut) {
+        return false;
+    }
+
+    unsigned char zeroBlind[32];
+    std::memset(zeroBlind, 0, sizeof(zeroBlind));
+    return secp256k1_pedersen_commit(walletSecpContext(),
+                                     commitmentOut,
+                                     zeroBlind,
+                                     value,
+                                     &secp256k1_generator_const_h,
+                                     &secp256k1_generator_const_g) == 1;
+}
+
+QString serializeCommitment(const secp256k1_pedersen_commitment &commitment)
+{
+    unsigned char serialized[33];
+    if (secp256k1_pedersen_commitment_serialize(walletSecpContext(), serialized, &commitment) != 1) {
+        return QString();
+    }
+    return toHex(serialized, sizeof(serialized));
+}
+
+bool appendFixedHexBytes(QByteArray *serialized,
+                         const QString &hex,
+                         int expectedSize)
+{
+    if (!serialized) {
+        return false;
+    }
+
+    const QByteArray bytes = fromHex(hex.trimmed());
+    if (bytes.size() != expectedSize) {
+        return false;
+    }
+
+    serialized->append(bytes);
+    return true;
+}
+
+bool appendOutputFeatureForOrdering(QByteArray *serialized, const QString &feature)
+{
+    if (!serialized) {
+        return false;
+    }
+
+    const QString trimmed = feature.trimmed();
+    if (trimmed.isEmpty() || trimmed == QStringLiteral("Plain")) {
+        appendU8(*serialized, 0);
+        return true;
+    }
+    if (trimmed == QStringLiteral("Coinbase")) {
+        appendU8(*serialized, 1);
+        return true;
+    }
+
+    return false;
+}
+
+bool appendKernelFeaturesForOrdering(QByteArray *serialized, const TxKernel &kernel)
+{
+    if (!serialized) {
+        return false;
+    }
+
+    const QString feature = kernel.features().trimmed();
+    if (feature.isEmpty() || feature == QStringLiteral("Plain")) {
+        appendU8(*serialized, 0);
+        appendU64(*serialized, static_cast<quint64>(kernel.fee()));
+        return true;
+    }
+    if (feature == QStringLiteral("Coinbase")) {
+        appendU8(*serialized, 1);
+        return true;
+    }
+
+    return false;
+}
+
+bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *errorOut)
+{
+    qDebug() << "[VerifyOutputsBatchRangeproofs] starting with" << outputs.size() << "outputs";
+    
+    if (outputs.isEmpty()) {
+        return true;
+    }
+
+    secp256k1_scratch_space *scratch = secp256k1_scratch_space_create(walletSecpContext(), kBulletproofScratchSpaceSize);
+    if (!scratch) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction body validation failed: could not allocate secp scratch space.");
+        }
+        qDebug() << "[VerifyOutputsBatchRangeproofs] FAILED: could not allocate scratch space";
+        return false;
+    }
+
+    QVector<secp256k1_pedersen_commitment> commitments;
+    QVector<QByteArray> proofs;
+    commitments.reserve(outputs.size());
+    proofs.reserve(outputs.size());
+
+    size_t proofLen = 0;
+    for (int i = 0; i < outputs.size(); ++i) {
+        const Output &output = outputs.at(i);
+        qDebug() << "[VerifyOutputsBatchRangeproofs] processing output" << i 
+                 << "commit=" << output.commit().left(16);
+
+        secp256k1_pedersen_commitment commitment;
+        if (!parseCommitmentHex(output.commit(), &commitment)) {
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = QStringLiteral("Transaction body validation failed: invalid output commitment at index %1.")
+                                .arg(i);
+            }
+            qDebug() << "[VerifyOutputsBatchRangeproofs] FAILED: invalid commitment at" << i;
+            return false;
+        }
+
+        const QByteArray proof = QByteArray::fromHex(output.proof().trimmed().toUtf8());
+        if (proof.isEmpty()) {
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = QStringLiteral("Transaction body validation failed: missing output proof at index %1.")
+                                .arg(i);
+            }
+            qDebug() << "[VerifyOutputsBatchRangeproofs] FAILED: missing proof at" << i;
+            return false;
+        }
+
+        qDebug() << "[VerifyOutputsBatchRangeproofs] proof size for output" << i << "=" << proof.size();
+        if (i == 0) {
+            proofLen = static_cast<size_t>(proof.size());
+        } else if (proof.size() != static_cast<int>(proofLen)) {
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = QStringLiteral("Transaction body validation failed: inconsistent proof length at index %1.")
+                                .arg(i);
+            }
+            return false;
+        }
+
+        commitments.append(commitment);
+        proofs.append(proof);
+    }
+
+    QVector<const unsigned char *> proofPointers;
+    QVector<const secp256k1_pedersen_commitment *> commitmentPointers;
+    QVector<secp256k1_generator> valueGenerators;
+    proofPointers.reserve(proofs.size());
+    commitmentPointers.reserve(commitments.size());
+    valueGenerators.reserve(proofs.size());
+    for (int i = 0; i < proofs.size(); ++i) {
+        proofPointers.append(reinterpret_cast<const unsigned char *>(proofs.at(i).constData()));
+        commitmentPointers.append(&commitments[i]);
+        valueGenerators.append(secp256k1_generator_const_h);
+    }
+
+    qDebug() << "[VerifyOutputsBatchRangeproofs] calling verify_multi with" 
+             << proofPointers.size() << "proofs, proofLen=" << proofLen
+             << ", commitmentPointers=" << commitmentPointers.size()
+             << ", valueGenerators=" << valueGenerators.size();
+
+    const int verifyOk = secp256k1_bulletproof_rangeproof_verify_multi(
+        walletSecpContext(),
+        scratch,
+        walletBulletproofGenerators(),
+        proofPointers.constData(),
+        static_cast<size_t>(proofPointers.size()),
+        proofLen,
+        0,
+        commitmentPointers.constData(),
+        1,
+        64,
+        valueGenerators.constData(),
+        0,
+        0);
+
+    qDebug() << "[VerifyOutputsBatchRangeproofs] verify_multi returned" << verifyOk;
+
+    secp256k1_scratch_space_destroy(scratch);
+
+    if (verifyOk != 1) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction body validation failed: batch rangeproof verification failed.");
+        }
+        qDebug() << "[VerifyOutputsBatchRangeproofs] FAILED with verifyOk=" << verifyOk;
+        return false;
+    }
+
+    qDebug() << "[VerifyOutputsBatchRangeproofs] SUCCESS - all" << outputs.size() << "rangeproofs verified";
+
+    return true;
+}
+
+QString inputSortKey(const Input &input)
+{
+    return WalletCryptoBackend::inputOrderHash(input);
+}
+
+QString outputSortKey(const Output &output)
+{
+    const QString featureKey =
+        (output.features().trimmed() == QStringLiteral("Coinbase"))
+            ? QStringLiteral("01")
+            : QStringLiteral("00");
+    return featureKey + output.commit().trimmed().toLower();
+}
+
+QString kernelSortKey(const TxKernel &kernel)
+{
+    return WalletCryptoBackend::kernelOrderHash(kernel);
+}
+
+template <typename Item>
+bool verifySortedAndUnique(const QVector<Item> &items,
+                           QString (*keyFn)(const Item &),
+                           const QString &label,
+                           QString *errorOut)
+{
+    QString previousKey;
+    for (int i = 0; i < items.size(); ++i) {
+        const QString key = keyFn(items.at(i));
+        if (key.isEmpty()) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Transaction body validation failed: empty %1 entry at index %2.")
+                                .arg(label, QString::number(i));
+            }
+            return false;
+        }
+        if (i > 0) {
+            if (previousKey == key) {
+                if (errorOut) {
+                    *errorOut = QStringLiteral("Transaction body validation failed: duplicate %1 at index %2.")
+                                    .arg(label, QString::number(i));
+                }
+                return false;
+            }
+            if (previousKey > key) {
+                if (errorOut) {
+                    *errorOut = QStringLiteral("Transaction body validation failed: %1 entries are not lexicographically sorted at index %2.")
+                                    .arg(label, QString::number(i));
+                }
+                return false;
+            }
+        }
+        previousKey = key;
+    }
+    return true;
+}
+
+bool verifyOutputRangeproof(const Output &output,
+                            secp256k1_scratch_space *scratch,
+                            QString *errorOut)
+{
+    secp256k1_pedersen_commitment commitment;
+    if (!parseCommitmentHex(output.commit(), &commitment)) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to parse output commitment.");
+        }
+        return false;
+    }
+
+    const QByteArray proof = QByteArray::fromHex(output.proof().trimmed().toUtf8());
+    if (proof.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Output proof is missing.");
+        }
+        return false;
+    }
+
+    if (secp256k1_bulletproof_rangeproof_verify(walletSecpContext(),
+                                                scratch,
+                                                walletBulletproofGenerators(),
+                                                reinterpret_cast<const unsigned char *>(proof.constData()),
+                                                static_cast<size_t>(proof.size()),
+                                                0,
+                                                &commitment,
+                                                1,
+                                                64,
+                                                &secp256k1_generator_const_h,
+                                                0,
+                                                0) != 1) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Rangeproof verification failed.");
+        }
+        return false;
+    }
+
+    return true;
+}
+
+QByteArray buildKernelSignatureMessageForFeature(const QString &feature,
+                                                 quint64 fee,
+                                                 quint64 lockHeight,
+                                                 QString *errorOut)
+{
+    QByteArray serialized;
+    if (feature.isEmpty() || feature == QStringLiteral("Plain")) {
+        appendU8(serialized, 0);
+        appendU64(serialized, fee);
+    } else if (feature == QStringLiteral("Coinbase")) {
+        appendU8(serialized, 1);
+    } else if (feature == QStringLiteral("HeightLocked")) {
+        appendU8(serialized, 2);
+        appendU64(serialized, fee);
+        appendU64(serialized, lockHeight);
+    } else {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Unsupported kernel feature for signature validation: %1").arg(feature);
+        }
+        return QByteArray();
+    }
+
+    return QCryptographicHash::hash(serialized, QCryptographicHash::Blake2b_256);
 }
 
 bool subtractScalars(const QByteArray &left, const QByteArray &right, QByteArray *differenceOut)
@@ -686,6 +1068,42 @@ bool createPartialSignature(const QByteArray &messageHash,
     return true;
 }
 
+bool aggsigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut)
+{
+    if (rawSignature.size() != 64 || !compactOut) {
+        return false;
+    }
+
+    secp256k1_ecdsa_signature signature;
+    std::memcpy(signature.data, rawSignature.constData(), 64);
+
+    unsigned char compact[64];
+    if (secp256k1_ecdsa_signature_serialize_compact(walletSecpContext(), compact, &signature) != 1) {
+        return false;
+    }
+
+    *compactOut = QByteArray(reinterpret_cast<const char *>(compact), sizeof(compact));
+    return true;
+}
+
+bool aggsigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut)
+{
+    if (compactSignature.size() != 64 || !rawOut) {
+        return false;
+    }
+
+    secp256k1_ecdsa_signature signature;
+    if (secp256k1_ecdsa_signature_parse_compact(
+            walletSecpContext(),
+            &signature,
+            reinterpret_cast<const unsigned char *>(compactSignature.constData())) != 1) {
+        return false;
+    }
+
+    *rawOut = QByteArray(reinterpret_cast<const char *>(signature.data), sizeof(signature.data));
+    return true;
+}
+
 bool verifyPartialSignature(const QByteArray &signature,
                             const QByteArray &messageHash,
                             const secp256k1_pubkey &pubnonceTotal,
@@ -719,7 +1137,39 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipant(c
     ParticipantContext context;
     const QString entropy = walletFingerprint + QLatin1Char(':') + workflowId + QLatin1Char(':') + roleTag;
     const QByteArray blindSecret = deriveSigningBaseSecret(walletFingerprint, workflowId, roleTag);
-    const QByteArray nonceSecret = deriveValidSecretBytes(QStringLiteral("nonce"), walletFingerprint, entropy);
+    QByteArray nonceSecret = deriveAggsigSecnonce(walletFingerprint, workflowId, roleTag);
+    if (nonceSecret.size() != 32) {
+        nonceSecret = deriveValidSecretBytes(QStringLiteral("nonce"), walletFingerprint, entropy);
+    }
+    context.role = roleTag;
+    context.blindSecret = QString::fromUtf8(blindSecret.toHex());
+    context.nonceSecret = QString::fromUtf8(nonceSecret.toHex());
+    context.blindPublic = createCompressedPubkeyHex(blindSecret);
+    context.noncePublic = createCompressedPubkeyHex(nonceSecret);
+    context.address = hashHex(QStringLiteral("addr:") + entropy);
+    return context;
+}
+
+WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipantFromBlindSecret(
+    const QString &blindSecretHex,
+    const QString &walletFingerprint,
+    const QString &workflowId,
+    const QString &roleTag)
+{
+    ParticipantContext context;
+    const QByteArray blindSecret = fromHex(blindSecretHex.trimmed());
+    if (blindSecret.size() != 32
+        || secp256k1_ec_seckey_verify(walletSecpContext(),
+                                      reinterpret_cast<const unsigned char *>(blindSecret.constData())) != 1) {
+        return context;
+    }
+
+    const QString entropy = walletFingerprint + QLatin1Char(':') + workflowId + QLatin1Char(':') + roleTag;
+    QByteArray nonceSecret = deriveAggsigSecnonce(walletFingerprint, workflowId, roleTag);
+    if (nonceSecret.size() != 32) {
+        nonceSecret = deriveValidSecretBytes(QStringLiteral("nonce"), walletFingerprint, entropy);
+    }
+
     context.role = roleTag;
     context.blindSecret = QString::fromUtf8(blindSecret.toHex());
     context.nonceSecret = QString::fromUtf8(nonceSecret.toHex());
@@ -734,7 +1184,10 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createRandomPartici
     const QString entropy = QStringLiteral("%1:%2")
         .arg(roleTag, randomHex(32));
     const QByteArray blindSecret = deriveValidSecretBytes(QStringLiteral("random-blind"), entropy, QStringLiteral("blind"));
-    const QByteArray nonceSecret = deriveValidSecretBytes(QStringLiteral("random-nonce"), entropy, QStringLiteral("nonce"));
+    QByteArray nonceSecret = deriveAggsigSecnonce(QStringLiteral("random"), entropy, roleTag);
+    if (nonceSecret.size() != 32) {
+        nonceSecret = deriveValidSecretBytes(QStringLiteral("random-nonce"), entropy, QStringLiteral("nonce"));
+    }
 
     ParticipantContext context;
     context.role = roleTag;
@@ -1151,7 +1604,15 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
         return false;
     }
 
-    slate->signatures[participantIndex].part = QString::fromUtf8(partialSignature.toHex());
+    QByteArray compactPartialSignature;
+    if (!aggsigRawToCompact(partialSignature, &compactPartialSignature)) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to serialize aggsig partial.");
+        }
+        return false;
+    }
+
+    slate->signatures[participantIndex].part = QString::fromUtf8(compactPartialSignature.toHex());
     slate->metadata.insert(QStringLiteral("message_hash"), QString::fromUtf8(messageHash.toHex()));
     slate->metadata.insert(QStringLiteral("pubkey_total"), serializePubkey(totalBlind));
     slate->metadata.insert(QStringLiteral("pubnonce_total"), serializePubkey(totalNonce));
@@ -1196,10 +1657,17 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
         if (participant.part.isEmpty()) {
             continue;
         }
-        const QByteArray partialBytes = fromHex(participant.part);
-        if (partialBytes.size() != 64) {
+        const QByteArray compactPartialBytes = fromHex(participant.part);
+        if (compactPartialBytes.size() != 64) {
             if (errorOut) {
                 *errorOut = QStringLiteral("Invalid partial signature length.");
+            }
+            return false;
+        }
+        QByteArray partialBytes;
+        if (!aggsigCompactToRaw(compactPartialBytes, &partialBytes)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Invalid partial signature format.");
             }
             return false;
         }
@@ -1235,7 +1703,15 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
     QVector<QByteArray> sigBuffers;
     for (int i = 0; i < slate->signatures.size(); ++i) {
         if (!slate->signatures.at(i).part.isEmpty()) {
-            sigBuffers.append(fromHex(slate->signatures.at(i).part));
+            const QByteArray compactPartialBytes = fromHex(slate->signatures.at(i).part);
+            QByteArray partialBytes;
+            if (!aggsigCompactToRaw(compactPartialBytes, &partialBytes)) {
+                if (errorOut) {
+                    *errorOut = QStringLiteral("Invalid partial signature format.");
+                }
+                return false;
+            }
+            sigBuffers.append(partialBytes);
         }
     }
     for (int i = 0; i < sigBuffers.size(); ++i) {
@@ -1268,7 +1744,7 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
                                        &totalBlind,
                                        &totalBlind,
                                        0,
-                                       1) != 1) {
+                                       0) != 1) {
         if (errorOut) {
             *errorOut = QStringLiteral("Final aggsig verification failed.");
         }
@@ -1278,11 +1754,426 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
     slate->metadata.insert(QStringLiteral("message_hash"), QString::fromUtf8(messageHash.toHex()));
     slate->metadata.insert(QStringLiteral("pubkey_total"), serializePubkey(totalBlind));
     slate->metadata.insert(QStringLiteral("pubnonce_total"), serializePubkey(totalNonce));
-    slate->metadata.insert(QStringLiteral("final_sig"), toHex(finalSig, sizeof(finalSig)));
+    QByteArray compactFinalSignature;
+    if (!aggsigRawToCompact(QByteArray(reinterpret_cast<const char *>(finalSig), sizeof(finalSig)),
+                            &compactFinalSignature)) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Failed to serialize final aggsig signature.");
+        }
+        return false;
+    }
+    slate->metadata.insert(QStringLiteral("final_sig"), QString::fromUtf8(compactFinalSignature.toHex()));
     slate->metadata.insert(QStringLiteral("signature_status"), QStringLiteral("finalized"));
     qDebug() << "[WalletFinalize] success"
              << "workflowId=" << slate->workflowId()
-             << "finalSig=" << toHex(finalSig, sizeof(finalSig));
+             << "finalSig=" << QString::fromUtf8(compactFinalSignature.toHex());
+    return true;
+}
+
+QString WalletCryptoBackend::inputOrderHash(const Input &input)
+{
+    QByteArray serialized;
+    appendU8(serialized, static_cast<quint8>(input.features()));
+    if (!appendFixedHexBytes(&serialized, input.commit().hex(), 33)) {
+        return QString();
+    }
+
+    return QString::fromUtf8(WalletBlake2b::hash256(serialized).toHex());
+}
+
+QString WalletCryptoBackend::outputOrderHash(const Output &output)
+{
+    QByteArray serialized;
+    if (!appendOutputFeatureForOrdering(&serialized, output.features())) {
+        return QString();
+    }
+    if (!appendFixedHexBytes(&serialized, output.commit(), 33)) {
+        return QString();
+    }
+
+    return QString::fromUtf8(WalletBlake2b::hash256(serialized).toHex());
+}
+
+QString WalletCryptoBackend::kernelOrderHash(const TxKernel &kernel)
+{
+    QByteArray serialized;
+    if (!appendKernelFeaturesForOrdering(&serialized, kernel)) {
+        return QString();
+    }
+    if (!appendFixedHexBytes(&serialized, kernel.excess(), 33)) {
+        return QString();
+    }
+    if (!appendFixedHexBytes(&serialized, kernel.excessSig(), 64)) {
+        return QString();
+    }
+
+    return QString::fromUtf8(WalletBlake2b::hash256(serialized).toHex());
+}
+
+bool WalletCryptoBackend::validateTransactionKernelSums(const Transaction &tx, QString *errorOut)
+{
+    const TransactionBody body = tx.body();
+    const QVector<Input> inputs = body.inputs();
+    const QVector<Output> outputs = body.outputs();
+    const QVector<TxKernel> kernels = body.kernels();
+
+    if (inputs.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction kernel validation failed: no inputs.");
+        }
+        return false;
+    }
+    if (outputs.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction kernel validation failed: no outputs.");
+        }
+        return false;
+    }
+    if (kernels.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction kernel validation failed: no kernels.");
+        }
+        return false;
+    }
+
+    QVector<secp256k1_pedersen_commitment> positiveCommitments;
+    QVector<secp256k1_pedersen_commitment> negativeCommitments;
+    positiveCommitments.reserve(outputs.size());
+    negativeCommitments.reserve(inputs.size() + kernels.size() + 1);
+
+    secp256k1_scratch_space *scratch = secp256k1_scratch_space_create(walletSecpContext(), kBulletproofScratchSpaceSize);
+    if (!scratch) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction kernel validation failed: could not allocate secp scratch space.");
+        }
+        return false;
+    }
+
+    QString detailError;
+    for (int i = 0; i < outputs.size(); ++i) {
+        const Output &output = outputs.at(i);
+        secp256k1_pedersen_commitment commitment;
+        if (!parseCommitmentHex(output.commit(), &commitment)) {
+            detailError = QStringLiteral("Transaction kernel validation failed: invalid output commitment %1.")
+                              .arg(output.commit().left(16));
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = detailError;
+            }
+            return false;
+        }
+        QString proofError;
+        if (!verifyOutputRangeproof(output, scratch, &proofError)) {
+            detailError = QStringLiteral("Transaction kernel validation failed for output %1: %2")
+                              .arg(output.commit().left(16), proofError);
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = detailError;
+            }
+            return false;
+        }
+        positiveCommitments.append(commitment);
+    }
+
+    for (int i = 0; i < inputs.size(); ++i) {
+        secp256k1_pedersen_commitment commitment;
+        if (!parseCommitmentHex(inputs.at(i).commit().hex(), &commitment)) {
+            detailError = QStringLiteral("Transaction kernel validation failed: invalid input commitment %1.")
+                              .arg(inputs.at(i).commit().hex().left(16));
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = detailError;
+            }
+            return false;
+        }
+        negativeCommitments.append(commitment);
+    }
+
+    for (int i = 0; i < kernels.size(); ++i) {
+        secp256k1_pedersen_commitment commitment;
+        if (!parseCommitmentHex(kernels.at(i).excess(), &commitment)) {
+            detailError = QStringLiteral("Transaction kernel validation failed: invalid kernel excess %1.")
+                              .arg(kernels.at(i).excess().left(16));
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = detailError;
+            }
+            return false;
+        }
+        negativeCommitments.append(commitment);
+    }
+
+    quint64 totalFee = 0;
+    for (int i = 0; i < kernels.size(); ++i) {
+        const quint64 fee = static_cast<quint64>(kernels.at(i).fee());
+        if (fee > 0 && totalFee > std::numeric_limits<quint64>::max() - fee) {
+            detailError = QStringLiteral("Transaction kernel validation failed: kernel fee overflow.");
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = detailError;
+            }
+            return false;
+        }
+        totalFee += fee;
+    }
+    if (totalFee > 0) {
+        secp256k1_pedersen_commitment feeCommitment;
+        if (!buildValueOnlyCommitment(totalFee, &feeCommitment)) {
+            detailError = QStringLiteral("Transaction kernel validation failed: could not build fee commitment.");
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = detailError;
+            }
+            return false;
+        }
+        // Grin overage term: outputs + fee == inputs + kernels + offset
+        positiveCommitments.append(feeCommitment);
+    }
+
+    const QString offsetHex = tx.offset().hex().trimmed();
+    if (!offsetHex.isEmpty() && offsetHex != QStringLiteral("0000000000000000000000000000000000000000000000000000000000000000")) {
+        secp256k1_pedersen_commitment offsetCommitment;
+        if (!buildZeroValueCommitment(offsetHex, &offsetCommitment)) {
+            detailError = QStringLiteral("Transaction kernel validation failed: invalid offset %1.")
+                              .arg(offsetHex.left(16));
+            secp256k1_scratch_space_destroy(scratch);
+            if (errorOut) {
+                *errorOut = detailError;
+            }
+            return false;
+        }
+        negativeCommitments.append(offsetCommitment);
+    }
+
+    QVector<const secp256k1_pedersen_commitment *> positivePointers;
+    QVector<const secp256k1_pedersen_commitment *> negativePointers;
+    positivePointers.reserve(positiveCommitments.size());
+    negativePointers.reserve(negativeCommitments.size());
+    for (int i = 0; i < positiveCommitments.size(); ++i) {
+        positivePointers.append(&positiveCommitments[i]);
+    }
+    for (int i = 0; i < negativeCommitments.size(); ++i) {
+        negativePointers.append(&negativeCommitments[i]);
+    }
+
+    const int tallyOk = secp256k1_pedersen_verify_tally(
+        walletSecpContext(),
+        positivePointers.isEmpty() ? 0 : positivePointers.constData(),
+        static_cast<size_t>(positivePointers.size()),
+        negativePointers.isEmpty() ? 0 : negativePointers.constData(),
+        static_cast<size_t>(negativePointers.size()));
+
+    if (tallyOk != 1) {
+        secp256k1_pedersen_commitment positiveSum;
+        secp256k1_pedersen_commitment negativeSum;
+        QString positiveHex;
+        QString negativeHex;
+        if (secp256k1_pedersen_commit_sum(walletSecpContext(),
+                                          &positiveSum,
+                                          positivePointers.isEmpty() ? 0 : positivePointers.constData(),
+                                          static_cast<size_t>(positivePointers.size()),
+                                          0,
+                                          0) == 1) {
+            positiveHex = serializeCommitment(positiveSum);
+        }
+        if (secp256k1_pedersen_commit_sum(walletSecpContext(),
+                                          &negativeSum,
+                                          negativePointers.isEmpty() ? 0 : negativePointers.constData(),
+                                          static_cast<size_t>(negativePointers.size()),
+                                          0,
+                                          0) == 1) {
+            negativeHex = serializeCommitment(negativeSum);
+        }
+
+        detailError = QStringLiteral("Transaction kernel validation failed: outputs (+fee) do not balance inputs + kernels + offset. outputs=%1 inputs=%2 kernels=%3 totalFee=%4 offset=%5 posSum=%6 negSum=%7")
+                          .arg(QString::number(outputs.size()),
+                               QString::number(inputs.size()),
+                               QString::number(kernels.size()),
+                       QString::number(totalFee),
+                               offsetHex.left(16),
+                               positiveHex.left(16),
+                               negativeHex.left(16));
+        secp256k1_scratch_space_destroy(scratch);
+        if (errorOut) {
+            *errorOut = detailError;
+        }
+        return false;
+    }
+
+    secp256k1_scratch_space_destroy(scratch);
+    return true;
+}
+
+bool WalletCryptoBackend::validateTransactionBody(const Transaction &tx, QString *errorOut)
+{
+    const TransactionBody body = tx.body();
+    const QVector<Input> inputs = body.inputs();
+    const QVector<Output> outputs = body.outputs();
+    const QVector<TxKernel> kernels = body.kernels();
+
+    if (inputs.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction body validation failed: no inputs.");
+        }
+        return false;
+    }
+    if (outputs.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction body validation failed: no outputs.");
+        }
+        return false;
+    }
+    if (kernels.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction body validation failed: no kernels.");
+        }
+        return false;
+    }
+
+    for (int i = 0; i < outputs.size(); ++i) {
+        if (outputs.at(i).features().trimmed() == QStringLiteral("Coinbase")) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Transaction body validation failed: coinbase output at index %1.")
+                                .arg(i);
+            }
+            return false;
+        }
+    }
+
+    for (int i = 0; i < kernels.size(); ++i) {
+        if (kernels.at(i).features().trimmed() == QStringLiteral("Coinbase")) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Transaction body validation failed: coinbase kernel at index %1.")
+                                .arg(i);
+            }
+            return false;
+        }
+    }
+
+    qDebug() << "[ValidateBodyCheckOrder] checking" << outputs.size() << "outputs sort order";
+    for (int i = 0; i < outputs.size(); ++i) {
+        const QString orderHash = outputSortKey(outputs.at(i));
+        qDebug() << "  output" << i << "commit=" << outputs.at(i).commit().left(16)
+                 << "orderHash=" << orderHash.left(16);
+    }
+
+    if (!verifySortedAndUnique(inputs, inputSortKey, QStringLiteral("input"), errorOut)) {
+        qDebug() << "[ValidateBody] input sort/unique check FAILED";
+        return false;
+    }
+    if (!verifySortedAndUnique(outputs, outputSortKey, QStringLiteral("output"), errorOut)) {
+        qDebug() << "[ValidateBody] output sort/unique check FAILED";
+        return false;
+    }
+    if (!verifySortedAndUnique(kernels, kernelSortKey, QStringLiteral("kernel"), errorOut)) {
+        qDebug() << "[ValidateBody] kernel sort/unique check FAILED";
+        return false;
+    }
+    qDebug() << "[ValidateBody] sort/unique checks PASSED";
+
+    QStringList commitments;
+    commitments.reserve(inputs.size() + outputs.size());
+    for (int i = 0; i < inputs.size(); ++i) {
+        commitments.append(inputs.at(i).commit().hex());
+    }
+    for (int i = 0; i < outputs.size(); ++i) {
+        commitments.append(outputs.at(i).commit().trimmed());
+    }
+    std::sort(commitments.begin(), commitments.end());
+    for (int i = 1; i < commitments.size(); ++i) {
+        if (!commitments.at(i).isEmpty() && commitments.at(i) == commitments.at(i - 1)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Transaction body validation failed: cut-through detected for commitment %1.")
+                                .arg(commitments.at(i).left(16));
+            }
+            return false;
+        }
+    }
+
+    qDebug() << "[ValidateBody] starting batch rangeproof verification for" << outputs.size() << "outputs";
+    if (!verifyOutputsBatchRangeproofs(outputs, errorOut)) {
+        qDebug() << "[ValidateBody] batch rangeproof verification FAILED:" << (errorOut ? *errorOut : "unknown");
+        return false;
+    }
+    qDebug() << "[ValidateBody] batch rangeproof verification PASSED";
+
+    return true;
+}
+
+bool WalletCryptoBackend::validateTransactionKernelSignatures(const Transaction &tx, QString *errorOut)
+{
+    const QVector<TxKernel> kernels = tx.body().kernels();
+    if (kernels.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Transaction kernel signature validation failed: no kernels.");
+        }
+        return false;
+    }
+
+    for (int i = 0; i < kernels.size(); ++i) {
+        const TxKernel &kernel = kernels.at(i);
+
+        secp256k1_pedersen_commitment excessCommitment;
+        if (!parseCommitmentHex(kernel.excess(), &excessCommitment)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Kernel signature validation failed: invalid excess at index %1.").arg(i);
+            }
+            return false;
+        }
+
+        secp256k1_pubkey excessPubkey;
+        if (secp256k1_pedersen_commitment_to_pubkey(walletSecpContext(), &excessPubkey, &excessCommitment) != 1) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Kernel signature validation failed: excess is not convertible to pubkey at index %1.").arg(i);
+            }
+            return false;
+        }
+
+        const QByteArray compactSignature = fromHex(kernel.excessSig().trimmed());
+        if (compactSignature.size() != 64) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Kernel signature validation failed: invalid signature length at index %1.").arg(i);
+            }
+            return false;
+        }
+        QByteArray rawSignature;
+        if (!aggsigCompactToRaw(compactSignature, &rawSignature)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Kernel signature validation failed: invalid signature format at index %1.").arg(i);
+            }
+            return false;
+        }
+
+        QString messageError;
+        const QByteArray messageHash = buildKernelSignatureMessageForFeature(
+            kernel.features(),
+            static_cast<quint64>(kernel.fee()),
+            0,
+            &messageError);
+        if (messageHash.size() != 32) {
+            if (errorOut) {
+                *errorOut = messageError.isEmpty()
+                    ? QStringLiteral("Kernel signature validation failed: invalid message at index %1.").arg(i)
+                    : messageError;
+            }
+            return false;
+        }
+
+        if (secp256k1_aggsig_verify_single(walletSecpContext(),
+                                           reinterpret_cast<const unsigned char *>(rawSignature.constData()),
+                                           reinterpret_cast<const unsigned char *>(messageHash.constData()),
+                                           0,
+                                           &excessPubkey,
+                                           &excessPubkey,
+                                           0,
+                                           0) != 1) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Kernel signature validation failed at index %1.").arg(i);
+            }
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -1326,10 +2217,17 @@ bool WalletCryptoBackend::verifyPartialSignatures(const SlateV4 &slate, QString 
             continue;
         }
 
-        const QByteArray partialBytes = fromHex(participant.part);
-        if (partialBytes.size() != 64) {
+        const QByteArray compactPartialBytes = fromHex(participant.part);
+        if (compactPartialBytes.size() != 64) {
             if (errorOut) {
                 *errorOut = QStringLiteral("Invalid partial signature length.");
+            }
+            return false;
+        }
+        QByteArray partialBytes;
+        if (!aggsigCompactToRaw(compactPartialBytes, &partialBytes)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Invalid partial signature format.");
             }
             return false;
         }
@@ -1469,10 +2367,17 @@ bool WalletCryptoBackend::buildFinalSignature(const SlateV4 &slate,
         allBlindPubkeys.append(participant.xs);
         allNoncePubkeys.append(participant.nonce);
         if (!participant.part.isEmpty()) {
-            const QByteArray partialBytes = fromHex(participant.part);
-            if (partialBytes.size() != 64) {
+            const QByteArray compactPartialBytes = fromHex(participant.part);
+            if (compactPartialBytes.size() != 64) {
                 if (errorOut) {
                     *errorOut = QStringLiteral("Invalid partial signature length.");
+                }
+                return false;
+            }
+            QByteArray partialBytes;
+            if (!aggsigCompactToRaw(compactPartialBytes, &partialBytes)) {
+                if (errorOut) {
+                    *errorOut = QStringLiteral("Invalid partial signature format.");
                 }
                 return false;
             }
@@ -1521,7 +2426,7 @@ bool WalletCryptoBackend::buildFinalSignature(const SlateV4 &slate,
                                        &totalBlind,
                                        &totalBlind,
                                        0,
-                                       1) != 1) {
+                                       0) != 1) {
         if (errorOut) {
             *errorOut = QStringLiteral("Final aggsig verification failed.");
         }
@@ -1529,7 +2434,15 @@ bool WalletCryptoBackend::buildFinalSignature(const SlateV4 &slate,
     }
 
     if (finalSignatureOut) {
-        *finalSignatureOut = toHex(finalSig, sizeof(finalSig));
+        QByteArray compactFinalSignature;
+        if (!aggsigRawToCompact(QByteArray(reinterpret_cast<const char *>(finalSig), sizeof(finalSig)),
+                                &compactFinalSignature)) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Failed to serialize final aggsig signature.");
+            }
+            return false;
+        }
+        *finalSignatureOut = QString::fromUtf8(compactFinalSignature.toHex());
     }
     return true;
 }

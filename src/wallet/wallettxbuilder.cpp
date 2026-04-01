@@ -2,6 +2,7 @@
 
 #include <QJsonDocument>
 #include <QStringList>
+#include <algorithm>
 
 #include "blindingfactor.h"
 #include "input.h"
@@ -58,6 +59,81 @@ bool containsOutputCommitment(const QVector<Output> &outputs, const QString &com
     return false;
 }
 
+bool containsInputCommitment(const QVector<Input> &inputs, const QString &commitment)
+{
+    for (const Input &input : inputs) {
+        if (input.commit().hex() == commitment) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QString outputSortKeyForCanonicalization(const Output &output)
+{
+    const QString featureKey =
+        (output.features().trimmed() == QStringLiteral("Coinbase"))
+            ? QStringLiteral("01")
+            : QStringLiteral("00");
+    return featureKey + output.commit().trimmed().toLower();
+}
+
+void canonicalizeBody(TransactionBody *body)
+{
+    if (!body) {
+        return;
+    }
+
+    QVector<Input> inputs = body->inputs();
+    QVector<Output> outputs = body->outputs();
+
+    // Deduplicate by commitment first.
+    QVector<Input> uniqueInputs;
+    for (const Input &input : inputs) {
+        const QString commitHex = input.commit().hex();
+        if (commitHex.isEmpty() || containsInputCommitment(uniqueInputs, commitHex)) {
+            continue;
+        }
+        uniqueInputs.append(input);
+    }
+
+    QVector<Output> uniqueOutputs;
+    for (const Output &output : outputs) {
+        const QString commitHex = output.commit().trimmed();
+        if (commitHex.isEmpty() || containsOutputCommitment(uniqueOutputs, commitHex)) {
+            continue;
+        }
+        uniqueOutputs.append(output);
+    }
+
+    // Match Grin output ordering semantics: OutputIdentifier (feature + commitment).
+    qDebug() << "[CanonicalizeBody] BEFORE sort:" << uniqueOutputs.size() << "outputs";
+    for (int i = 0; i < uniqueOutputs.size(); ++i) {
+        const QString orderHash = outputSortKeyForCanonicalization(uniqueOutputs.at(i));
+        qDebug() << "  output" << i << "commit=" << uniqueOutputs.at(i).commit().left(16)
+                 << "orderHash=" << orderHash.left(16);
+    }
+
+    std::sort(uniqueInputs.begin(), uniqueInputs.end(), [](const Input &left, const Input &right) {
+        return WalletCryptoBackend::inputOrderHash(left) < WalletCryptoBackend::inputOrderHash(right);
+    });
+    std::sort(uniqueOutputs.begin(), uniqueOutputs.end(), [](const Output &left, const Output &right) {
+        QString leftHash = outputSortKeyForCanonicalization(left);
+        QString rightHash = outputSortKeyForCanonicalization(right);
+        return leftHash < rightHash;
+    });
+
+    qDebug() << "[CanonicalizeBody] AFTER sort:" << uniqueOutputs.size() << "outputs";
+    for (int i = 0; i < uniqueOutputs.size(); ++i) {
+        const QString orderHash = outputSortKeyForCanonicalization(uniqueOutputs.at(i));
+        qDebug() << "  output" << i << "commit=" << uniqueOutputs.at(i).commit().left(16)
+                 << "orderHash=" << orderHash.left(16);
+    }
+
+    body->setInputs(uniqueInputs);
+    body->setOutputs(uniqueOutputs);
+}
+
 WalletTxBuilder::BuildResult finalizeBuildResult(const SlateV4 &slate, Transaction tx)
 {
     WalletTxBuilder::BuildResult result;
@@ -82,6 +158,20 @@ WalletTxBuilder::BuildResult finalizeBuildResult(const SlateV4 &slate, Transacti
     TransactionBody body = tx.body();
     body.setKernels(kernels);
     tx.setBody(body);
+
+    QString validationError;
+    if (!WalletCryptoBackend::validateTransactionKernelSums(tx, &validationError)) {
+        result.error = validationError.isEmpty()
+            ? QStringLiteral("Transaction kernel validation failed.")
+            : validationError;
+        return result;
+    }
+    if (!WalletCryptoBackend::validateTransactionKernelSignatures(tx, &validationError)) {
+        result.error = validationError.isEmpty()
+            ? QStringLiteral("Transaction kernel signature validation failed.")
+            : validationError;
+        return result;
+    }
 
     result.transaction = tx;
     result.transactionJson = QString::fromUtf8(QJsonDocument(tx.toJson()).toJson(QJsonDocument::Indented));
@@ -129,6 +219,7 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeleton(const Sla
                               changeOutput->proof));
     }
     body.setOutputs(outputs);
+    canonicalizeBody(&body);
 
     Transaction tx;
     tx.setTxId(slate.id);
@@ -191,6 +282,7 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeletonFromCommit
 
     body.setInputs(inputs);
     body.setOutputs(outputs);
+    canonicalizeBody(&body);
 
     Transaction tx;
     tx.setTxId(slate.id);

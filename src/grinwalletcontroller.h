@@ -177,6 +177,10 @@ private:
                                      SlateV4 *slate,
                                      WalletCryptoBackend::ParticipantContext *signatureOverrideOut,
                                      QString *errorOut = 0);
+    bool prepareStandardSenderContext(const QString &workflowId,
+                                      SlateV4 *slate,
+                                      WalletCryptoBackend::ParticipantContext *signatureOverrideOut,
+                                      QString *errorOut = 0);
     void compactInvoiceSlateForReturn(const QString &workflowId, SlateV4 *slate);
     void compactStandardSlateForReturn(const QString &workflowId, SlateV4 *slate);
     QString currentSlatepackAddress() const;
@@ -188,6 +192,8 @@ private:
     void runExternalInvoicePreflight(const SlateV4 &incomingSlate,
                                      const SlateV4 &emittedSlate,
                                      const QString &armoredSlatepack) const;
+    void beginBroadcastWithInputPreflight(const QString &workflowId,
+                                          const QJsonObject &txSkeleton);
 
     NodeForeignApi *m_nodeApi;
     QTimer *m_autoRefreshTimer;
@@ -224,6 +230,9 @@ private:
     qulonglong m_seedScanNextIndex;
     QList<WalletOutput> m_seedScanDiscovered;
     QString m_pendingBroadcastWorkflowId;
+    bool m_pendingBroadcastInputLookup;
+    QJsonObject m_pendingBroadcastTxSkeleton;
+    QJsonArray m_pendingBroadcastInputCommits;
     bool m_broadcastStatusRefreshInFlight;
     bool m_kernelStatusCheckInFlight;
     QList<QPair<QString, QString> > m_kernelStatusQueue;

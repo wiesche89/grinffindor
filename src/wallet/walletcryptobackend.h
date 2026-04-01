@@ -6,6 +6,11 @@
 #include "slatev4.h"
 #include "walletkeychain.h"
 
+class Transaction;
+class Input;
+class Output;
+class TxKernel;
+
 class WalletCryptoBackend
 {
 public:
@@ -36,6 +41,10 @@ public:
     static ParticipantContext createParticipant(const QString &walletFingerprint,
                                                 const QString &workflowId,
                                                 const QString &roleTag);
+    static ParticipantContext createParticipantFromBlindSecret(const QString &blindSecretHex,
+                                                               const QString &walletFingerprint,
+                                                               const QString &workflowId,
+                                                               const QString &roleTag);
     static ParticipantContext createRandomParticipant(const QString &roleTag);
     static QString createOffset(const QString &walletFingerprint, const QString &workflowId);
     static QString addOffsets(const QString &leftOffset,
@@ -75,6 +84,12 @@ public:
                                     QString *finalSignatureOut,
                                     QString *errorOut = 0);
     static bool finalizeSlate(SlateV4 *slate, QString *errorOut = 0);
+    static QString inputOrderHash(const Input &input);
+    static QString outputOrderHash(const Output &output);
+    static QString kernelOrderHash(const TxKernel &kernel);
+    static bool validateTransactionBody(const Transaction &tx, QString *errorOut = 0);
+    static bool validateTransactionKernelSums(const Transaction &tx, QString *errorOut = 0);
+    static bool validateTransactionKernelSignatures(const Transaction &tx, QString *errorOut = 0);
     static QString describeBackend();
 
 private:

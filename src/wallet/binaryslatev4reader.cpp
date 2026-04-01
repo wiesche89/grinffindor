@@ -141,10 +141,24 @@ QByteArray hkdfSha256(const QByteArray &ikm,
 
 QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
 {
-    QByteArray scalar = QCryptographicHash::hash(walletSecret, QCryptographicHash::Sha512).left(32);
-    if (scalar.size() != 32) {
+    if (walletSecret.size() != 32) {
         return QByteArray();
     }
+    // Use BLAKE2b-512 to match Monocypher's crypto_eddsa_key_pair which uses
+    // crypto_blake2b internally (not SHA-512). The X25519 scalar must be derived
+    // the same way so that our x25519 public key matches what the sender computed
+    // from our Ed25519 slatepack address via the birational map.
+    QByteArray expanded(64, Qt::Uninitialized);
+#ifdef GRIN_HAS_SLATEPACK_CRYPTO
+    crypto_blake2b(
+        reinterpret_cast<uint8_t *>(expanded.data()),
+        64,
+        reinterpret_cast<const uint8_t *>(walletSecret.constData()),
+        static_cast<size_t>(walletSecret.size()));
+#else
+    return QByteArray();
+#endif
+    QByteArray scalar = expanded.left(32);
     scalar[0] = static_cast<char>(static_cast<unsigned char>(scalar[0]) & 248U);
     scalar[31] = static_cast<char>((static_cast<unsigned char>(scalar[31]) & 127U) | 64U);
     return scalar;
