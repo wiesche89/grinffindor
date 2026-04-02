@@ -5805,21 +5805,16 @@ bool GrinWalletController::prepareStandardSenderContext(
     localContext.insert(QStringLiteral("incoming_s2_offset"), incomingOffset);
 
     QString effectiveOffset = canonicalOffset;
-    const bool externalBinary = slate->metadata.value(QStringLiteral("external_binary")).toBool();
     if (!incomingOffset.isEmpty()) {
         if (incomingOffset != canonicalOffset) {
-            if (externalBinary) {
-                effectiveOffset = incomingOffset;
-                qDebug() << "[StandardSenderOffset] imported S2 offset extends local S1 offset"
-                         << "workflowId=" << workflowId
-                         << "incomingOffset=" << incomingOffset
-                         << "localS1Offset=" << canonicalOffset;
-            } else {
-                qWarning() << "[StandardSenderOffset] imported S2 offset differs; keeping local S1 offset"
-                           << "workflowId=" << workflowId
-                           << "incomingOffset=" << incomingOffset
-                           << "localS1Offset=" << canonicalOffset;
-            }
+            // grin-wallet updates the shared transaction offset during S2.
+            // Compact external S2 slates do not reliably preserve our local metadata,
+            // so the sender must treat the imported S2 offset as canonical here.
+            effectiveOffset = incomingOffset;
+            qDebug() << "[StandardSenderOffset] imported S2 offset supersedes local S1 offset"
+                     << "workflowId=" << workflowId
+                     << "incomingOffset=" << incomingOffset
+                     << "localS1Offset=" << canonicalOffset;
         } else {
             qDebug() << "[StandardSenderOffset] imported S2 offset matches local S1 offset"
                      << "workflowId=" << workflowId

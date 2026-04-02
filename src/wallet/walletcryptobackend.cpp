@@ -624,11 +624,7 @@ QString inputSortKey(const Input &input)
 
 QString outputSortKey(const Output &output)
 {
-    const QString featureKey =
-        (output.features().trimmed() == QStringLiteral("Coinbase"))
-            ? QStringLiteral("01")
-            : QStringLiteral("00");
-    return featureKey + output.commit().trimmed().toLower();
+    return WalletCryptoBackend::outputOrderHash(output);
 }
 
 QString kernelSortKey(const TxKernel &kernel)
@@ -1074,6 +1070,29 @@ bool aggsigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut)
         return false;
     }
 
+    // grin-wallet serializes slate participant signatures directly as the
+    // 64-byte libsecp signature payload carried by the aggsig APIs.
+    // Do not reinterpret these bytes through the ECDSA parser/serializer.
+    *compactOut = rawSignature;
+    return true;
+}
+
+bool aggsigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut)
+{
+    if (compactSignature.size() != 64 || !rawOut) {
+        return false;
+    }
+
+    *rawOut = compactSignature;
+    return true;
+}
+
+bool kernelSigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut)
+{
+    if (rawSignature.size() != 64 || !compactOut) {
+        return false;
+    }
+
     secp256k1_ecdsa_signature signature;
     std::memcpy(signature.data, rawSignature.constData(), 64);
 
@@ -1086,7 +1105,7 @@ bool aggsigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut)
     return true;
 }
 
-bool aggsigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut)
+bool kernelSigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut)
 {
     if (compactSignature.size() != 64 || !rawOut) {
         return false;
@@ -1744,7 +1763,7 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
                                        &totalBlind,
                                        &totalBlind,
                                        0,
-                                       0) != 1) {
+                                       1) != 1) {
         if (errorOut) {
             *errorOut = QStringLiteral("Final aggsig verification failed.");
         }
@@ -1755,8 +1774,8 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
     slate->metadata.insert(QStringLiteral("pubkey_total"), serializePubkey(totalBlind));
     slate->metadata.insert(QStringLiteral("pubnonce_total"), serializePubkey(totalNonce));
     QByteArray compactFinalSignature;
-    if (!aggsigRawToCompact(QByteArray(reinterpret_cast<const char *>(finalSig), sizeof(finalSig)),
-                            &compactFinalSignature)) {
+    if (!kernelSigRawToCompact(QByteArray(reinterpret_cast<const char *>(finalSig), sizeof(finalSig)),
+                               &compactFinalSignature)) {
         if (errorOut) {
             *errorOut = QStringLiteral("Failed to serialize final aggsig signature.");
         }
@@ -2137,7 +2156,7 @@ bool WalletCryptoBackend::validateTransactionKernelSignatures(const Transaction 
             return false;
         }
         QByteArray rawSignature;
-        if (!aggsigCompactToRaw(compactSignature, &rawSignature)) {
+        if (!kernelSigCompactToRaw(compactSignature, &rawSignature)) {
             if (errorOut) {
                 *errorOut = QStringLiteral("Kernel signature validation failed: invalid signature format at index %1.").arg(i);
             }
@@ -2426,7 +2445,7 @@ bool WalletCryptoBackend::buildFinalSignature(const SlateV4 &slate,
                                        &totalBlind,
                                        &totalBlind,
                                        0,
-                                       0) != 1) {
+                                       1) != 1) {
         if (errorOut) {
             *errorOut = QStringLiteral("Final aggsig verification failed.");
         }
@@ -2435,8 +2454,8 @@ bool WalletCryptoBackend::buildFinalSignature(const SlateV4 &slate,
 
     if (finalSignatureOut) {
         QByteArray compactFinalSignature;
-        if (!aggsigRawToCompact(QByteArray(reinterpret_cast<const char *>(finalSig), sizeof(finalSig)),
-                                &compactFinalSignature)) {
+        if (!kernelSigRawToCompact(QByteArray(reinterpret_cast<const char *>(finalSig), sizeof(finalSig)),
+                                   &compactFinalSignature)) {
             if (errorOut) {
                 *errorOut = QStringLiteral("Failed to serialize final aggsig signature.");
             }

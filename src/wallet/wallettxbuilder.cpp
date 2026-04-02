@@ -71,11 +71,7 @@ bool containsInputCommitment(const QVector<Input> &inputs, const QString &commit
 
 QString outputSortKeyForCanonicalization(const Output &output)
 {
-    const QString featureKey =
-        (output.features().trimmed() == QStringLiteral("Coinbase"))
-            ? QStringLiteral("01")
-            : QStringLiteral("00");
-    return featureKey + output.commit().trimmed().toLower();
+    return WalletCryptoBackend::outputOrderHash(output);
 }
 
 void canonicalizeBody(TransactionBody *body)
