@@ -4,3 +4,6 @@
 [submodule "src/submodules/grin-node-api"]
 	path = src/submodules/grin-node-api
 	url = https://github.com/wiesche89/grin-node-api.git
+[submodule "3rdparty/secp256k1-zkp"]
+	path = 3rdparty/secp256k1-zkp
+	url = https://github.com/mimblewimble/secp256k1-zkp.git
