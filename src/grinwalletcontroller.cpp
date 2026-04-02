@@ -3199,8 +3199,6 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
     const QString workflowId = slate.id;
     slate.ver.slateVersion = 4;
     slate.ver.blockHeaderVersion = 3;
-    const WalletCryptoBackend::ParticipantContext receiverContext =
-        WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("receiver"));
     const quint64 requestedAmount = amountToNanogrin(amount);
     if (requestedAmount == 0) {
         setLastError(QStringLiteral("Enter a valid amount in GRIN, e.g. 1.000000000."));
@@ -3209,7 +3207,6 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
     slate.state = SlateV4::Invoice1;
     slate.amount = formatNanogrin(requestedAmount);
     slate.offset = QStringLiteral("0000000000000000000000000000000000000000000000000000000000000000");
-    slate.signatures.append(WalletCryptoBackend::createParticipantData(receiverContext));
     WalletOutput invoiceOutput;
     SlateV4::Commit invoiceCommit;
     QString outputError;
@@ -3225,6 +3222,22 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
             : outputError);
         return;
     }
+
+    WalletCryptoBackend::ParticipantContext receiverContext =
+        WalletCryptoBackend::createParticipantFromBlindSecret(
+            invoiceOutput.blindingFactor,
+            m_seedFingerprint,
+            workflowId,
+            QStringLiteral("receiver"));
+    if (receiverContext.blindSecret.isEmpty()
+        || receiverContext.nonceSecret.isEmpty()
+        || receiverContext.blindPublic.isEmpty()
+        || receiverContext.noncePublic.isEmpty()) {
+        receiverContext =
+            WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("receiver"));
+    }
+    slate.signatures.append(WalletCryptoBackend::createParticipantData(receiverContext));
+
     // Include receiver output commit in I1 per reference format.
     // This lets the payer verify the amount and include the output in the binary slate.
     slate.commitments.append(invoiceCommit);
@@ -4972,18 +4985,32 @@ void GrinWalletController::connectNodeClient()
 
     connect(m_nodeApi, &NodeForeignApi::getKernelFinished, this, [this](const Result<LocatedTxKernel> &result) {
         m_kernelStatusCheckInFlight = false;
-        if (!m_currentKernelWorkflowId.isEmpty() && !result.hasError()) {
-            updateTransactionEntry(m_currentKernelWorkflowId, [this, &result](QJsonObject &entry) {
-                entry.insert(QStringLiteral("status"), QStringLiteral("confirmed"));
-                entry.insert(QStringLiteral("broadcasted"), true);
-                entry.insert(QStringLiteral("confirmed_height"), static_cast<qint64>(result.value().height()));
-                entry.insert(QStringLiteral("confirmations"),
-                             static_cast<qint64>(m_chainHeight >= result.value().height()
-                                 ? (m_chainHeight - result.value().height() + 1)
-                                 : 0));
-                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            });
-            finalizeBroadcastedWorkflow(m_currentKernelWorkflowId);
+        if (!m_currentKernelWorkflowId.isEmpty()) {
+            if (!result.hasError()) {
+                updateTransactionEntry(m_currentKernelWorkflowId, [this, &result](QJsonObject &entry) {
+                    entry.insert(QStringLiteral("status"), QStringLiteral("confirmed"));
+                    entry.insert(QStringLiteral("broadcasted"), true);
+                    entry.insert(QStringLiteral("confirmed_height"), static_cast<qint64>(result.value().height()));
+                    entry.insert(QStringLiteral("confirmations"),
+                                 static_cast<qint64>(m_chainHeight >= result.value().height()
+                                     ? (m_chainHeight - result.value().height() + 1)
+                                     : 0));
+                    entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+                });
+                finalizeBroadcastedWorkflow(m_currentKernelWorkflowId);
+            } else if (result.errorMessage() == QStringLiteral("NotFound")) {
+                updateTransactionEntry(m_currentKernelWorkflowId, [](QJsonObject &entry) {
+                    const QString status = entry.value(QStringLiteral("status")).toString();
+                    entry.insert(QStringLiteral("status"),
+                                 status == QStringLiteral("in_mempool")
+                                     ? QStringLiteral("in_mempool")
+                                     : QStringLiteral("broadcasted"));
+                    entry.insert(QStringLiteral("broadcasted"), true);
+                    entry.insert(QStringLiteral("confirmations"), 0);
+                    entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+                });
+                setLastError(QString());
+            }
         }
 
         m_currentKernelWorkflowId.clear();
