@@ -10,7 +10,7 @@
 #endif
 
 #include "nodefooterstatus.h"
-#include "grinwalletcontroller.h"
+#include "wallet/grinwalletcontroller.h"
 
 #ifdef Q_OS_WASM
 static QString detectAssetBaseUrl()

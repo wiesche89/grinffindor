@@ -6,19 +6,21 @@ QT_WASM_INITIAL_MEMORY = 128MB
 
 SOURCES += src/main.cpp \
            src/nodefooterstatus.cpp \
-           src/grinwalletstorage.cpp \
-           src/grinwalletplatformhelpers.cpp \
-           src/grinwalletcontrollerhelpers.cpp \
-           src/grinwallethistoryhelpers.cpp \
-           src/grinwalletseedcrypto.cpp \
-           src/grinwalletshortcutbridge.cpp \
-           src/grinwallettransactionstore.cpp \
-           src/grinwalletworkflow.cpp \
-           src/grinwalletworkflowhelpers.cpp \
-           src/grinwalletnodesync.cpp \
-           src/grinwalletnodesyncservice.cpp \
-           src/grinwalletworkflowservice.cpp \
-           src/grinwalletcontroller.cpp \
+           src/wallet/grinwalletstorage.cpp \
+           src/wallet/grinwalletplatformhelpers.cpp \
+           src/wallet/grinwalletcontrollerhelpers.cpp \
+           src/wallet/grinwallethistoryhelpers.cpp \
+           src/wallet/grinwalletseedcrypto.cpp \
+           src/wallet/grinwalletshortcutbridge.cpp \
+           src/wallet/grinwallettransactionstore.cpp \
+           src/wallet/grinwalletworkflow.cpp \
+           src/wallet/grinwalletworkflowhelpers.cpp \
+           src/wallet/grinwalletworkflowtxhelpers.cpp \
+           src/wallet/grinwalletnodesync.cpp \
+           src/wallet/grinwalletnodesyncservice.cpp \
+           src/wallet/grinwalletworkflowservice.cpp \
+           src/wallet/grinwalletcontroller.cpp \
+           src/wallet/grinwalletnodepushhelpers.cpp \
            src/wallet/slatev4.cpp \
            src/wallet/walletoutput.cpp \
            src/wallet/walletscanner.cpp \
@@ -33,19 +35,21 @@ SOURCES += src/main.cpp \
            3rdparty/secp256k1-zkp/src/secp256k1.c
 
 HEADERS += src/nodefooterstatus.h \
-           src/grinwalletstorage.h \
-           src/grinwalletplatformhelpers.h \
-           src/grinwalletcontrollerhelpers.h \
-           src/grinwallethistoryhelpers.h \
-           src/grinwalletseedcrypto.h \
-           src/grinwalletshortcutbridge.h \
-           src/grinwallettransactionstore.h \
-           src/grinwalletworkflow.h \
-           src/grinwalletworkflowhelpers.h \
-           src/grinwalletnodesync.h \
-           src/grinwalletnodesyncservice.h \
-           src/grinwalletworkflowservice.h \
-           src/grinwalletcontroller.h \
+           src/wallet/grinwalletstorage.h \
+           src/wallet/grinwalletplatformhelpers.h \
+           src/wallet/grinwalletcontrollerhelpers.h \
+           src/wallet/grinwallethistoryhelpers.h \
+           src/wallet/grinwalletseedcrypto.h \
+           src/wallet/grinwalletshortcutbridge.h \
+           src/wallet/grinwallettransactionstore.h \
+           src/wallet/grinwalletworkflow.h \
+           src/wallet/grinwalletworkflowhelpers.h \
+           src/wallet/grinwalletworkflowtxhelpers.h \
+           src/wallet/grinwalletnodesync.h \
+           src/wallet/grinwalletnodesyncservice.h \
+           src/wallet/grinwalletworkflowservice.h \
+           src/wallet/grinwalletcontroller.h \
+           src/wallet/grinwalletnodepushhelpers.h \
            src/wallet/slatev4.h \
            src/wallet/walletoutput.h \
            src/wallet/walletscanner.h \
@@ -60,7 +64,8 @@ HEADERS += src/nodefooterstatus.h \
 INCLUDEPATH += $$PWD/3rdparty/secp256k1-zkp \
                $$PWD/3rdparty/secp256k1-zkp/include \
                $$PWD/3rdparty/secp256k1-zkp/src \
-               $$PWD/3rdparty/monocypher
+               $$PWD/3rdparty/monocypher \
+               $$PWD/src
 
 DEFINES += GRIN_HAS_SLATEPACK_CRYPTO
 
