@@ -668,17 +668,6 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     if (!slate.fee.trimmed().isEmpty() && parseNanogrin(slate.fee) > 0) optionalFields |= 0x04;
     if (slate.kernelFeatures != 0) optionalFields |= 0x08;
     if (!slate.ttl.trimmed().isEmpty() && slate.ttl != QStringLiteral("0")) optionalFields |= 0x10;
-    qDebug() << "[BinarySlateWriter::Slate]"
-             << "workflowId=" << slate.workflowId()
-             << "state=" << slate.stateCode()
-             << "slateVersion=" << slate.ver.slateVersion
-             << "blockHeaderVersion=" << slate.ver.blockHeaderVersion
-             << "participantCount=" << slate.numParticipants
-             << "amount=" << slate.amount
-             << "fee=" << slate.fee
-             << "kernelFeatures=" << slate.kernelFeatures
-             << "ttl=" << slate.ttl
-             << "optionalFields=" << optionalFields;
     appendU8(payload, optionalFields);
 
     if (optionalFields & 0x01) appendU8(payload, static_cast<quint8>(slate.numParticipants));
@@ -688,16 +677,8 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     if (optionalFields & 0x10) appendU64(payload, slate.ttl.toULongLong());
 
     appendU8(payload, static_cast<quint8>(slate.signatures.size()));
-    qDebug() << "[BinarySlateWriter::Slate]"
-             << "signatureCount=" << slate.signatures.size();
     for (int i = 0; i < slate.signatures.size(); ++i) {
         const SlateV4::ParticipantData &sig = slate.signatures.at(i);
-        qDebug() << "[BinarySlateWriter::Slate] sig"
-                 << i
-                 << "hasPart=" << !sig.part.isEmpty()
-                 << "xs=" << sig.xs
-                 << "nonce=" << sig.nonce
-                 << "partLen=" << sig.part.length();
         appendU8(payload, sig.part.isEmpty() ? 0 : 1);
         if (!appendHex(payload, sig.xs, 33) || !appendHex(payload, sig.nonce, 33)) {
             return false;
@@ -710,22 +691,12 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     quint8 optionalStructs = 0;
     if (!slate.commitments.isEmpty()) optionalStructs |= 0x01;
     if (slate.hasPaymentProof) optionalStructs |= 0x02;
-    qDebug() << "[BinarySlateWriter::Slate]"
-             << "optionalStructs=" << optionalStructs
-             << "commitmentCount=" << slate.commitments.size()
-             << "hasPaymentProof=" << slate.hasPaymentProof;
     appendU8(payload, optionalStructs);
 
     if (optionalStructs & 0x01) {
         appendU16(payload, static_cast<quint16>(slate.commitments.size()));
         for (int i = 0; i < slate.commitments.size(); ++i) {
             const SlateV4::Commit &commit = slate.commitments.at(i);
-            qDebug() << "[BinarySlateWriter::Slate] commit"
-                     << i
-                     << "feature=" << commit.feature
-                     << "hasProof=" << !commit.proof.isEmpty()
-                     << "commitment=" << commit.commitment
-                     << "proofLen=" << commit.proof.length();
             appendU8(payload, commit.proof.isEmpty() ? 0 : 1);
             appendU8(payload, static_cast<quint8>(commit.feature));
             if (!appendHex(payload, commit.commitment, 33)) {
@@ -743,10 +714,6 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     }
 
     if (optionalStructs & 0x02) {
-        qDebug() << "[BinarySlateWriter::Slate]"
-                 << "paymentProofSender=" << slate.paymentProof.senderAddress
-                 << "paymentProofReceiver=" << slate.paymentProof.receiverAddress
-                 << "paymentProofReceiverSigLen=" << slate.paymentProof.receiverSignature.length();
         if (!appendHex(payload, slate.paymentProof.senderAddress, 32)
             || !appendHex(payload, slate.paymentProof.receiverAddress, 32)) {
             return false;
@@ -759,14 +726,8 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     }
 
     if (slate.kernelFeatures == 2 && slate.metadata.contains(QStringLiteral("lock_height"))) {
-        qDebug() << "[BinarySlateWriter::Slate]"
-                 << "lockHeight=" << slate.metadata.value(QStringLiteral("lock_height")).toString();
         appendU64(payload, slate.metadata.value(QStringLiteral("lock_height")).toString().toULongLong());
     }
-
-    qDebug() << "[BinarySlateWriter::Slate]"
-             << "payloadBytes=" << payload.size()
-             << "payloadHead=" << QString::fromUtf8(payload.left(48).toHex());
     *payloadOut = payload;
     return true;
 }
@@ -831,10 +792,6 @@ bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
         }
         return false;
 #endif
-    } else if (!recipients.isEmpty() && !preserveExternalBinary) {
-        qDebug() << "[BinarySlateWriter] encryption disabled; emitting plaintext binary slatepack"
-                 << "workflowId=" << slate.workflowId()
-                 << "recipientCount=" << recipients.size();
     }
 
     if (!sender.trimmed().isEmpty() && !preserveExternalBinary) {
@@ -856,20 +813,6 @@ bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
         outputPayload.append(slatePayload);
         outputFormat = QStringLiteral("binary-plain-sender");
     }
-
-    qDebug() << "[BinarySlateWriter]"
-             << "workflowId=" << slate.workflowId()
-             << "state=" << slate.stateCode()
-             << "sender=" << sender
-             << "recipientCount=" << recipients.size()
-             << "recipients=" << recipients
-             << "optFlags=" << optFlags
-             << "optFieldsLen=" << optFields.size()
-             << "preserveExternalBinary=" << preserveExternalBinary
-             << "senderSecretBytes=" << senderSecret.size()
-             << "slatePayloadBytes=" << slatePayload.size()
-             << "outputPayloadBytes=" << outputPayload.size()
-             << "outputFormat=" << outputFormat;
 
     if (armoredOut) {
         *armoredOut = armorPayload(outputPayload);

@@ -102,14 +102,6 @@ void canonicalizeBody(TransactionBody *body)
         uniqueOutputs.append(output);
     }
 
-    // Match Grin output ordering semantics: OutputIdentifier (feature + commitment).
-    qDebug() << "[CanonicalizeBody] BEFORE sort:" << uniqueOutputs.size() << "outputs";
-    for (int i = 0; i < uniqueOutputs.size(); ++i) {
-        const QString orderHash = outputSortKeyForCanonicalization(uniqueOutputs.at(i));
-        qDebug() << "  output" << i << "commit=" << uniqueOutputs.at(i).commit().left(16)
-                 << "orderHash=" << orderHash.left(16);
-    }
-
     std::sort(uniqueInputs.begin(), uniqueInputs.end(), [](const Input &left, const Input &right) {
         return WalletCryptoBackend::inputOrderHash(left) < WalletCryptoBackend::inputOrderHash(right);
     });
@@ -118,13 +110,6 @@ void canonicalizeBody(TransactionBody *body)
         QString rightHash = outputSortKeyForCanonicalization(right);
         return leftHash < rightHash;
     });
-
-    qDebug() << "[CanonicalizeBody] AFTER sort:" << uniqueOutputs.size() << "outputs";
-    for (int i = 0; i < uniqueOutputs.size(); ++i) {
-        const QString orderHash = outputSortKeyForCanonicalization(uniqueOutputs.at(i));
-        qDebug() << "  output" << i << "commit=" << uniqueOutputs.at(i).commit().left(16)
-                 << "orderHash=" << orderHash.left(16);
-    }
 
     body->setInputs(uniqueInputs);
     body->setOutputs(uniqueOutputs);

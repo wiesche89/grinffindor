@@ -64,11 +64,8 @@ void NodeFooterStatus::connectApi(NodeForeignApi *api, bool &availableTarget, QS
 
     connect(api, &NodeForeignApi::getVersionFinished, this, [this, &availableTarget, &versionTarget](const Result<NodeVersion> &result) {
         if (result.hasError()) {
-            qWarning() << "[NodeFooterStatus] getVersionFinished error:" << result.errorMessage();
             availableTarget = false;
         } else {
-            qDebug() << "[NodeFooterStatus] getVersionFinished nodeVersion=" << result.value().nodeVersion()
-                     << "blockHeaderVersion=" << result.value().blockHeaderVersion();
             availableTarget = true;
         }
         versionTarget = result.hasError() ? QStringLiteral("offline") : formatVersion(result.value());

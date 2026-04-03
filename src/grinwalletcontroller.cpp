@@ -197,9 +197,8 @@ EM_JS(void, browserInstallWalletShortcutBridge, (), {
         }
 
         const debug = function(label, payload) {
-            try {
-                console.log("[ShortcutBridge]", label, payload || "");
-            } catch (e) {}
+            void label;
+            void payload;
         };
 
         const qtCanvas = function() {
@@ -613,11 +612,10 @@ void logWorkflowJson(const QString &label,
                      const QString &state,
                      const QJsonObject &object)
 {
-    qDebug().noquote() << QStringLiteral("[WorkflowJson] %1 workflowId=%2 state=%3\n%4")
-                              .arg(label,
-                                   workflowId,
-                                   state,
-                                   prettyJson(object));
+    Q_UNUSED(label)
+    Q_UNUSED(workflowId)
+    Q_UNUSED(state)
+    Q_UNUSED(object)
 }
 
 QJsonObject defaultWalletState()
@@ -1545,27 +1543,20 @@ void logStandardSenderBlindOffsetDiagnostics(const QString &workflowId,
     QString kernelExcessCommitmentError;
     const QString kernelExcessCommitment = WalletCryptoBackend::calculateExcessCommitment(slate, &kernelExcessCommitmentError);
 
-    qWarning() << "[OffsetBlindDiag]"
-               << "workflowId=" << workflowId
-               << "localSenderOffset=" << localSenderOffset
-               << "importedSlateOffset=" << importedSlateOffset
-               << "finalTxOffsetUsedForKernelExcess=" << finalTxOffsetUsedForKernelExcess;
-
-    qWarning() << "[OffsetBlindDiag]"
-               << "inputBlindCount=" << selectedInputs.size()
-               << "outputBlindCountKnownLocal="
-               << ((receiverBlind.isEmpty() ? 0 : 1) + (changeBlind.isEmpty() ? 0 : 1))
-               << "change_blind=" << changeBlind
-               << "receiver_blind=" << receiverBlind;
-
-    qWarning() << "[OffsetBlindDiag]"
-               << "kernel_excess_secret_local_sender=" << senderBlindSecret
-               << "kernel_excess_public_local_sender=" << senderBlindPublic
-               << "receiver_excess_contribution_public=" << receiverExcessContributionPublic
-               << "kernel_excess_public_combined=" << kernelExcessPublic
-               << "kernel_excess_commitment=" << kernelExcessCommitment
-               << "combinedExcessPublicError=" << combinedExcessPublicError
-               << "kernelExcessCommitmentError=" << kernelExcessCommitmentError;
+    Q_UNUSED(workflowId)
+    Q_UNUSED(localSenderOffset)
+    Q_UNUSED(importedSlateOffset)
+    Q_UNUSED(finalTxOffsetUsedForKernelExcess)
+    Q_UNUSED(selectedInputs)
+    Q_UNUSED(changeBlind)
+    Q_UNUSED(receiverBlind)
+    Q_UNUSED(senderBlindSecret)
+    Q_UNUSED(senderBlindPublic)
+    Q_UNUSED(receiverExcessContributionPublic)
+    Q_UNUSED(kernelExcessPublic)
+    Q_UNUSED(kernelExcessCommitment)
+    Q_UNUSED(combinedExcessPublicError)
+    Q_UNUSED(kernelExcessCommitmentError)
 }
 
 QString syntheticWorkflowIdForCommitment(const QString &commitment)
@@ -2053,25 +2044,16 @@ QString decodeIncomingSlatepack(const QString &input, const QByteArray &decrypti
 {
     const QString trimmed = input.trimmed();
     if (trimmed.isEmpty()) {
-        qDebug() << "[SlatepackDecode] empty input";
         return QString();
     }
-    qDebug() << "[SlatepackDecode]"
-             << "inputChars=" << trimmed.size()
-             << "decryptionKeyBytes=" << decryptionKey.size()
-             << "summary=" << summarizeArmoredSlatepack(trimmed);
 
     const QJsonDocument jsonDocument = QJsonDocument::fromJson(trimmed.toUtf8());
     if (jsonDocument.isObject()) {
         QString decodedPayload;
         QString parseError;
         if (BinarySlateV4Reader::decodeSlatepackPayload(trimmed.toUtf8(), decryptionKey, &decodedPayload, &parseError)) {
-            qDebug() << "[SlatepackDecode] json payload decoded"
-                     << "decodedChars=" << decodedPayload.size();
             return decodedPayload;
         }
-        qDebug() << "[SlatepackDecode] json payload parse failed"
-                 << "error=" << parseError;
 
         const QJsonObject object = jsonDocument.object();
         if (object.contains(QStringLiteral("slatepack")) || object.contains(QStringLiteral("payload"))) {
@@ -2094,20 +2076,12 @@ QString decodeIncomingSlatepack(const QString &input, const QByteArray &decrypti
             QString decodedPayload;
             QString parseError;
             if (BinarySlateV4Reader::decodeSlatepackPayload(payload, decryptionKey, &decodedPayload, &parseError)) {
-                qDebug() << "[SlatepackDecode] armored payload decoded"
-                         << "payloadBytes=" << payload.size()
-                         << "decodedChars=" << decodedPayload.size();
                 return decodedPayload;
             }
-            qDebug() << "[SlatepackDecode] armored payload parse failed"
-                     << "payloadBytes=" << payload.size()
-                     << "error=" << parseError
-                     << "payloadPreview=" << shortHexPreview(payload);
             return buildSlatepackDiagnostic(QStringLiteral("armored"), payload, parseError);
         }
     }
 
-    qDebug() << "[SlatepackDecode] falling back to decodeSlatepackArmor";
     return decodeSlatepackArmor(trimmed);
 }
 
@@ -2119,7 +2093,6 @@ bool invokeNoArgMethod(QObject *object, const char *methodName)
 bool replaceFocusedObjectSelection(QObject *object, const QString &text)
 {
     if (!object) {
-        qDebug() << "[ShortcutFilter] replaceFocusedObjectSelection: no focus object";
         return false;
     }
 
@@ -2145,11 +2118,6 @@ bool replaceFocusedObjectSelection(QObject *object, const QString &text)
                                                             Qt::DirectConnection,
                                                             Q_ARG(int, start),
                                                             Q_ARG(QString, text));
-            qDebug() << "[ShortcutFilter] insert method"
-                     << object->metaObject()->className()
-                     << "start=" << start
-                     << "end=" << end
-                     << "ok=" << inserted;
             if (inserted) {
                 object->setProperty("cursorPosition", start + text.length());
                 return true;
@@ -2164,10 +2132,6 @@ bool replaceFocusedObjectSelection(QObject *object, const QString &text)
 
     const bool textSet = object->setProperty("text", text);
     const bool cursorSet = object->setProperty("cursorPosition", text.length());
-    qDebug() << "[ShortcutFilter] text property fallback"
-             << object->metaObject()->className()
-             << "textSet=" << textSet
-             << "cursorSet=" << cursorSet;
     return textSet;
 }
 
@@ -2199,7 +2163,6 @@ QString focusedObjectText(QObject *object)
 extern "C" EMSCRIPTEN_KEEPALIVE int grinffindorHandleShortcut(int key)
 {
     if (!g_shortcutController) {
-        qDebug() << "[ShortcutFilter] no shortcut controller for key" << key;
         return 0;
     }
     return g_shortcutController->processShortcutKey(key) ? 1 : 0;
@@ -2419,47 +2382,30 @@ bool GrinWalletController::processShortcutKey(int key)
 
     QObject *focusObject = qApp->focusObject();
     if (!focusObject) {
-        qDebug() << "[ShortcutFilter] no focus object for key" << key;
         return false;
     }
 
-    qDebug() << "[ShortcutFilter] key="
-             << QKeySequence(key).toString()
-             << "qtKey=" << key
-             << "focusClass=" << focusObject->metaObject()->className()
-             << "objectName=" << focusObject->objectName()
-             << "selectedTextLength=" << focusObject->property("selectedText").toString().length()
-             << "textLength=" << focusObject->property("text").toString().length();
-
     if (key == Qt::Key_A) {
         if (invokeNoArgMethod(focusObject, "selectAll")) {
-            qDebug() << "[ShortcutFilter] selectAll accepted";
             return true;
         }
-        qDebug() << "[ShortcutFilter] selectAll unavailable";
         return false;
     }
 
     if (key == Qt::Key_V) {
         const QString pastedText = requestPasteText();
-        qDebug() << "[ShortcutFilter] paste text length=" << pastedText.length();
         if (!pastedText.isEmpty() && replaceFocusedObjectSelection(focusObject, pastedText)) {
-            qDebug() << "[ShortcutFilter] paste accepted";
             return true;
         }
-        qDebug() << "[ShortcutFilter] paste rejected";
         return false;
     }
 
     if (invokeNoArgMethod(focusObject, "copy")) {
-        qDebug() << "[ShortcutFilter] copy accepted via method";
         return true;
     }
 
     const QString copiedText = focusedObjectText(focusObject);
-    qDebug() << "[ShortcutFilter] copy fallback length=" << copiedText.length();
     if (!copiedText.isEmpty() && copyTextToClipboard(copiedText)) {
-        qDebug() << "[ShortcutFilter] copy accepted via fallback";
         return true;
     }
 
@@ -2896,12 +2842,10 @@ QString GrinWalletController::requestPasteText() const
     const char *capturedValue = browserConsumeCapturedPasteText();
     const QString capturedText = QString::fromUtf8(capturedValue ? capturedValue : "");
     if (!capturedText.isEmpty()) {
-        qDebug() << "[ShortcutFilter] requestPasteText using captured buffer length=" << capturedText.length();
         return capturedText;
     }
     const char *value = browserReadClipboardText();
     const QString clipboardText = QString::fromUtf8(value ? value : "");
-    qDebug() << "[ShortcutFilter] requestPasteText navigator clipboard length=" << clipboardText.length();
     return clipboardText;
 #else
     const QClipboard *clipboard = QGuiApplication::clipboard();
@@ -3128,10 +3072,6 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
 
     storeWorkflowContext(workflowId, localContext);
 
-    qDebug() << "[S1Offset] prepared standard sender offset"
-             << "workflowId=" << workflowId
-             << "offset=" << slate.offset
-             << "hasChange=" << !changeOutput.blindingFactor.isEmpty();
     // Populate slate.commitments for S1 per reference:
     // sender inputs as plain commits (no proof), change output with proof.
     // This allows the receiver to verify the fee and build the full tx view.
@@ -3254,20 +3194,6 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
     if (!note.trimmed().isEmpty()) {
         slate.metadata.insert(QStringLiteral("note"), note.trimmed());
     }
-    qDebug() << "[WorkflowReceiveStart]"
-             << "workflowId=" << workflowId
-             << "state=" << slate.stateCode()
-             << "amount=" << slate.amount
-             << "offset=" << slate.offset
-             << "version=" << slate.versionCode()
-             << "externalBinary=" << slate.metadata.value(QStringLiteral("external_binary")).toBool()
-             << "receiverBlindPublic=" << receiverContext.blindPublic
-             << "receiverNoncePublic=" << receiverContext.noncePublic
-             << "hasPaymentProof=" << slate.hasPaymentProof
-             << "commitment=" << invoiceCommit.commitment
-             << "proofLen=" << invoiceCommit.proof.length()
-             << "childIndex=" << invoiceOutput.childIndex
-             << "keyPath=" << invoiceOutput.keyPath;
     // Keep full local invoice context internally, but emit compact external I1.
     SlateV4 outboundSlate = slate;
     outboundSlate.metadata = QJsonObject();
@@ -3312,12 +3238,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         }
     }
 
-    qDebug() << "[WorkflowProcess] incoming"
-             << "inputChars=" << slatepack.trimmed().size()
-             << "walletUnlocked=" << m_walletUnlocked
-             << "selectedNetwork=" << resolvedNetworkName()
-             << "inputSummary=" << summarizeArmoredSlatepack(slatepack);
-
     const QString decoded = decodeIncomingSlatepack(slatepack, decryptionKey);
     if (decoded.isEmpty()) {
         setLastError(QStringLiteral("Incoming Slatepack could not be decoded."));
@@ -3346,21 +3266,7 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
     SlateV4 slate = SlateV4::fromJson(document.object());
     alignSlateVersionWithNode(&slate);
     const SlateV4 incomingSlate = slate;
-    qDebug().noquote() << QStringLiteral("[WorkflowJson] incoming-slatepack\n%1").arg(decoded);
     logWorkflowJson(QStringLiteral("incoming-slate"), slate.workflowId(), slate.stateCode(), slate.toJson());
-    qDebug() << "[WorkflowProcess] decoded"
-             << "id=" << slate.id
-             << "state=" << slate.stateCode()
-             << "mode=" << slate.modeCode()
-             << "version=" << slate.versionCode()
-             << "amount=" << slate.amount
-             << "fee=" << slate.fee
-             << "sigCount=" << slate.signatures.size()
-             << "commitmentCount=" << slate.commitments.size()
-             << "externalBinary=" << slate.metadata.value(QStringLiteral("external_binary")).toBool()
-             << "senderMeta=" << slate.metadata.value(QStringLiteral("slatepack_sender")).toString()
-             << "recipientMetaCount=" << slate.metadata.value(QStringLiteral("slatepack_recipients")).toArray().size()
-             << "networkMeta=" << slate.metadata.value(QStringLiteral("network")).toString();
     if (slate.workflowId().isEmpty() && !slate.id.isEmpty() && slate.state != SlateV4::Unknown) {
         slate.metadata.insert(QStringLiteral("workflow_id"), slate.id);
         slate.metadata.insert(QStringLiteral("workflow"),
@@ -3406,9 +3312,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         if (!resolvedWorkflowId.isEmpty()) {
             workflowId = resolvedWorkflowId;
             slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
-            qDebug() << "[WorkflowProcess] workflow id restored from slate id"
-                     << "slateId=" << slate.id
-                     << "workflowId=" << workflowId;
         }
     }
     if (workflowId.isEmpty() || mode == QStringLiteral("unknown") || state == QStringLiteral("NA")) {
@@ -3439,10 +3342,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         && !slate.id.trimmed().isEmpty()) {
         const QString resolvedWorkflowId = resolveWorkflowIdBySlateId();
         if (!resolvedWorkflowId.isEmpty() && resolvedWorkflowId != workflowId) {
-            qDebug() << "[WorkflowProcess] workflow id aliased"
-                     << "incomingWorkflowId=" << workflowId
-                     << "resolvedWorkflowId=" << resolvedWorkflowId
-                     << "slateId=" << slate.id;
             workflowId = resolvedWorkflowId;
             slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
         }
@@ -3450,13 +3349,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
 
     const QString localSlatepackAddress = currentSlatepackAddress();
     const QString localPaymentProofAddress = currentPaymentProofAddress();
-    qDebug() << "[WorkflowProcess] role"
-             << "workflowId=" << workflowId
-             << "state=" << state
-             << "mode=" << mode
-             << "localRole=" << localRoleTag
-             << "localSlatepackAddress=" << localSlatepackAddress
-             << "localPaymentProofAddress=" << localPaymentProofAddress;
     if (!localPaymentProofAddress.isEmpty() && slate.hasPaymentProof) {
         if (mode == QStringLiteral("send")) {
             if (slate.paymentProof.senderAddress.trimmed().isEmpty()) {
@@ -3495,9 +3387,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
             && mode == QStringLiteral("invoice")
             && state == QStringLiteral("I1")) {
             persistWorkflowTransaction(slate, false);
-            qDebug() << "[WorkflowSelectionContext] persisted transaction after sender lock"
-                     << "workflowId=" << workflowId
-                     << "state=" << state;
         }
     }
 
@@ -3576,10 +3465,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                 && !receiverContextFromBlind.noncePublic.isEmpty()) {
                 signatureOverrideContext = receiverContextFromBlind;
                 signatureOverride = &signatureOverrideContext;
-                qDebug() << "[WorkflowSign] receiver aggsig context bound to receiver output blind"
-                         << "workflowId=" << workflowId
-                         << "receiverBlindPub=" << receiverContextFromBlind.blindPublic
-                         << "receiverCommit=" << receiveOutput.commitment.left(16);
             }
         }
 
@@ -3602,15 +3487,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                     &offsetError);
                 if (!adjustedOffset.isEmpty()) {
                     slate.offset = adjustedOffset;
-                    qDebug() << "[WorkflowSign] invoice I2 receiver offset adjusted"
-                             << "workflowId=" << workflowId
-                             << "offset=" << slate.offset
-                             << "receiverBlind=" << receiveOutput.blindingFactor.left(16)
-                             << "receiverPub=" << receiverContext.blindPublic;
-                } else {
-                    qDebug() << "[WorkflowSign] invoice I2 receiver offset adjust failed"
-                             << "workflowId=" << workflowId
-                             << "error=" << offsetError;
                 }
             }
         }
@@ -3620,33 +3496,11 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         setLastError(cryptoError.isEmpty() ? QStringLiteral("Failed to apply round 2 signature.") : cryptoError);
         return;
     }
-    qDebug() << "[WorkflowSign] after round2"
-             << "workflowId=" << workflowId
-             << "state=" << state
-             << "role=" << localRoleTag
-             << "sigCount=" << slate.signatures.size()
-             << "offset=" << slate.offset
-             << "messageHash=" << slate.metadata.value(QStringLiteral("message_hash")).toString()
-             << "pubkeyTotal=" << slate.metadata.value(QStringLiteral("pubkey_total")).toString()
-             << "pubnonceTotal=" << slate.metadata.value(QStringLiteral("pubnonce_total")).toString();
-    for (int i = 0; i < slate.signatures.size(); ++i) {
-        const SlateV4::ParticipantData &sig = slate.signatures.at(i);
-        qDebug() << "[WorkflowSign] participant"
-                 << i
-                 << "xs=" << sig.xs
-                 << "nonce=" << sig.nonce
-                 << "partLen=" << sig.part.length();
-    }
-
     if (mode == QStringLiteral("invoice")
         && state == QStringLiteral("I2")
         && localRoleTag == QStringLiteral("receiver")
         && slate.numParticipants < slate.signatures.size()) {
         slate.numParticipants = slate.signatures.size();
-        qDebug() << "[WorkflowSign] normalized invoice I3 participants"
-                 << "workflowId=" << workflowId
-                 << "participantCount=" << slate.numParticipants
-                 << "signatureCount=" << slate.signatures.size();
     }
 
     if (mode == QStringLiteral("invoice")
@@ -3656,9 +3510,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
             slate.metadata.remove(QStringLiteral("tx_skeleton"));
             slate.metadata.remove(QStringLiteral("tx_build_error"));
             slate.metadata.insert(QStringLiteral("tx_ready"), false);
-            qDebug() << "[WorkflowSign] invoice I2 tx skeleton skipped"
-                     << "workflowId=" << workflowId
-                     << "reason=" << "external-binary-invoice";
         } else {
             const QJsonObject localContext = workflowContext(workflowId);
             const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
@@ -3675,10 +3526,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                     if (selectedInput.commitment.isEmpty() && !selectedCommitment.trimmed().isEmpty()) {
                         selectedInput.commitment = selectedCommitment;
                         selectedInput.coinbase = selectedInputCoinbase.value(selectedCommitment).toBool(false);
-                        qDebug() << "[WorkflowSign] invoice I2 selected input restored from context"
-                                 << "workflowId=" << workflowId
-                                 << "commitment=" << selectedCommitment.left(16)
-                                 << "coinbase=" << selectedInput.coinbase;
                     }
                     if (!selectedInput.commitment.isEmpty()) {
                         selectedInputs.append(selectedInput);
@@ -3717,15 +3564,8 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                     slate.metadata.insert(QStringLiteral("tx_skeleton"), txBuild.transaction.toJson());
                     slate.metadata.insert(QStringLiteral("tx_ready"), false);
                     slate.metadata.remove(QStringLiteral("tx_build_error"));
-                    qDebug() << "[WorkflowSign] invoice I2 tx skeleton built"
-                             << "workflowId=" << workflowId
-                             << "selectedInputCount=" << selectedInputs.size()
-                             << "hasChange=" << !changeOutput.commitment.isEmpty();
                 } else {
                     slate.metadata.insert(QStringLiteral("tx_build_error"), txBuild.error);
-                    qDebug() << "[WorkflowSign] invoice I2 tx skeleton failed"
-                             << "workflowId=" << workflowId
-                             << "error=" << txBuild.error;
                 }
             }
         }
@@ -3792,10 +3632,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                 if (selectedInput.commitment.isEmpty() && !selectedCommitment.trimmed().isEmpty()) {
                     selectedInput.commitment = selectedCommitment;
                     selectedInput.coinbase = selectedInputCoinbase.value(selectedCommitment).toBool(false);
-                    qDebug() << "[WorkflowSign] final selected input restored from context"
-                             << "workflowId=" << workflowId
-                             << "commitment=" << selectedCommitment.left(16)
-                             << "coinbase=" << selectedInput.coinbase;
                 }
                 if (!selectedInput.commitment.isEmpty()) {
                     selectedInputs.append(selectedInput);
@@ -3846,28 +3682,10 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                 slate.metadata.insert(QStringLiteral("tx_skeleton"), txBuild.transaction.toJson());
                 slate.metadata.insert(QStringLiteral("tx_ready"), true);
                 slate.metadata.remove(QStringLiteral("tx_build_error"));
-                qDebug() << "[WorkflowSign] external send S3 tx skeleton built"
-                         << "workflowId=" << workflowId
-                         << "selectedInputCount=" << selectedInputs.size()
-                         << "hasReceiverOutput=" << !receiverOutput.commitment.isEmpty()
-                         << "hasChangeOutput=" << !changeOutput.commitment.isEmpty()
-                         << "finalTxOffset=" << txBuild.transaction.offset().hex()
-                         << "finalTxKernelExcess="
-                         << (txBuild.transaction.body().kernels().isEmpty()
-                             ? QString()
-                             : txBuild.transaction.body().kernels().at(0).excess())
-                         << "outputCount="
-                         << txBuild.transaction.body().outputs().size();
                 finalizeWorkflowOutputs(slate, false);
             } else {
                 slate.metadata.insert(QStringLiteral("tx_ready"), false);
                 slate.metadata.insert(QStringLiteral("tx_build_error"), txBuild.error);
-                qDebug() << "[WorkflowSign] external send S3 tx skeleton failed"
-                         << "workflowId=" << workflowId
-                         << "selectedInputCount=" << selectedInputs.size()
-                         << "hasReceiverOutput=" << !receiverOutput.commitment.isEmpty()
-                         << "hasChangeOutput=" << !changeOutput.commitment.isEmpty()
-                         << "error=" << txBuild.error;
             }
         } else if (externalBinary && nextState == QStringLiteral("I3")) {
             WalletOutput receiverOutput;
@@ -3883,9 +3701,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                                                  &receiverOutput,
                                                  &receiverCommit,
                                                  &receiverError)) {
-                    qDebug() << "[WorkflowSign] external invoice I3 receiver output restore failed"
-                             << "workflowId=" << workflowId
-                             << "error=" << receiverError;
                 }
             }
             const WalletTxBuilder::BuildResult txBuild =
@@ -3896,17 +3711,8 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
                 slate.metadata.insert(QStringLiteral("tx_skeleton"), txBuild.transaction.toJson());
                 slate.metadata.insert(QStringLiteral("tx_ready"), true);
                 slate.metadata.remove(QStringLiteral("tx_build_error"));
-                qDebug() << "[WorkflowSign] external invoice I3 tx skeleton built"
-                         << "workflowId=" << workflowId
-                         << "commitmentCount=" << slate.commitments.size()
-                         << "hasReceiverOutput=" << !receiverOutput.commitment.isEmpty()
-                         << "outputCount="
-                         << txBuild.transaction.body().outputs().size();
             } else {
                 slate.metadata.insert(QStringLiteral("tx_build_error"), txBuild.error);
-                qDebug() << "[WorkflowSign] external invoice I3 tx skeleton failed"
-                         << "workflowId=" << workflowId
-                         << "error=" << txBuild.error;
             }
         }
     }
@@ -3919,16 +3725,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
     }
     const QString updatedDecoded = QString::fromUtf8(QJsonDocument(slate.toJson()).toJson(QJsonDocument::Indented));
     logWorkflowJson(QStringLiteral("outgoing-slate"), workflowId, nextState, slate.toJson());
-    qDebug() << "[SlatepackEncode]"
-             << "workflowId=" << workflowId
-             << "state=" << nextState
-             << "externalBinary=" << externalBinary
-             << "forcedMode=" << 0
-             << "senderMetadata=" << slate.metadata.value(QStringLiteral("slatepack_sender")).toString()
-             << "localSender=" << localSlatepackAddress
-             << "recipientCount=" << outgoingRecipients.size()
-             << "recipientList=" << outgoingRecipients
-             << "outgoingSender=" << outgoingSender;
     if (!BinarySlateV4Writer::encodeSlatepack(
             slate,
             &updatedSlatepack,
@@ -3942,11 +3738,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         }
         updatedSlatepack = encodeSlatepackArmor(updatedDecoded, localSlatepackAddress);
     }
-    qDebug() << "[SlatepackEncode] result"
-             << "workflowId=" << workflowId
-             << "state=" << nextState
-             << "outputChars=" << updatedSlatepack.size()
-             << "outputSummary=" << summarizeArmoredSlatepack(updatedSlatepack);
     if (incomingSlate.metadata.value(QStringLiteral("external_binary")).toBool()
         && incomingSlate.modeCode() == QStringLiteral("invoice")
         && incomingSlate.stateCode() == QStringLiteral("I1")
@@ -3962,14 +3753,6 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
         && slate.metadata.value(QStringLiteral("tx_ready")).toBool()
         && slate.metadata.value(QStringLiteral("tx_skeleton")).isObject();
     if (autoBroadcastExternalFinal) {
-        qDebug() << "[WorkflowBroadcast] auto broadcast external final slate"
-                 << "workflowId=" << workflowId
-                 << "state=" << nextState
-                 << "txReady=" << slate.metadata.value(QStringLiteral("tx_ready")).toBool()
-                 << "skeletonOutputs="
-                 << slate.metadata.value(QStringLiteral("tx_skeleton")).toObject()
-                        .value(QStringLiteral("body")).toObject()
-                        .value(QStringLiteral("outputs")).toArray().size();
         broadcastCurrentWorkflowTransaction();
         if (!m_pendingBroadcastWorkflowId.isEmpty()) {
             setLastInfo(QStringLiteral("Workflow %1 advanced to %2 and is being broadcast to the node.")
@@ -4156,9 +3939,6 @@ void GrinWalletController::beginBroadcastWithInputPreflight(const QString &workf
     const Transaction tx = Transaction::fromJson(txSkeleton);
     const QVector<Input> inputs = tx.body().inputs();
     if (inputs.isEmpty()) {
-        qWarning() << "[WorkflowBroadcast] preflight failed"
-                   << "workflowId=" << workflowId
-                   << "reason=no-inputs";
         m_pendingBroadcastWorkflowId.clear();
         updateTransactionEntry(workflowId, [](QJsonObject &entry) {
             entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
@@ -4178,10 +3958,6 @@ void GrinWalletController::beginBroadcastWithInputPreflight(const QString &workf
     m_pendingBroadcastInputLookup = true;
     m_pendingBroadcastTxSkeleton = txSkeleton;
     m_pendingBroadcastInputCommits = commits;
-
-    qDebug() << "[WorkflowBroadcast] preflight get_outputs"
-             << "workflowId=" << workflowId
-             << "inputCount=" << commits.size();
     m_nodeApi->getOutputCommitmentsAsync(commits);
 }
 
@@ -4368,13 +4144,6 @@ QStringList GrinWalletController::outgoingSlatepackRecipients(const SlateV4 &sla
         }
     }
 
-    qDebug() << "[SlatepackRecipients]"
-             << "workflowId=" << slate.workflowId()
-             << "state=" << slate.stateCode()
-             << "localAddress=" << localAddress
-             << "senderMeta=" << sender
-             << "explicitRecipientCount=" << explicitRecipients.size()
-             << "resolvedRecipients=" << recipients;
     return recipients;
 }
 
@@ -4396,11 +4165,6 @@ void GrinWalletController::alignSlateVersionWithNode(SlateV4 *slate) const
     }
 
     if (m_nodeBlockHeaderVersion > 0 && slate->ver.blockHeaderVersion != m_nodeBlockHeaderVersion) {
-        qDebug() << "[WorkflowVersion] alignSlate"
-                 << "workflowId=" << slate->workflowId()
-                 << "state=" << slate->stateCode()
-                 << "from=" << slate->ver.blockHeaderVersion
-                 << "to=" << m_nodeBlockHeaderVersion;
         slate->ver.blockHeaderVersion = m_nodeBlockHeaderVersion;
     }
 }
@@ -4483,13 +4247,6 @@ void GrinWalletController::setWorkflow(const QString &id, const QString &mode, c
     m_workflowState = state;
     m_workflowSlatepack = slatepack;
     m_workflowDecoded = decoded;
-    qDebug() << "[WorkflowState]"
-             << "id=" << id
-             << "mode=" << mode
-             << "state=" << state
-             << "slatepackChars=" << slatepack.size()
-             << "decodedChars=" << decoded.size()
-             << "slatepackSummary=" << summarizeArmoredSlatepack(slatepack);
     emit workflowChanged();
 }
 
@@ -4545,9 +4302,6 @@ void GrinWalletController::connectNodeClient()
         const quint64 blockHeaderVersion = result.value().blockHeaderVersion();
         if (blockHeaderVersion > 0 && blockHeaderVersion < 256) {
             m_nodeBlockHeaderVersion = static_cast<int>(blockHeaderVersion);
-            qDebug() << "[WorkflowVersion] activeNodeVersion"
-                     << "network=" << resolvedNetworkName()
-                     << "blockHeaderVersion=" << m_nodeBlockHeaderVersion;
         }
     });
 
@@ -4629,9 +4383,6 @@ void GrinWalletController::connectNodeClient()
         if (result.hasError()) {
             const QString message = QStringLiteral("Pre-broadcast input lookup failed: %1")
                                         .arg(result.errorMessage());
-            qWarning() << "[WorkflowBroadcast] preflight lookup failed"
-                       << "workflowId=" << workflowId
-                       << "error=" << result.errorMessage();
             m_pendingBroadcastWorkflowId.clear();
             m_pendingBroadcastTxSkeleton = QJsonObject();
             m_pendingBroadcastInputCommits = QJsonArray();
@@ -4666,9 +4417,6 @@ void GrinWalletController::connectNodeClient()
         if (!missingCommit.isEmpty()) {
             const QString message = QStringLiteral("Node preflight rejected input commit %1. Wallet state may be stale or the output is already spent.")
                                         .arg(missingCommit);
-            qWarning() << "[WorkflowBroadcast] preflight missing input"
-                       << "workflowId=" << workflowId
-                       << "missingCommit=" << missingCommit;
             m_pendingBroadcastWorkflowId.clear();
             m_pendingBroadcastTxSkeleton = QJsonObject();
             m_pendingBroadcastInputCommits = QJsonArray();
@@ -4697,10 +4445,6 @@ void GrinWalletController::connectNodeClient()
                 input.setFeatures(expectedFeature);
                 inputs[i] = input;
                 adjustedInputFeatures = true;
-                qDebug() << "[WorkflowBroadcast] preflight adjusted input feature"
-                         << "workflowId=" << workflowId
-                         << "commit=" << commitHex.left(16)
-                         << "feature=" << (expectedFeature == OutputFeatures::Coinbase ? "Coinbase" : "Plain");
             }
         }
         if (adjustedInputFeatures) {
@@ -4712,9 +4456,6 @@ void GrinWalletController::connectNodeClient()
         if (!WalletCryptoBackend::validateTransactionBody(tx, &validationError)) {
             const QString message = QStringLiteral("Local pre-broadcast body validation failed: %1")
                                         .arg(validationError);
-            qWarning() << "[WorkflowBroadcast] local preflight body validation failed"
-                       << "workflowId=" << workflowId
-                       << "error=" << validationError;
             m_pendingBroadcastWorkflowId.clear();
             m_pendingBroadcastTxSkeleton = QJsonObject();
             m_pendingBroadcastInputCommits = QJsonArray();
@@ -4731,9 +4472,6 @@ void GrinWalletController::connectNodeClient()
         if (!WalletCryptoBackend::validateTransactionKernelSums(tx, &validationError)) {
             const QString message = QStringLiteral("Local pre-broadcast kernel sum/offset validation failed: %1")
                                         .arg(validationError);
-            qWarning() << "[WorkflowBroadcast] local preflight kernel sums failed"
-                       << "workflowId=" << workflowId
-                       << "error=" << validationError;
             m_pendingBroadcastWorkflowId.clear();
             m_pendingBroadcastTxSkeleton = QJsonObject();
             m_pendingBroadcastInputCommits = QJsonArray();
@@ -4750,9 +4488,6 @@ void GrinWalletController::connectNodeClient()
         if (!WalletCryptoBackend::validateTransactionKernelSignatures(tx, &validationError)) {
             const QString message = QStringLiteral("Local pre-broadcast kernel signature validation failed: %1")
                                         .arg(validationError);
-            qWarning() << "[WorkflowBroadcast] local preflight kernel signature failed"
-                       << "workflowId=" << workflowId
-                       << "error=" << validationError;
             m_pendingBroadcastWorkflowId.clear();
             m_pendingBroadcastTxSkeleton = QJsonObject();
             m_pendingBroadcastInputCommits = QJsonArray();
@@ -4767,10 +4502,6 @@ void GrinWalletController::connectNodeClient()
         }
 
         logWorkflowJson(QStringLiteral("broadcast-tx-final"), workflowId, QStringLiteral("broadcast"), tx.toJson());
-
-        qDebug() << "[WorkflowBroadcast] preflight passed"
-                 << "workflowId=" << workflowId
-                 << "foundInputs=" << foundOutputs.size();
         m_pendingBroadcastTxSkeleton = QJsonObject();
         m_pendingBroadcastInputCommits = QJsonArray();
         m_nodeApi->pushTransactionAsync(tx, true);
@@ -5307,12 +5038,6 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         // output.workflowId == workflowId here can incorrectly discard a valid
         // S1 selection before S3 finalization.
         if (!hasMatchingSelection) {
-            qDebug() << "[WorkflowSelectionContext] stale selection discarded"
-                     << "workflowId=" << workflowId
-                     << "hasTransactionEntry=" << hasTransactionEntry
-                     << "hasMatchingSelection=" << hasMatchingSelection
-                     << "hasMatchingLocks=" << hasMatchingLocks
-                     << "selectedInputs=" << selectedCommitments.size();
             localContext.remove(QStringLiteral("selected_inputs"));
             localContext.remove(QStringLiteral("selected_total"));
             localContext.remove(QStringLiteral("selected_input_commits"));
@@ -5330,9 +5055,6 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
             storeWorkflowContext(workflowId, localContext);
         } else {
         if (!hasTransactionEntry) {
-            qDebug() << "[WorkflowSelectionContext] existing lock without transaction entry"
-                     << "workflowId=" << workflowId
-                     << "selectedInputs=" << selectedCommitments.size();
             SlateV4 placeholder;
             placeholder.id = workflowId;
             placeholder.metadata.insert(QStringLiteral("workflow_id"), workflowId);
@@ -5352,23 +5074,11 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
             if (!output.commitment.isEmpty()) {
                 selectedInputCoinbase.insert(output.commitment, output.coinbase);
                 selectedTotal += amountToNanogrin(output.amount);
-                qDebug() << "[WorkflowSelectionContext] existing input"
-                         << i
-                         << "commitment=" << commitment.left(16)
-                         << "walletCoinbase=" << output.coinbase;
             } else {
                 const QJsonValue persistedValue =
                     localContext.value(QStringLiteral("selected_input_coinbase")).toObject().value(commitment);
                 if (!persistedValue.isUndefined()) {
                     selectedInputCoinbase.insert(commitment, persistedValue.toBool());
-                    qDebug() << "[WorkflowSelectionContext] existing input fallback"
-                             << i
-                             << "commitment=" << commitment.left(16)
-                             << "persistedCoinbase=" << persistedValue.toBool();
-                } else {
-                    qDebug() << "[WorkflowSelectionContext] existing input missing"
-                             << i
-                             << "commitment=" << commitment.left(16);
                 }
             }
         }
@@ -5402,10 +5112,6 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
                 storeWorkflowContext(workflowId, localContext);
             }
         }
-        qDebug() << "[WorkflowSelectionContext] existing selection"
-                 << "workflowId=" << workflowId
-                 << "selectedInputs=" << selectedCommitments.size()
-                 << "coinbaseMapSize=" << selectedInputCoinbase.size();
         quint64 amountNano = localContext.value(QStringLiteral("amount_nano")).toVariant().toULongLong();
         if (amountNano == 0) {
             amountNano = resolveWorkflowAmountNano();
@@ -5475,11 +5181,6 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
                 localContext.remove(QStringLiteral("change_key_path"));
             }
             storeWorkflowContext(workflowId, localContext);
-            qDebug() << "[WorkflowSelectionContext] existing fee recalculated"
-                     << "workflowId=" << workflowId
-                     << "selectedTotal=" << selectedTotal
-                     << "fee=" << recalculatedFee
-                     << "change=" << recalculatedChange;
         }
         if (feeOut) {
             *feeOut = recalculatedFee > 0
@@ -5661,35 +5362,13 @@ bool GrinWalletController::prepareInvoiceSenderContext(
 
     slate->offset = adjustedOffset;
     *signatureOverrideOut = senderAggsig;
-    qDebug() << "[InvoiceSenderOffset]"
-             << "workflowId=" << workflowId
-             << "selectedInputs=" << selectedCommitments.size()
-             << "positiveCount=" << positiveBlinds.size()
-             << "negativeCount=" << negativeBlinds.size()
-             << "adjustedOffset=" << adjustedOffset
-             << "blindPublic=" << senderAggsig.blindPublic;
 
     QList<SlateV4::Commit> rebuiltCommitments = slate->commitments;
     for (int i = 0; i < selectedCommitments.size(); ++i) {
         const WalletOutput input = findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
         if (input.commitment.isEmpty()) {
-            qDebug() << "[InvoiceSenderComs] input missing from tracked outputs"
-                     << "commitment=" << selectedCommitments.at(i).toString().left(16);
             continue;
         }
-        qDebug() << "[InvoiceSenderInput]"
-                 << "commitment=" << input.commitment.left(16)
-                 << "amount=" << input.amount
-                 << "source=" << input.source
-                 << "coinbase=" << input.coinbase
-                 << "onChain=" << input.onChain
-                 << "spent=" << input.spent
-                 << "locked=" << input.locked
-                 << "pending=" << input.pending
-                 << "height=" << input.height
-                 << "childIndex=" << input.childIndex
-                 << "keyPath=" << input.keyPath
-                 << "workflowId=" << input.workflowId;
 
         bool exists = false;
         for (int j = 0; j < rebuiltCommitments.size(); ++j) {
@@ -5705,11 +5384,6 @@ bool GrinWalletController::prepareInvoiceSenderContext(
         SlateV4::Commit commit;
         const bool inputCoinbase =
             selectedInputCoinbase.value(input.commitment).toBool(input.coinbase);
-        qDebug() << "[InvoiceSenderComs] source"
-                 << "commitment=" << input.commitment.left(16)
-                 << "walletCoinbase=" << input.coinbase
-                 << "mappedCoinbase=" << inputCoinbase
-                 << "mapDefined=" << selectedInputCoinbase.contains(input.commitment);
         commit.feature = inputCoinbase ? 1 : 0;
         commit.commitment = input.commitment;
         rebuiltCommitments.append(commit);
@@ -5719,19 +5393,6 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     if (!changeCommitment.isEmpty()) {
         const WalletOutput changeOutput = findTrackedOutputByCommitment(trackedOutputs, changeCommitment);
         if (!changeOutput.commitment.isEmpty()) {
-            qDebug() << "[InvoiceSenderChange]"
-                     << "commitment=" << changeOutput.commitment.left(16)
-                     << "amount=" << changeOutput.amount
-                     << "source=" << changeOutput.source
-                     << "coinbase=" << changeOutput.coinbase
-                     << "onChain=" << changeOutput.onChain
-                     << "spent=" << changeOutput.spent
-                     << "locked=" << changeOutput.locked
-                     << "pending=" << changeOutput.pending
-                     << "height=" << changeOutput.height
-                     << "childIndex=" << changeOutput.childIndex
-                     << "keyPath=" << changeOutput.keyPath
-                     << "workflowId=" << changeOutput.workflowId;
             bool exists = false;
             for (int i = 0; i < rebuiltCommitments.size(); ++i) {
                 if (rebuiltCommitments.at(i).commitment == changeOutput.commitment) {
@@ -5750,18 +5411,6 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     }
 
     slate->commitments = sortedCompactCommitments(rebuiltCommitments);
-    qDebug() << "[InvoiceSenderComs]"
-             << "workflowId=" << workflowId
-             << "commitmentCount=" << slate->commitments.size();
-    for (int i = 0; i < slate->commitments.size(); ++i) {
-        const SlateV4::Commit &commit = slate->commitments.at(i);
-        qDebug() << "[InvoiceSenderComs] commit"
-                 << i
-                 << "feature=" << commit.feature
-                 << "hasProof=" << !commit.proof.isEmpty()
-                 << "commitment=" << commit.commitment.left(16);
-    }
-
     return true;
 }
 
@@ -5838,19 +5487,7 @@ bool GrinWalletController::prepareStandardSenderContext(
             // Compact external S2 slates do not reliably preserve our local metadata,
             // so the sender must treat the imported S2 offset as canonical here.
             effectiveOffset = incomingOffset;
-            qDebug() << "[StandardSenderOffset] imported S2 offset supersedes local S1 offset"
-                     << "workflowId=" << workflowId
-                     << "incomingOffset=" << incomingOffset
-                     << "localS1Offset=" << canonicalOffset;
-        } else {
-            qDebug() << "[StandardSenderOffset] imported S2 offset matches local S1 offset"
-                     << "workflowId=" << workflowId
-                     << "offset=" << canonicalOffset;
         }
-    } else {
-        qWarning() << "[StandardSenderOffset] imported S2 offset is empty, using local S1 offset"
-                   << "workflowId=" << workflowId
-                   << "localS1Offset=" << canonicalOffset;
     }
 
     slate->offset = effectiveOffset;
@@ -5858,11 +5495,6 @@ bool GrinWalletController::prepareStandardSenderContext(
     storeWorkflowContext(workflowId, localContext);
 
     *signatureOverrideOut = senderAggsig;
-    qDebug() << "[StandardSenderOffset]"
-             << "workflowId=" << workflowId
-             << "selectedInputs=" << selectedCommitments.size()
-             << "offset=" << slate->offset
-             << "blindPublic=" << senderAggsig.blindPublic;
 
     QList<SlateV4::Commit> rebuiltCommitments = slate->commitments;
     for (int i = 0; i < selectedCommitments.size(); ++i) {
@@ -5941,225 +5573,15 @@ void GrinWalletController::compactInvoiceSlateForReturn(const QString &workflowI
     slate->metadata.remove(QStringLiteral("processed_at"));
     slate->metadata.remove(QStringLiteral("tx_ready"));
     slate->metadata.remove(QStringLiteral("network"));
-    qDebug() << "[WorkflowSign] compacted invoice I2"
-             << "workflowId=" << workflowId
-             << "remainingSigCount=" << slate->signatures.size()
-             << "participantCount=" << slate->numParticipants
-             << "amountLength=" << slate->amount.length();
 }
 
 void GrinWalletController::runExternalInvoicePreflight(const SlateV4 &incomingSlate,
                                                        const SlateV4 &emittedSlate,
                                                        const QString &armoredSlatepack) const
 {
-    const QString decodedRoundtrip = decodeIncomingSlatepack(armoredSlatepack, QByteArray());
-    if (decodedRoundtrip.isEmpty()) {
-        qDebug() << "[InvoicePreflight] roundtrip decode failed"
-                 << "workflowId=" << emittedSlate.workflowId();
-        return;
-    }
-
-    const QJsonDocument roundtripDocument = QJsonDocument::fromJson(decodedRoundtrip.toUtf8());
-    if (!roundtripDocument.isObject()) {
-        qDebug() << "[InvoicePreflight] roundtrip json invalid"
-                 << "workflowId=" << emittedSlate.workflowId();
-        return;
-    }
-
-    const SlateV4 roundtripSlate = SlateV4::fromJson(roundtripDocument.object());
-    qDebug() << "[InvoicePreflight] roundtrip"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "state=" << roundtripSlate.stateCode()
-             << "version=" << roundtripSlate.versionCode()
-             << "sender=" << roundtripSlate.metadata.value(QStringLiteral("slatepack_sender")).toString()
-             << "sigCount=" << roundtripSlate.signatures.size()
-             << "participantCount=" << roundtripSlate.numParticipants
-             << "commitmentCount=" << roundtripSlate.commitments.size()
-             << "amount=" << roundtripSlate.amount
-             << "fee=" << roundtripSlate.fee
-             << "offset=" << roundtripSlate.offset
-             << "messageHash=" << roundtripSlate.metadata.value(QStringLiteral("message_hash")).toString();
-
-    for (int i = 0; i < incomingSlate.signatures.size(); ++i) {
-        const SlateV4::ParticipantData &sig = incomingSlate.signatures.at(i);
-        qDebug() << "[InvoicePreflight] incoming-participant"
-                 << "workflowId=" << emittedSlate.workflowId()
-                 << "index=" << i
-                 << "xs=" << sig.xs
-                 << "nonce=" << sig.nonce
-                 << "partLen=" << sig.part.length();
-    }
-    for (int i = 0; i < emittedSlate.signatures.size(); ++i) {
-        const SlateV4::ParticipantData &sig = emittedSlate.signatures.at(i);
-        qDebug() << "[InvoicePreflight] emitted-participant"
-                 << "workflowId=" << emittedSlate.workflowId()
-                 << "index=" << i
-                 << "xs=" << sig.xs
-                 << "nonce=" << sig.nonce
-                 << "partLen=" << sig.part.length();
-    }
-    for (int i = 0; i < roundtripSlate.signatures.size(); ++i) {
-        const SlateV4::ParticipantData &sig = roundtripSlate.signatures.at(i);
-        qDebug() << "[InvoicePreflight] roundtrip-participant"
-                 << "workflowId=" << emittedSlate.workflowId()
-                 << "index=" << i
-                 << "xs=" << sig.xs
-                 << "nonce=" << sig.nonce
-                 << "partLen=" << sig.part.length();
-    }
-
-    for (int i = 0; i < incomingSlate.commitments.size(); ++i) {
-        const SlateV4::Commit &commit = incomingSlate.commitments.at(i);
-        qDebug() << "[InvoicePreflight] incoming-commit"
-                 << "workflowId=" << emittedSlate.workflowId()
-                 << "index=" << i
-                 << "feature=" << commit.feature
-                 << "hasProof=" << !commit.proof.isEmpty()
-                 << "commitment=" << commit.commitment;
-    }
-    for (int i = 0; i < emittedSlate.commitments.size(); ++i) {
-        const SlateV4::Commit &commit = emittedSlate.commitments.at(i);
-        qDebug() << "[InvoicePreflight] emitted-commit"
-                 << "workflowId=" << emittedSlate.workflowId()
-                 << "index=" << i
-                 << "feature=" << commit.feature
-                 << "hasProof=" << !commit.proof.isEmpty()
-                 << "commitment=" << commit.commitment;
-    }
-    for (int i = 0; i < roundtripSlate.commitments.size(); ++i) {
-        const SlateV4::Commit &commit = roundtripSlate.commitments.at(i);
-        qDebug() << "[InvoicePreflight] roundtrip-commit"
-                 << "workflowId=" << emittedSlate.workflowId()
-                 << "index=" << i
-                 << "feature=" << commit.feature
-                 << "hasProof=" << !commit.proof.isEmpty()
-                 << "commitment=" << commit.commitment;
-    }
-
-    qDebug() << "[InvoicePreflight] compare"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "plannedSender=" << emittedSlate.metadata.value(QStringLiteral("slatepack_sender")).toString()
-             << "roundtripSender=" << roundtripSlate.metadata.value(QStringLiteral("slatepack_sender")).toString()
-             << "plannedFee=" << emittedSlate.fee
-             << "roundtripFee=" << roundtripSlate.fee
-             << "plannedOffset=" << emittedSlate.offset
-             << "roundtripOffset=" << roundtripSlate.offset
-             << "plannedSigCount=" << emittedSlate.signatures.size()
-             << "roundtripSigCount=" << roundtripSlate.signatures.size()
-             << "plannedCommitmentCount=" << emittedSlate.commitments.size()
-             << "roundtripCommitmentCount=" << roundtripSlate.commitments.size();
-
-    SlateV4 combinedSlate = roundtripSlate;
-    combinedSlate.signatures = incomingSlate.signatures;
-    for (int i = 0; i < roundtripSlate.signatures.size(); ++i) {
-        const SlateV4::ParticipantData &roundtripParticipant = roundtripSlate.signatures.at(i);
-        bool updated = false;
-        for (int j = 0; j < combinedSlate.signatures.size(); ++j) {
-            if (combinedSlate.signatures[j].xs == roundtripParticipant.xs) {
-                combinedSlate.signatures[j] = roundtripParticipant;
-                updated = true;
-                break;
-            }
-        }
-        if (!updated) {
-            combinedSlate.signatures.append(roundtripParticipant);
-        }
-    }
-    combinedSlate.numParticipants = combinedSlate.signatures.size();
-
-    QString emittedBlindError;
-    QString emittedNonceError;
-    qDebug() << "[InvoicePreflight] emitted-aggsig"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "messageHash=" << WalletCryptoBackend::kernelSignatureMessageHex(emittedSlate)
-             << "pubkeyTotal=" << WalletCryptoBackend::combinedBlindPublicKeyHex(emittedSlate, &emittedBlindError)
-             << "pubnonceTotal=" << WalletCryptoBackend::combinedNoncePublicKeyHex(emittedSlate, &emittedNonceError)
-             << "pubkeyError=" << emittedBlindError
-             << "pubnonceError=" << emittedNonceError;
-
-    QString roundtripBlindError;
-    QString roundtripNonceError;
-    qDebug() << "[InvoicePreflight] roundtrip-aggsig"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "messageHash=" << WalletCryptoBackend::kernelSignatureMessageHex(roundtripSlate)
-             << "pubkeyTotal=" << WalletCryptoBackend::combinedBlindPublicKeyHex(roundtripSlate, &roundtripBlindError)
-             << "pubnonceTotal=" << WalletCryptoBackend::combinedNoncePublicKeyHex(roundtripSlate, &roundtripNonceError)
-             << "pubkeyError=" << roundtripBlindError
-             << "pubnonceError=" << roundtripNonceError;
-
-    QString combinedBlindError;
-    QString combinedNonceError;
-    qDebug() << "[InvoicePreflight] combined-aggsig"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "messageHash=" << WalletCryptoBackend::kernelSignatureMessageHex(combinedSlate)
-             << "pubkeyTotal=" << WalletCryptoBackend::combinedBlindPublicKeyHex(combinedSlate, &combinedBlindError)
-             << "pubnonceTotal=" << WalletCryptoBackend::combinedNoncePublicKeyHex(combinedSlate, &combinedNonceError)
-             << "pubkeyError=" << combinedBlindError
-             << "pubnonceError=" << combinedNonceError
-             << "combinedSigCount=" << combinedSlate.signatures.size()
-             << "combinedParticipantCount=" << combinedSlate.numParticipants;
-
-    QString verifyError;
-    const bool verifyOk = WalletCryptoBackend::verifyPartialSignatures(combinedSlate, &verifyError);
-    qDebug() << "[InvoicePreflight] partial-verify"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "ok=" << verifyOk
-             << "combinedSigCount=" << combinedSlate.signatures.size()
-             << "combinedParticipantCount=" << combinedSlate.numParticipants
-             << "error=" << verifyError;
-
-    QString excessError;
-    const QString excessCommitment = WalletCryptoBackend::calculateExcessCommitment(combinedSlate, &excessError);
-    qDebug() << "[InvoicePreflight] excess"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "commitment=" << excessCommitment
-             << "error=" << excessError;
-
-    QString finalSigError;
-    QString finalSig;
-    const bool finalSigOk = WalletCryptoBackend::buildFinalSignature(combinedSlate, &finalSig, &finalSigError);
-    qDebug() << "[InvoicePreflight] final-sig"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "ok=" << finalSigOk
-             << "signature=" << finalSig
-             << "error=" << finalSigError;
-
-    int partialCount = 0;
-    int missingPartialCount = 0;
-    for (int i = 0; i < combinedSlate.signatures.size(); ++i) {
-        const SlateV4::ParticipantData &participant = combinedSlate.signatures.at(i);
-        if (participant.part.isEmpty()) {
-            ++missingPartialCount;
-            qDebug() << "[InvoicePreflight] missing-participant"
-                     << "workflowId=" << emittedSlate.workflowId()
-                     << "index=" << i
-                     << "xs=" << participant.xs
-                     << "nonce=" << participant.nonce
-                     << "matchesIncoming=" << (i < incomingSlate.signatures.size()
-                                               && incomingSlate.signatures.at(i).xs == participant.xs
-                                               && incomingSlate.signatures.at(i).nonce == participant.nonce);
-        } else {
-            ++partialCount;
-        }
-    }
-
-    qDebug() << "[InvoicePreflight] receiver-finalize"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "partialCount=" << partialCount
-             << "missingPartialCount=" << missingPartialCount
-             << "numParticipants=" << combinedSlate.numParticipants
-             << "needsStoredContext=" << (missingPartialCount > 0)
-             << "expectedKernelExcess=" << excessCommitment
-             << "finalSigPreflightOk=" << finalSigOk;
-
-    qDebug() << "[InvoicePreflight] receiver-readiness"
-             << "workflowId=" << emittedSlate.workflowId()
-             << "hasSingleReplySignature=" << (roundtripSlate.signatures.size() == 1)
-             << "hasTwoCommitments=" << (roundtripSlate.commitments.size() == 2)
-             << "hasFee=" << !roundtripSlate.fee.trimmed().isEmpty()
-             << "amountCleared=" << roundtripSlate.amount.trimmed().isEmpty()
-             << "senderHeaderPresent=" << !roundtripSlate.metadata.value(QStringLiteral("slatepack_sender")).toString().trimmed().isEmpty()
-             << "note=" << "final-sig at I2 may be incomplete without receiver context";
+    Q_UNUSED(incomingSlate)
+    Q_UNUSED(emittedSlate)
+    Q_UNUSED(armoredSlatepack)
 }
 
 void GrinWalletController::compactStandardSlateForReturn(const QString &workflowId, SlateV4 *slate)
@@ -6197,10 +5619,6 @@ void GrinWalletController::compactStandardSlateForReturn(const QString &workflow
             WalletCryptoBackend::combineBlindingFactors(positiveBlinds, negativeBlinds, &offsetError);
         if (!adjustedOffset.isEmpty()) {
             slate->offset = adjustedOffset;
-        } else {
-            qDebug() << "[WorkflowSign] standard S2 offset adjust failed"
-                     << "workflowId=" << workflowId
-                     << "error=" << offsetError;
         }
     }
 
@@ -6217,12 +5635,6 @@ void GrinWalletController::compactStandardSlateForReturn(const QString &workflow
 
     slate->amount.clear();
     slate->fee.clear();
-    qDebug() << "[WorkflowSign] compacted standard S2"
-             << "workflowId=" << workflowId
-             << "remainingSigCount=" << slate->signatures.size()
-             << "offset=" << slate->offset
-             << "amountLength=" << slate->amount.length()
-             << "feeLength=" << slate->fee.length();
     logWorkflowJson(QStringLiteral("S2-compacted"), workflowId, slate->stateCode(), slate->toJson());
 }
 

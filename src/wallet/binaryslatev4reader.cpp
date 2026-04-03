@@ -316,11 +316,6 @@ bool parseBinaryEnvelopeOptionalFields(const QByteArray &optFields,
         }
     }
 
-    if (cursor.canRead(1)) {
-        qDebug() << "[BinarySlatepackEnvelope] optional field payload has trailing bytes"
-                 << "optFlags=" << optFlags
-                 << "optFieldsLen=" << optFields.size();
-    }
     return true;
 }
 
@@ -709,13 +704,8 @@ bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, 
         if (errorOut) *errorOut = QStringLiteral("Invalid binary struct status.");
         return false;
     }
-    qDebug() << "[BinarySlateReader] optionalStructs="
-             << optionalStructs
-             << "state=" << slate.stateCode()
-             << "id=" << slate.id;
     if (optionalStructs & 0x01) {
         const quint16 numComs = cursor.readU16(&ok);
-        qDebug() << "[BinarySlateReader] numComs=" << numComs;
         for (quint16 i = 0; i < numComs; ++i) {
             SlateV4::Commit commit;
             const quint8 hasProof = cursor.readU8(&ok);
@@ -734,12 +724,6 @@ bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, 
                 return false;
             }
             slate.commitments.append(commit);
-            qDebug() << "[BinarySlateReader] com"
-                     << i
-                     << "feature=" << commit.feature
-                     << "hasProof=" << (hasProof > 0)
-                     << "commitment=" << commit.commitment
-                     << "proofLength=" << commit.proof.length();
         }
     }
     if (optionalStructs & 0x02) {
@@ -926,15 +910,6 @@ bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload,
         }
         return false;
     }
-    qDebug() << "[BinarySlatepackEnvelope]"
-             << "major=" << major
-             << "minor=" << minor
-             << "mode=" << mode
-             << "optFlags=" << optFlags
-             << "optFieldsLen=" << optFieldsLen
-             << "sender=" << envelopeSender
-             << "recipientCount=" << envelopeRecipients.size();
-
     const quint64 payloadSize = cursor.readU64(&ok);
     if (!ok || payloadSize > static_cast<quint64>(std::numeric_limits<int>::max())) {
         if (errorOut) *errorOut = QStringLiteral("Invalid binary slatepack payload length.");

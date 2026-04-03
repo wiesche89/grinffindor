@@ -73,18 +73,11 @@ Item {
     }
     function syncBrowserShortcutContext(control) {
         if (!control) {
-            console.log("[ShortcutContext]", JSON.stringify({ focused: false, textLength: 0, selectedLength: 0 }))
             grinWalletController.updateBrowserShortcutContext("", "", false)
             return
         }
         var textValue = control.text !== undefined && control.text !== null ? control.text : ""
         var selectedValue = control.selectedText !== undefined && control.selectedText !== null ? control.selectedText : ""
-        console.log("[ShortcutContext]", JSON.stringify({
-            focused: !!control.activeFocus,
-            textLength: textValue.length,
-            selectedLength: selectedValue.length,
-            objectName: control.objectName !== undefined ? control.objectName : ""
-        }))
         grinWalletController.updateBrowserShortcutContext(textValue, selectedValue, !!control.activeFocus)
     }
     function openRevealSeedPopup() {

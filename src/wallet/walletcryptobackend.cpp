@@ -504,8 +504,6 @@ bool appendKernelFeaturesForOrdering(QByteArray *serialized, const TxKernel &ker
 
 bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *errorOut)
 {
-    qDebug() << "[VerifyOutputsBatchRangeproofs] starting with" << outputs.size() << "outputs";
-    
     if (outputs.isEmpty()) {
         return true;
     }
@@ -515,7 +513,6 @@ bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *erro
         if (errorOut) {
             *errorOut = QStringLiteral("Transaction body validation failed: could not allocate secp scratch space.");
         }
-        qDebug() << "[VerifyOutputsBatchRangeproofs] FAILED: could not allocate scratch space";
         return false;
     }
 
@@ -527,9 +524,6 @@ bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *erro
     size_t proofLen = 0;
     for (int i = 0; i < outputs.size(); ++i) {
         const Output &output = outputs.at(i);
-        qDebug() << "[VerifyOutputsBatchRangeproofs] processing output" << i 
-                 << "commit=" << output.commit().left(16);
-
         secp256k1_pedersen_commitment commitment;
         if (!parseCommitmentHex(output.commit(), &commitment)) {
             secp256k1_scratch_space_destroy(scratch);
@@ -537,7 +531,6 @@ bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *erro
                 *errorOut = QStringLiteral("Transaction body validation failed: invalid output commitment at index %1.")
                                 .arg(i);
             }
-            qDebug() << "[VerifyOutputsBatchRangeproofs] FAILED: invalid commitment at" << i;
             return false;
         }
 
@@ -548,11 +541,8 @@ bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *erro
                 *errorOut = QStringLiteral("Transaction body validation failed: missing output proof at index %1.")
                                 .arg(i);
             }
-            qDebug() << "[VerifyOutputsBatchRangeproofs] FAILED: missing proof at" << i;
             return false;
         }
-
-        qDebug() << "[VerifyOutputsBatchRangeproofs] proof size for output" << i << "=" << proof.size();
         if (i == 0) {
             proofLen = static_cast<size_t>(proof.size());
         } else if (proof.size() != static_cast<int>(proofLen)) {
@@ -580,11 +570,6 @@ bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *erro
         valueGenerators.append(secp256k1_generator_const_h);
     }
 
-    qDebug() << "[VerifyOutputsBatchRangeproofs] calling verify_multi with" 
-             << proofPointers.size() << "proofs, proofLen=" << proofLen
-             << ", commitmentPointers=" << commitmentPointers.size()
-             << ", valueGenerators=" << valueGenerators.size();
-
     const int verifyOk = secp256k1_bulletproof_rangeproof_verify_multi(
         walletSecpContext(),
         scratch,
@@ -600,20 +585,14 @@ bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *erro
         0,
         0);
 
-    qDebug() << "[VerifyOutputsBatchRangeproofs] verify_multi returned" << verifyOk;
-
     secp256k1_scratch_space_destroy(scratch);
 
     if (verifyOk != 1) {
         if (errorOut) {
             *errorOut = QStringLiteral("Transaction body validation failed: batch rangeproof verification failed.");
         }
-        qDebug() << "[VerifyOutputsBatchRangeproofs] FAILED with verifyOk=" << verifyOk;
         return false;
     }
-
-    qDebug() << "[VerifyOutputsBatchRangeproofs] SUCCESS - all" << outputs.size() << "rangeproofs verified";
-
     return true;
 }
 
@@ -1568,14 +1547,6 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
         blindPubkeys.append(slate->signatures.at(i).xs);
         noncePubkeys.append(slate->signatures.at(i).nonce);
     }
-    qDebug() << "[WalletRound2]"
-             << "workflowId=" << slate->workflowId()
-             << "state=" << slate->stateCode()
-             << "role=" << roleTag
-             << "sigCount=" << slate->signatures.size()
-             << "blindPubkeys=" << blindPubkeys
-             << "noncePubkeys=" << noncePubkeys;
-
     secp256k1_pubkey totalBlind;
     secp256k1_pubkey totalNonce;
     secp256k1_pubkey ownBlind;
@@ -1589,12 +1560,6 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
     }
 
     const QByteArray messageHash = buildKernelSignatureMessage(*slate);
-    qDebug() << "[WalletRound2]"
-             << "workflowId=" << slate->workflowId()
-             << "messageHash=" << QString::fromUtf8(messageHash.toHex())
-             << "contextBlindPublic=" << context.blindPublic
-             << "contextNoncePublic=" << context.noncePublic
-             << "override=" << (overrideContext != 0);
     QByteArray partialSignature;
     if (!createPartialSignature(messageHash,
                                 fromHex(context.blindSecret),
@@ -1636,11 +1601,6 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
     slate->metadata.insert(QStringLiteral("pubkey_total"), serializePubkey(totalBlind));
     slate->metadata.insert(QStringLiteral("pubnonce_total"), serializePubkey(totalNonce));
     slate->metadata.insert(QStringLiteral("signature_status"), QStringLiteral("partial"));
-    qDebug() << "[WalletRound2]"
-             << "workflowId=" << slate->workflowId()
-             << "partialLen=" << partialSignature.size()
-             << "pubkeyTotal=" << serializePubkey(totalBlind)
-             << "pubnonceTotal=" << serializePubkey(totalNonce);
     return true;
 }
 
@@ -1656,21 +1616,8 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
     QList<QString> allBlindPubkeys;
     QList<QString> allNoncePubkeys;
     QList<QString> sigBlindPubkeys;
-    qDebug() << "[WalletFinalize] start"
-             << "workflowId=" << slate->workflowId()
-             << "state=" << slate->stateCode()
-             << "numParticipants=" << slate->numParticipants
-             << "sigCount=" << slate->signatures.size()
-             << "amount=" << slate->amount
-             << "fee=" << slate->fee
-             << "offset=" << slate->offset;
     for (int i = 0; i < slate->signatures.size(); ++i) {
         const SlateV4::ParticipantData &participant = slate->signatures.at(i);
-        qDebug() << "[WalletFinalize] participant"
-                 << i
-                 << "xs=" << participant.xs
-                 << "nonce=" << participant.nonce
-                 << "partLen=" << participant.part.length();
         allBlindPubkeys.append(participant.xs);
         allNoncePubkeys.append(participant.nonce);
         if (participant.part.isEmpty()) {
@@ -1692,12 +1639,6 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
         }
         sigBlindPubkeys.append(participant.xs);
     }
-    qDebug() << "[WalletFinalize]"
-             << "workflowId=" << slate->workflowId()
-             << "usablePartialCount=" << sigBlindPubkeys.size()
-             << "blindPubkeys=" << allBlindPubkeys
-             << "noncePubkeys=" << allNoncePubkeys;
-
     if (sigBlindPubkeys.size() < slate->numParticipants) {
         if (errorOut) {
             *errorOut = QStringLiteral("Not enough partial signatures to finalize.");
@@ -1713,11 +1654,6 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
         }
         return false;
     }
-    qDebug() << "[WalletFinalize]"
-             << "workflowId=" << slate->workflowId()
-             << "pubkeyTotal=" << serializePubkey(totalBlind)
-             << "pubnonceTotal=" << serializePubkey(totalNonce);
-
     QVector<unsigned char *> sigPointers;
     QVector<QByteArray> sigBuffers;
     for (int i = 0; i < slate->signatures.size(); ++i) {
@@ -1748,14 +1684,7 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
         }
         return false;
     }
-    qDebug() << "[WalletFinalize]"
-             << "workflowId=" << slate->workflowId()
-             << "combinedFinalSig=" << toHex(finalSig, sizeof(finalSig));
-
     const QByteArray messageHash = buildKernelSignatureMessage(*slate);
-    qDebug() << "[WalletFinalize]"
-             << "workflowId=" << slate->workflowId()
-             << "messageHash=" << QString::fromUtf8(messageHash.toHex());
     if (secp256k1_aggsig_verify_single(walletSecpContext(),
                                        finalSig,
                                        reinterpret_cast<const unsigned char *>(messageHash.constData()),
@@ -1783,9 +1712,6 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
     }
     slate->metadata.insert(QStringLiteral("final_sig"), QString::fromUtf8(compactFinalSignature.toHex()));
     slate->metadata.insert(QStringLiteral("signature_status"), QStringLiteral("finalized"));
-    qDebug() << "[WalletFinalize] success"
-             << "workflowId=" << slate->workflowId()
-             << "finalSig=" << QString::fromUtf8(compactFinalSignature.toHex());
     return true;
 }
 
@@ -2069,26 +1995,15 @@ bool WalletCryptoBackend::validateTransactionBody(const Transaction &tx, QString
         }
     }
 
-    qDebug() << "[ValidateBodyCheckOrder] checking" << outputs.size() << "outputs sort order";
-    for (int i = 0; i < outputs.size(); ++i) {
-        const QString orderHash = outputSortKey(outputs.at(i));
-        qDebug() << "  output" << i << "commit=" << outputs.at(i).commit().left(16)
-                 << "orderHash=" << orderHash.left(16);
-    }
-
     if (!verifySortedAndUnique(inputs, inputSortKey, QStringLiteral("input"), errorOut)) {
-        qDebug() << "[ValidateBody] input sort/unique check FAILED";
         return false;
     }
     if (!verifySortedAndUnique(outputs, outputSortKey, QStringLiteral("output"), errorOut)) {
-        qDebug() << "[ValidateBody] output sort/unique check FAILED";
         return false;
     }
     if (!verifySortedAndUnique(kernels, kernelSortKey, QStringLiteral("kernel"), errorOut)) {
-        qDebug() << "[ValidateBody] kernel sort/unique check FAILED";
         return false;
     }
-    qDebug() << "[ValidateBody] sort/unique checks PASSED";
 
     QStringList commitments;
     commitments.reserve(inputs.size() + outputs.size());
@@ -2109,12 +2024,9 @@ bool WalletCryptoBackend::validateTransactionBody(const Transaction &tx, QString
         }
     }
 
-    qDebug() << "[ValidateBody] starting batch rangeproof verification for" << outputs.size() << "outputs";
     if (!verifyOutputsBatchRangeproofs(outputs, errorOut)) {
-        qDebug() << "[ValidateBody] batch rangeproof verification FAILED:" << (errorOut ? *errorOut : "unknown");
         return false;
     }
-    qDebug() << "[ValidateBody] batch rangeproof verification PASSED";
 
     return true;
 }
@@ -2279,14 +2191,6 @@ bool WalletCryptoBackend::verifyPartialSignatures(const SlateV4 &slate, QString 
         return false;
     }
 
-    qDebug() << "[WalletVerifyPartial]"
-             << "workflowId=" << slate.workflowId()
-             << "state=" << slate.stateCode()
-             << "participantCount=" << slate.signatures.size()
-             << "verifiedCount=" << verifiedCount
-             << "messageHash=" << QString::fromUtf8(messageHash.toHex())
-             << "pubkeyTotal=" << serializePubkey(totalBlind)
-             << "pubnonceTotal=" << serializePubkey(totalNonce);
     return true;
 }
 

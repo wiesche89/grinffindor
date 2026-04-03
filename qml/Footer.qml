@@ -124,7 +124,6 @@ Rectangle {
                     cursorShape: Qt.PointingHandCursor
 
                     onClicked: {
-                        console.log(modelData.label + " clicked (" + modelData.url + ")")
                         Qt.openUrlExternally(modelData.url)
                     }
                 }
