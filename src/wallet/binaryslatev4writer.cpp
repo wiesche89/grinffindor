@@ -29,17 +29,32 @@ const quint64 kFeeFieldsMask = ((1ULL << 40) - 1ULL);
 const quint8 kFeeFieldsShift = 0;
 const char kBech32Charset[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
+/**
+ * @brief appendU8
+ * @param out
+ * @param value
+ */
 void appendU8(QByteArray &out, quint8 value)
 {
     out.append(static_cast<char>(value));
 }
 
+/**
+ * @brief appendU16
+ * @param out
+ * @param value
+ */
 void appendU16(QByteArray &out, quint16 value)
 {
     out.append(static_cast<char>((value >> 8) & 0xff));
     out.append(static_cast<char>(value & 0xff));
 }
 
+/**
+ * @brief appendU32
+ * @param out
+ * @param value
+ */
 void appendU32(QByteArray &out, quint32 value)
 {
     for (int shift = 24; shift >= 0; shift -= 8) {
@@ -47,6 +62,11 @@ void appendU32(QByteArray &out, quint32 value)
     }
 }
 
+/**
+ * @brief appendU64
+ * @param out
+ * @param value
+ */
 void appendU64(QByteArray &out, quint64 value)
 {
     for (int shift = 56; shift >= 0; shift -= 8) {
@@ -54,6 +74,13 @@ void appendU64(QByteArray &out, quint64 value)
     }
 }
 
+/**
+ * @brief appendHex
+ * @param out
+ * @param hex
+ * @param expectedBytes
+ * @return
+ */
 bool appendHex(QByteArray &out, const QString &hex, int expectedBytes)
 {
     QByteArray bytes = QByteArray::fromHex(hex.toUtf8());
@@ -64,17 +91,33 @@ bool appendHex(QByteArray &out, const QString &hex, int expectedBytes)
     return true;
 }
 
+/**
+ * @brief uuidParts
+ * @param uuid
+ * @return
+ */
 QStringList uuidParts(const QString &uuid)
 {
     return uuid.trimmed().split(QLatin1Char('-'), Qt::SkipEmptyParts);
 }
 
+/**
+ * @brief appendUuid
+ * @param out
+ * @param uuid
+ * @return
+ */
 bool appendUuid(QByteArray &out, const QString &uuid)
 {
     const QString compact = uuidParts(uuid).join(QString());
     return appendHex(out, compact, 16);
 }
 
+/**
+ * @brief parseNanogrin
+ * @param amount
+ * @return
+ */
 quint64 parseNanogrin(const QString &amount)
 {
     const QString trimmed = amount.trimmed();
@@ -110,12 +153,22 @@ quint64 parseNanogrin(const QString &amount)
     return whole * 1000000000ULL + frac;
 }
 
+/**
+ * @brief encodeFeeFields
+ * @param fee
+ * @return
+ */
 quint64 encodeFeeFields(const QString &fee)
 {
     const quint64 parsedFee = parseNanogrin(fee);
     return (static_cast<quint64>(kFeeFieldsShift) << 40) | (parsedFee & kFeeFieldsMask);
 }
 
+/**
+ * @brief stageByte
+ * @param state
+ * @return
+ */
 quint8 stageByte(SlateV4::State state)
 {
     switch (state) {
@@ -131,6 +184,11 @@ quint8 stageByte(SlateV4::State state)
     }
 }
 
+/**
+ * @brief encodeBase58
+ * @param input
+ * @return
+ */
 QString encodeBase58(const QByteArray &input)
 {
     if (input.isEmpty()) {
@@ -161,6 +219,11 @@ QString encodeBase58(const QByteArray &input)
     return result;
 }
 
+/**
+ * @brief formatArmored
+ * @param data
+ * @return
+ */
 QString formatArmored(const QString &data)
 {
     QString out;
@@ -177,6 +240,11 @@ QString formatArmored(const QString &data)
     return out;
 }
 
+/**
+ * @brief randomBytes
+ * @param size
+ * @return
+ */
 QByteArray randomBytes(int size)
 {
     QByteArray data(size, Qt::Uninitialized);
@@ -186,6 +254,10 @@ QByteArray randomBytes(int size)
     return data;
 }
 
+/**
+ * @brief bech32CharsetReverse
+ * @return
+ */
 QVector<int> bech32CharsetReverse()
 {
     QVector<int> reverse(128, -1);
@@ -195,6 +267,14 @@ QVector<int> bech32CharsetReverse()
     return reverse;
 }
 
+/**
+ * @brief convertBitsToBytes
+ * @param data
+ * @param fromBits
+ * @param toBits
+ * @param pad
+ * @return
+ */
 QByteArray convertBitsToBytes(const QVector<int> &data, int fromBits, int toBits, bool pad)
 {
     QByteArray output;
@@ -227,6 +307,12 @@ QByteArray convertBitsToBytes(const QVector<int> &data, int fromBits, int toBits
     return output;
 }
 
+/**
+ * @brief decodeBech32Payload
+ * @param address
+ * @param hrpOut
+ * @return
+ */
 QByteArray decodeBech32Payload(const QString &address, QString *hrpOut = 0)
 {
     static const QVector<int> reverse = bech32CharsetReverse();
@@ -259,6 +345,14 @@ QByteArray decodeBech32Payload(const QString &address, QString *hrpOut = 0)
     return convertBitsToBytes(values, 5, 8, false);
 }
 
+/**
+ * @brief hkdfSha256
+ * @param ikm
+ * @param salt
+ * @param info
+ * @param outputLength
+ * @return
+ */
 QByteArray hkdfSha256(const QByteArray &ikm,
                       const QByteArray &salt,
                       const QByteArray &info,
@@ -281,6 +375,11 @@ QByteArray hkdfSha256(const QByteArray &ikm,
     return output;
 }
 
+/**
+ * @brief encodeBase64Raw
+ * @param input
+ * @return
+ */
 QString encodeBase64Raw(const QByteArray &input)
 {
     QByteArray encoded = input.toBase64(QByteArray::Base64Encoding);
@@ -290,6 +389,11 @@ QString encodeBase64Raw(const QByteArray &input)
     return QString::fromUtf8(encoded);
 }
 
+/**
+ * @brief formatWrappedBase64
+ * @param input
+ * @return
+ */
 QString formatWrappedBase64(const QByteArray &input)
 {
     const QString encoded = encodeBase64Raw(input);
@@ -301,6 +405,11 @@ QString formatWrappedBase64(const QByteArray &input)
     return wrapped;
 }
 
+/**
+ * @brief incrementStreamNonce
+ * @param nonce
+ * @return
+ */
 bool incrementStreamNonce(QByteArray *nonce)
 {
     if (!nonce || nonce->size() != 12) {
@@ -318,6 +427,13 @@ bool incrementStreamNonce(QByteArray *nonce)
 }
 
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
+
+/**
+ * @brief deriveX25519PublicKey
+ * @param privateKey
+ * @param publicKeyOut
+ * @return
+ */
 bool deriveX25519PublicKey(const QByteArray &privateKey, QByteArray *publicKeyOut)
 {
     if (!publicKeyOut || privateKey.size() != 32) {
@@ -331,6 +447,13 @@ bool deriveX25519PublicKey(const QByteArray &privateKey, QByteArray *publicKeyOu
     return true;
 }
 
+/**
+ * @brief deriveX25519SharedSecret
+ * @param privateKey
+ * @param peerPublicKey
+ * @param sharedSecretOut
+ * @return
+ */
 bool deriveX25519SharedSecret(const QByteArray &privateKey,
                               const QByteArray &peerPublicKey,
                               QByteArray *sharedSecretOut)
@@ -347,6 +470,14 @@ bool deriveX25519SharedSecret(const QByteArray &privateKey,
     return true;
 }
 
+/**
+ * @brief chacha20Poly1305Encrypt
+ * @param key
+ * @param nonce
+ * @param plaintext
+ * @param ciphertextOut
+ * @return
+ */
 bool chacha20Poly1305Encrypt(const QByteArray &key,
                              const QByteArray &nonce,
                              const QByteArray &plaintext,
@@ -374,6 +505,11 @@ bool chacha20Poly1305Encrypt(const QByteArray &key,
     return true;
 }
 
+/**
+ * @brief x25519SecretFromWalletSecret
+ * @param walletSecret
+ * @return
+ */
 QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
 {
     if (walletSecret.size() != 32) {
@@ -399,6 +535,12 @@ QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
     return scalar;
 }
 
+/**
+ * @brief recipientAddressToX25519
+ * @param recipientAddress
+ * @param x25519PublicOut
+ * @return
+ */
 bool recipientAddressToX25519(const QString &recipientAddress, QByteArray *x25519PublicOut)
 {
     if (!x25519PublicOut) {
@@ -423,6 +565,12 @@ bool recipientAddressToX25519(const QString &recipientAddress, QByteArray *x2551
     return true;
 }
 
+/**
+ * @brief buildEncryptedMetadata
+ * @param sender
+ * @param recipients
+ * @return
+ */
 QByteArray buildEncryptedMetadata(const QString &sender, const QStringList &recipients)
 {
     QByteArray metadata;
@@ -455,6 +603,16 @@ QByteArray buildEncryptedMetadata(const QString &sender, const QStringList &reci
     return packed;
 }
 
+/**
+ * @brief encryptAgePayload
+ * @param payload
+ * @param senderAddress
+ * @param recipients
+ * @param senderSecret
+ * @param encryptedOut
+ * @param errorOut
+ * @return
+ */
 bool encryptAgePayload(const QByteArray &payload,
                        const QString &senderAddress,
                        const QStringList &recipients,
@@ -586,6 +744,13 @@ bool encryptAgePayload(const QByteArray &payload,
 }
 #endif
 
+/**
+ * @brief serializeJsonEnvelope
+ * @param payload
+ * @param mode
+ * @param sender
+ * @return
+ */
 QByteArray serializeJsonEnvelope(const QByteArray &payload, int mode, const QString &sender)
 {
     QJsonObject envelope;
@@ -598,6 +763,13 @@ QByteArray serializeJsonEnvelope(const QByteArray &payload, int mode, const QStr
     return QJsonDocument(envelope).toJson(QJsonDocument::Compact);
 }
 
+/**
+ * @brief buildBinaryEnvelopeOptionalFields
+ * @param sender
+ * @param recipients
+ * @param flagsOut
+ * @return
+ */
 QByteArray buildBinaryEnvelopeOptionalFields(const QString &sender, const QStringList &recipients, quint16 *flagsOut)
 {
     quint16 flags = 0;
@@ -639,6 +811,12 @@ QByteArray buildBinaryEnvelopeOptionalFields(const QString &sender, const QStrin
     return fields;
 }
 
+/**
+ * @brief serializeSlate
+ * @param slate
+ * @param payloadOut
+ * @return
+ */
 bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
 {
     if (!payloadOut) {
@@ -732,6 +910,11 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     return true;
 }
 
+/**
+ * @brief armorPayload
+ * @param payload
+ * @return
+ */
 QString armorPayload(const QByteArray &payload)
 {
     const QByteArray checksum = QCryptographicHash::hash(
@@ -743,6 +926,16 @@ QString armorPayload(const QByteArray &payload)
 
 }
 
+/**
+ * @brief BinarySlateV4Writer::encodeSlatepack
+ * @param slate
+ * @param armoredOut
+ * @param errorOut
+ * @param sender
+ * @param recipients
+ * @param senderSecret
+ * @return
+ */
 bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
                                           QString *armoredOut,
                                           QString *errorOut,

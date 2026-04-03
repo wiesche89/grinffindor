@@ -6,21 +6,37 @@
 #include "grinwalletworkflowhelpers.h"
 #include "walletkeychain.h"
 
+// -------------------------------------------------------------------------------------------------------
+// Decoding And Validating Incoming Slatepacks
+// -------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief GrinWalletWorkflowService::currentSlatepackDecryptionKey
+ * @return
+ */
 QByteArray GrinWalletWorkflowService::currentSlatepackDecryptionKey() const
 {
-    if (!m_controller->m_walletUnlocked || m_controller->m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!m_controller->hasUnlockedSession()) {
         return QByteArray();
     }
 
-    const WalletKeychain keychain(m_controller->m_sessionMnemonic);
+    const WalletKeychain keychain(m_controller->sessionMnemonic());
     return keychain.isValid() ? keychain.slatepackSecretKey() : QByteArray();
 }
 
+/**
+ * @brief GrinWalletWorkflowService::decodeWorkflowSlatepack
+ * @param slatepack
+ * @param decodedOut
+ * @param documentOut
+ * @return
+ */
 bool GrinWalletWorkflowService::decodeWorkflowSlatepack(const QString &slatepack,
                                                         QString *decodedOut,
                                                         QJsonDocument *documentOut) const
 {
     const QString decoded =
+
         GrinWalletWorkflowHelpers::decodeIncomingSlatepack(slatepack, currentSlatepackDecryptionKey());
     if (decoded.isEmpty()) {
         m_controller->setLastError(QStringLiteral("Incoming Slatepack could not be decoded."));
@@ -63,6 +79,17 @@ bool GrinWalletWorkflowService::decodeWorkflowSlatepack(const QString &slatepack
     return true;
 }
 
+/**
+ * @brief GrinWalletWorkflowService::initializeWorkflowSlate
+ * @param slatepack
+ * @param slate
+ * @param incomingSlateOut
+ * @param workflowIdOut
+ * @param modeOut
+ * @param stateOut
+ * @param localRoleTagOut
+ * @return
+ */
 bool GrinWalletWorkflowService::initializeWorkflowSlate(const QString &slatepack,
                                                         SlateV4 *slate,
                                                         SlateV4 *incomingSlateOut,
@@ -99,6 +126,7 @@ bool GrinWalletWorkflowService::initializeWorkflowSlate(const QString &slatepack
 
     QString workflowId = parsedSlate.workflowId();
     const QString mode = parsedSlate.modeCode();
+
     const QString state = parsedSlate.stateCode();
     if (workflowId.isEmpty()) {
         const QString resolvedWorkflowId = m_controller->resolveWorkflowIdBySlateId(parsedSlate);
@@ -127,6 +155,7 @@ bool GrinWalletWorkflowService::initializeWorkflowSlate(const QString &slatepack
       : (state == QStringLiteral("S2")) ? QStringLiteral("sender")
       : (state == QStringLiteral("I1")) ? QStringLiteral("sender")
       : (state == QStringLiteral("I2")) ? QStringLiteral("receiver")
+
       : QString();
 
     if (localRoleTag.isEmpty()) {
@@ -135,6 +164,7 @@ bool GrinWalletWorkflowService::initializeWorkflowSlate(const QString &slatepack
     }
 
     if (localRoleTag == QStringLiteral("sender")
+
         && m_controller->workflowContext(workflowId).isEmpty()
         && !parsedSlate.id.trimmed().isEmpty()) {
         const QString resolvedWorkflowId = m_controller->resolveWorkflowIdBySlateId(parsedSlate);
@@ -165,6 +195,10 @@ bool GrinWalletWorkflowService::initializeWorkflowSlate(const QString &slatepack
     return true;
 }
 
+/**
+ * @brief GrinWalletWorkflowService::processWorkflowSlatepack
+ * @param slatepack
+ */
 void GrinWalletWorkflowService::processWorkflowSlatepack(const QString &slatepack)
 {
     m_controller->touchWalletSession();

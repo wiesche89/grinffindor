@@ -5,6 +5,11 @@
 
 namespace {
 
+/**
+ * @brief amountToNanogrin
+ * @param amount
+ * @return
+ */
 quint64 amountToNanogrin(const QString &amount)
 {
     const QString trimmed = amount.trimmed();
@@ -40,6 +45,12 @@ quint64 amountToNanogrin(const QString &amount)
     return whole * 1000000000ULL + frac;
 }
 
+/**
+ * @brief isSpendable
+ * @param output
+ * @param chainHeight
+ * @return
+ */
 bool isSpendable(const WalletOutput &output, qulonglong chainHeight)
 {
     if (output.spent || output.locked || !output.onChain || output.pending) {
@@ -66,6 +77,12 @@ bool isSpendable(const WalletOutput &output, qulonglong chainHeight)
     return true;
 }
 
+/**
+ * @brief isBetterCandidate
+ * @param candidate
+ * @param best
+ * @return
+ */
 bool isBetterCandidate(const WalletSelection::Result &candidate,
                        const WalletSelection::Result &best)
 {
@@ -93,11 +110,23 @@ bool isBetterCandidate(const WalletSelection::Result &candidate,
     return candidate.fee < best.fee;
 }
 
+/**
+ * @brief amountAscending
+ * @param left
+ * @param right
+ * @return
+ */
 bool amountAscending(const WalletOutput &left, const WalletOutput &right)
 {
     return amountToNanogrin(left.amount) < amountToNanogrin(right.amount);
 }
 
+/**
+ * @brief buildCandidate
+ * @param selectedOutputs
+ * @param amount
+ * @return
+ */
 WalletSelection::Result buildCandidate(const QList<WalletOutput> &selectedOutputs,
                                        quint64 amount)
 {
@@ -136,6 +165,12 @@ WalletSelection::Result buildCandidate(const QList<WalletOutput> &selectedOutput
     return result;
 }
 
+/**
+ * @brief considerAccumulatedCandidates
+ * @param orderedCandidates
+ * @param amount
+ * @param bestResult
+ */
 void considerAccumulatedCandidates(const QList<WalletOutput> &orderedCandidates,
                                    quint64 amount,
                                    WalletSelection::Result *bestResult)
@@ -165,6 +200,13 @@ void considerAccumulatedCandidates(const QList<WalletOutput> &orderedCandidates,
 
 }
 
+/**
+ * @brief WalletSelection::estimateFee
+ * @param numInputs
+ * @param numOutputs
+ * @param numKernels
+ * @return
+ */
 quint64 WalletSelection::estimateFee(int numInputs, int numOutputs, int numKernels)
 {
     const quint64 weight = static_cast<quint64>(numInputs) * 1ULL
@@ -173,6 +215,13 @@ quint64 WalletSelection::estimateFee(int numInputs, int numOutputs, int numKerne
     return weight * 500000ULL;
 }
 
+/**
+ * @brief WalletSelection::selectSpendableOutputs
+ * @param outputs
+ * @param amount
+ * @param chainHeight
+ * @return
+ */
 WalletSelection::Result WalletSelection::selectSpendableOutputs(const QList<WalletOutput> &outputs,
                                                                 quint64 amount,
                                                                 qulonglong chainHeight)
@@ -200,6 +249,7 @@ WalletSelection::Result WalletSelection::selectSpendableOutputs(const QList<Wall
     QList<WalletOutput> descendingCandidates = candidates;
     std::reverse(descendingCandidates.begin(), descendingCandidates.end());
     considerAccumulatedCandidates(descendingCandidates, amount, &result);
+
     considerAccumulatedCandidates(candidates, amount, &result);
 
     if (result.success) {

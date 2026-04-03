@@ -21,6 +21,11 @@ const int kSeedCipherArgon2Lanes = 1;
 const int kSeedCipherKeyBytes = 32;
 const int kSeedCipherMacBytes = 16;
 
+/**
+ * @brief randomBytes
+ * @param size
+ * @return
+ */
 QByteArray randomBytes(int size)
 {
     QByteArray data(size, Qt::Uninitialized);
@@ -30,6 +35,10 @@ QByteArray randomBytes(int size)
     return data;
 }
 
+/**
+ * @brief mnemonicWords
+ * @return
+ */
 QStringList &mnemonicWords()
 {
     static QStringList words;
@@ -52,6 +61,11 @@ QStringList &mnemonicWords()
     return words;
 }
 
+/**
+ * @brief bitsFromBytes
+ * @param bytes
+ * @return
+ */
 QByteArray bitsFromBytes(const QByteArray &bytes)
 {
     QByteArray bits;
@@ -65,6 +79,11 @@ QByteArray bitsFromBytes(const QByteArray &bytes)
     return bits;
 }
 
+/**
+ * @brief bytesFromBits
+ * @param bits
+ * @return
+ */
 QByteArray bytesFromBits(const QByteArray &bits)
 {
     QByteArray bytes;
@@ -79,6 +98,11 @@ QByteArray bytesFromBits(const QByteArray &bits)
     return bytes;
 }
 
+/**
+ * @brief mnemonicFromEntropy
+ * @param entropy
+ * @return
+ */
 QString mnemonicFromEntropy(const QByteArray &entropy)
 {
     const QStringList &words = mnemonicWords();
@@ -102,6 +126,12 @@ QString mnemonicFromEntropy(const QByteArray &entropy)
     return mnemonic.join(QStringLiteral(" "));
 }
 
+/**
+ * @brief entropyFromMnemonic
+ * @param mnemonic
+ * @param entropyOut
+ * @return
+ */
 bool entropyFromMnemonic(const QString &mnemonic, QByteArray *entropyOut)
 {
     const QString normalized = GrinWalletSeedCrypto::normalizeMnemonic(mnemonic);
@@ -140,6 +170,12 @@ bool entropyFromMnemonic(const QString &mnemonic, QByteArray *entropyOut)
     return true;
 }
 
+/**
+ * @brief deriveLegacyKeyMaterial
+ * @param password
+ * @param salt
+ * @return
+ */
 QByteArray deriveLegacyKeyMaterial(const QString &password, const QByteArray &salt)
 {
     const QByteArray material = password.toUtf8() + salt;
@@ -150,6 +186,13 @@ QByteArray deriveLegacyKeyMaterial(const QString &password, const QByteArray &sa
     return digest;
 }
 
+/**
+ * @brief xorStream
+ * @param data
+ * @param key
+ * @param nonce
+ * @return
+ */
 QByteArray xorStream(const QByteArray &data, const QByteArray &key, const QByteArray &nonce)
 {
     QByteArray output(data.size(), Qt::Uninitialized);
@@ -166,6 +209,14 @@ QByteArray xorStream(const QByteArray &data, const QByteArray &key, const QByteA
     return output;
 }
 
+/**
+ * @brief deriveKeyMaterialV2
+ * @param password
+ * @param salt
+ * @param iterations
+ * @param outputLength
+ * @return
+ */
 QByteArray deriveKeyMaterialV2(const QString &password, const QByteArray &salt, int iterations, int outputLength)
 {
     const QByteArray material = password.toUtf8() + salt;
@@ -188,6 +239,15 @@ QByteArray deriveKeyMaterialV2(const QString &password, const QByteArray &salt, 
     return output;
 }
 
+/**
+ * @brief deriveKeyMaterialV3
+ * @param password
+ * @param salt
+ * @param blocks
+ * @param passes
+ * @param keyOut
+ * @return
+ */
 bool deriveKeyMaterialV3(const QString &password,
                          const QByteArray &salt,
                          int blocks,
@@ -234,11 +294,20 @@ bool deriveKeyMaterialV3(const QString &password,
 
 } // namespace
 
+/**
+ * @brief GrinWalletSeedCrypto::generateMnemonic
+ * @return
+ */
 QString GrinWalletSeedCrypto::generateMnemonic()
 {
     return mnemonicFromEntropy(randomBytes(kMnemonicEntropyBytes));
 }
 
+/**
+ * @brief GrinWalletSeedCrypto::normalizeMnemonic
+ * @param mnemonic
+ * @return
+ */
 QString GrinWalletSeedCrypto::normalizeMnemonic(const QString &mnemonic)
 {
     QString normalized = mnemonic.toLower().trimmed();
@@ -246,11 +315,22 @@ QString GrinWalletSeedCrypto::normalizeMnemonic(const QString &mnemonic)
     return normalized;
 }
 
+/**
+ * @brief GrinWalletSeedCrypto::isValidMnemonic
+ * @param mnemonic
+ * @return
+ */
 bool GrinWalletSeedCrypto::isValidMnemonic(const QString &mnemonic)
 {
     return entropyFromMnemonic(mnemonic, 0);
 }
 
+/**
+ * @brief GrinWalletSeedCrypto::encryptMnemonic
+ * @param mnemonic
+ * @param password
+ * @return
+ */
 QJsonObject GrinWalletSeedCrypto::encryptMnemonic(const QString &mnemonic, const QString &password)
 {
     const QByteArray salt = randomBytes(16);
@@ -291,6 +371,13 @@ QJsonObject GrinWalletSeedCrypto::encryptMnemonic(const QString &mnemonic, const
     return encrypted;
 }
 
+/**
+ * @brief GrinWalletSeedCrypto::decryptMnemonic
+ * @param encrypted
+ * @param password
+ * @param mnemonicOut
+ * @return
+ */
 bool GrinWalletSeedCrypto::decryptMnemonic(const QJsonObject &encrypted,
                                            const QString &password,
                                            QString *mnemonicOut)
@@ -299,6 +386,7 @@ bool GrinWalletSeedCrypto::decryptMnemonic(const QJsonObject &encrypted,
     const QByteArray salt = QByteArray::fromBase64(encrypted.value(QStringLiteral("salt")).toString().toUtf8());
     const QByteArray nonce = QByteArray::fromBase64(encrypted.value(QStringLiteral("nonce")).toString().toUtf8());
     const QByteArray cipher = QByteArray::fromBase64(encrypted.value(QStringLiteral("cipher")).toString().toUtf8());
+
     const QByteArray mac = QByteArray::fromBase64(encrypted.value(QStringLiteral("mac")).toString().toUtf8());
 
     if (version >= kSeedCipherVersion) {
@@ -356,6 +444,7 @@ bool GrinWalletSeedCrypto::decryptMnemonic(const QJsonObject &encrypted,
     }
 
     const QByteArray expectedMac =
+
         QCryptographicHash::hash(macKey + nonce + cipher + macKey, QCryptographicHash::Sha256);
     if (expectedMac != mac) {
         return false;
@@ -371,6 +460,11 @@ bool GrinWalletSeedCrypto::decryptMnemonic(const QJsonObject &encrypted,
     return true;
 }
 
+/**
+ * @brief GrinWalletSeedCrypto::seedFingerprint
+ * @param mnemonic
+ * @return
+ */
 QString GrinWalletSeedCrypto::seedFingerprint(const QString &mnemonic)
 {
     return QString::fromUtf8(

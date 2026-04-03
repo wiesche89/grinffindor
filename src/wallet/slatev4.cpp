@@ -3,10 +3,15 @@
 #include <QJsonDocument>
 #include <QUuid>
 
+/**
+ * @brief SlateV4::ParticipantData::toJson
+ * @return
+ */
 QJsonObject SlateV4::ParticipantData::toJson() const
 {
     QJsonObject json;
     json.insert(QStringLiteral("xs"), xs);
+
     json.insert(QStringLiteral("nonce"), nonce);
     if (!part.isEmpty()) {
         json.insert(QStringLiteral("part"), part);
@@ -14,6 +19,11 @@ QJsonObject SlateV4::ParticipantData::toJson() const
     return json;
 }
 
+/**
+ * @brief SlateV4::ParticipantData::fromJson
+ * @param json
+ * @return
+ */
 SlateV4::ParticipantData SlateV4::ParticipantData::fromJson(const QJsonObject &json)
 {
     ParticipantData data;
@@ -23,10 +33,15 @@ SlateV4::ParticipantData SlateV4::ParticipantData::fromJson(const QJsonObject &j
     return data;
 }
 
+/**
+ * @brief SlateV4::PaymentProof::toJson
+ * @return
+ */
 QJsonObject SlateV4::PaymentProof::toJson() const
 {
     QJsonObject json;
     json.insert(QStringLiteral("saddr"), senderAddress);
+
     json.insert(QStringLiteral("raddr"), receiverAddress);
     if (!receiverSignature.isEmpty()) {
         json.insert(QStringLiteral("rsig"), receiverSignature);
@@ -34,6 +49,11 @@ QJsonObject SlateV4::PaymentProof::toJson() const
     return json;
 }
 
+/**
+ * @brief SlateV4::PaymentProof::fromJson
+ * @param json
+ * @return
+ */
 SlateV4::PaymentProof SlateV4::PaymentProof::fromJson(const QJsonObject &json)
 {
     PaymentProof proof;
@@ -43,12 +63,17 @@ SlateV4::PaymentProof SlateV4::PaymentProof::fromJson(const QJsonObject &json)
     return proof;
 }
 
+/**
+ * @brief SlateV4::Commit::toJson
+ * @return
+ */
 QJsonObject SlateV4::Commit::toJson() const
 {
     QJsonObject json;
     if (feature != 0) {
         json.insert(QStringLiteral("f"), feature);
     }
+
     json.insert(QStringLiteral("c"), commitment);
     if (!proof.isEmpty()) {
         json.insert(QStringLiteral("p"), proof);
@@ -56,6 +81,11 @@ QJsonObject SlateV4::Commit::toJson() const
     return json;
 }
 
+/**
+ * @brief SlateV4::Commit::fromJson
+ * @param json
+ * @return
+ */
 SlateV4::Commit SlateV4::Commit::fromJson(const QJsonObject &json)
 {
     Commit commit;
@@ -65,6 +95,9 @@ SlateV4::Commit SlateV4::Commit::fromJson(const QJsonObject &json)
     return commit;
 }
 
+/**
+ * @brief SlateV4::SlateV4
+ */
 SlateV4::SlateV4() :
     state(Unknown),
     numParticipants(2),
@@ -74,6 +107,10 @@ SlateV4::SlateV4() :
     id = QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
 
+/**
+ * @brief SlateV4::stateCode
+ * @return
+ */
 QString SlateV4::stateCode() const
 {
     switch (state) {
@@ -89,11 +126,19 @@ QString SlateV4::stateCode() const
     }
 }
 
+/**
+ * @brief SlateV4::versionCode
+ * @return
+ */
 QString SlateV4::versionCode() const
 {
     return QStringLiteral("%1:%2").arg(ver.slateVersion).arg(ver.blockHeaderVersion);
 }
 
+/**
+ * @brief SlateV4::modeCode
+ * @return
+ */
 QString SlateV4::modeCode() const
 {
     if (state == Invoice1 || state == Invoice2 || state == Invoice3) {
@@ -105,31 +150,54 @@ QString SlateV4::modeCode() const
     return QStringLiteral("unknown");
 }
 
+/**
+ * @brief SlateV4::isFinalState
+ * @return
+ */
 bool SlateV4::isFinalState() const
 {
     return state == Standard3 || state == Invoice3;
 }
 
+/**
+ * @brief SlateV4::workflowId
+ * @return
+ */
 QString SlateV4::workflowId() const
 {
     return metadata.value(QStringLiteral("workflow_id")).toString();
 }
 
+/**
+ * @brief SlateV4::note
+ * @return
+ */
 QString SlateV4::note() const
 {
     return metadata.value(QStringLiteral("note")).toString();
 }
 
+/**
+ * @brief SlateV4::network
+ * @return
+ */
 QString SlateV4::network() const
 {
     return metadata.value(QStringLiteral("network")).toString();
 }
 
+/**
+ * @brief SlateV4::setStateFromCode
+ * @param code
+ */
 void SlateV4::setStateFromCode(const QString &code)
 {
     state = stateFromCode(code);
 }
 
+/**
+ * @brief SlateV4::advanceState
+ */
 void SlateV4::advanceState()
 {
     switch (state) {
@@ -141,11 +209,16 @@ void SlateV4::advanceState()
     }
 }
 
+/**
+ * @brief SlateV4::toJson
+ * @return
+ */
 QJsonObject SlateV4::toJson() const
 {
     QJsonObject json;
     json.insert(QStringLiteral("ver"), versionCode());
     json.insert(QStringLiteral("id"), id);
+
     json.insert(QStringLiteral("sta"), stateCode());
     if (!offset.isEmpty()) {
         json.insert(QStringLiteral("off"), offset);
@@ -170,6 +243,7 @@ QJsonObject SlateV4::toJson() const
     for (int i = 0; i < signatures.size(); ++i) {
         sigs.append(signatures.at(i).toJson());
     }
+
     json.insert(QStringLiteral("sigs"), sigs);
 
     if (!commitments.isEmpty()) {
@@ -191,12 +265,18 @@ QJsonObject SlateV4::toJson() const
     return json;
 }
 
+/**
+ * @brief SlateV4::fromJson
+ * @param json
+ * @return
+ */
 SlateV4 SlateV4::fromJson(const QJsonObject &json)
 {
     SlateV4 slate;
     slate.id = json.value(QStringLiteral("id")).toString();
 
     const QString verCode = json.value(QStringLiteral("ver")).toString(QStringLiteral("4:3"));
+
     const QStringList verParts = verCode.split(QLatin1Char(':'));
     if (verParts.size() == 2) {
         slate.ver.slateVersion = verParts.at(0).toInt();
@@ -255,12 +335,22 @@ SlateV4 SlateV4::fromJson(const QJsonObject &json)
     return slate;
 }
 
+/**
+ * @brief SlateV4::fromJsonString
+ * @param json
+ * @return
+ */
 SlateV4 SlateV4::fromJsonString(const QString &json)
 {
     const QJsonDocument document = QJsonDocument::fromJson(json.toUtf8());
     return document.isObject() ? fromJson(document.object()) : SlateV4();
 }
 
+/**
+ * @brief SlateV4::stateFromCode
+ * @param code
+ * @return
+ */
 SlateV4::State SlateV4::stateFromCode(const QString &code)
 {
     if (code == QStringLiteral("S1")) return Standard1;

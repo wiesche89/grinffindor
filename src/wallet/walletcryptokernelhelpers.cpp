@@ -15,22 +15,46 @@
 namespace
 {
 
+/**
+ * @brief inputSortKey
+ * @param input
+ * @return
+ */
 QString inputSortKey(const Input &input)
 {
     return WalletCryptoKernelHelpers::inputOrderHash(input);
 }
 
+/**
+ * @brief outputSortKey
+ * @param output
+ * @return
+ */
 QString outputSortKey(const Output &output)
 {
     return WalletCryptoKernelHelpers::outputOrderHash(output);
 }
 
+/**
+ * @brief kernelSortKey
+ * @param kernel
+ * @return
+ */
 QString kernelSortKey(const TxKernel &kernel)
 {
     return WalletCryptoKernelHelpers::kernelOrderHash(kernel);
 }
 
 template <typename Item>
+
+/**
+ * @brief verifySortedAndUnique
+ * @param items
+ * @param )
+ * @param label
+ * @param errorOut
+ * @return
+ */
 bool verifySortedAndUnique(const QVector<Item> &items,
                            QString (*keyFn)(const Item &),
                            const QString &label,
@@ -72,6 +96,11 @@ bool verifySortedAndUnique(const QVector<Item> &items,
 namespace WalletCryptoKernelHelpers
 {
 
+/**
+ * @brief inputOrderHash
+ * @param input
+ * @return
+ */
 QString inputOrderHash(const Input &input)
 {
     QByteArray serialized;
@@ -83,6 +112,11 @@ QString inputOrderHash(const Input &input)
     return QString::fromUtf8(WalletBlake2b::hash256(serialized).toHex());
 }
 
+/**
+ * @brief outputOrderHash
+ * @param output
+ * @return
+ */
 QString outputOrderHash(const Output &output)
 {
     QByteArray serialized;
@@ -96,6 +130,11 @@ QString outputOrderHash(const Output &output)
     return QString::fromUtf8(WalletBlake2b::hash256(serialized).toHex());
 }
 
+/**
+ * @brief kernelOrderHash
+ * @param kernel
+ * @return
+ */
 QString kernelOrderHash(const TxKernel &kernel)
 {
     QByteArray serialized;
@@ -112,6 +151,12 @@ QString kernelOrderHash(const TxKernel &kernel)
     return QString::fromUtf8(WalletBlake2b::hash256(serialized).toHex());
 }
 
+/**
+ * @brief validateTransactionKernelSums
+ * @param tx
+ * @param errorOut
+ * @return
+ */
 bool validateTransactionKernelSums(const Transaction &tx, QString *errorOut)
 {
     const TransactionBody body = tx.body();
@@ -313,6 +358,12 @@ bool validateTransactionKernelSums(const Transaction &tx, QString *errorOut)
     return true;
 }
 
+/**
+ * @brief validateTransactionBody
+ * @param tx
+ * @param errorOut
+ * @return
+ */
 bool validateTransactionBody(const Transaction &tx, QString *errorOut)
 {
     const TransactionBody body = tx.body();
@@ -395,6 +446,12 @@ bool validateTransactionBody(const Transaction &tx, QString *errorOut)
     return true;
 }
 
+/**
+ * @brief validateTransactionKernelSignatures
+ * @param tx
+ * @param errorOut
+ * @return
+ */
 bool validateTransactionKernelSignatures(const Transaction &tx, QString *errorOut)
 {
     const QVector<TxKernel> kernels = tx.body().kernels();

@@ -11,6 +11,12 @@ namespace
 {
 const char kBase58Alphabet[] = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
+/**
+ * @brief compactCommitLessThan
+ * @param left
+ * @param right
+ * @return
+ */
 bool compactCommitLessThan(const SlateV4::Commit &left, const SlateV4::Commit &right)
 {
     const QByteArray leftBytes = QByteArray::fromHex(left.commitment.toUtf8());
@@ -21,6 +27,11 @@ bool compactCommitLessThan(const SlateV4::Commit &left, const SlateV4::Commit &r
     return left.commitment < right.commitment;
 }
 
+/**
+ * @brief encodeBase58
+ * @param input
+ * @return
+ */
 QString encodeBase58(const QByteArray &input)
 {
     if (input.isEmpty()) {
@@ -51,6 +62,11 @@ QString encodeBase58(const QByteArray &input)
     return result;
 }
 
+/**
+ * @brief decodeBase58
+ * @param text
+ * @return
+ */
 QByteArray decodeBase58(const QString &text)
 {
     QByteArray output;
@@ -86,6 +102,11 @@ QByteArray decodeBase58(const QString &text)
     return output;
 }
 
+/**
+ * @brief formatArmored
+ * @param data
+ * @return
+ */
 QString formatArmored(const QString &data)
 {
     QString out;
@@ -103,8 +124,14 @@ QString formatArmored(const QString &data)
 }
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::amountToNanogrin
+ * @param amount
+ * @return
+ */
 quint64 GrinWalletWorkflowHelpers::amountToNanogrin(const QString &amount)
 {
+
     const QString trimmed = amount.trimmed();
     if (trimmed.isEmpty()) {
         return 0;
@@ -116,6 +143,7 @@ quint64 GrinWalletWorkflowHelpers::amountToNanogrin(const QString &amount)
     }
 
     bool wholeOk = false;
+
     const quint64 whole = parts.at(0).toULongLong(&wholeOk);
     if (!wholeOk) {
         return 0;
@@ -130,6 +158,7 @@ quint64 GrinWalletWorkflowHelpers::amountToNanogrin(const QString &amount)
     }
 
     bool fracOk = false;
+
     const quint64 frac = fractional.isEmpty() ? 0 : fractional.toULongLong(&fracOk);
     if (!fractional.isEmpty() && !fracOk) {
         return 0;
@@ -138,6 +167,11 @@ quint64 GrinWalletWorkflowHelpers::amountToNanogrin(const QString &amount)
     return whole * 1000000000ULL + frac;
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::formatNanogrin
+ * @param amount
+ * @return
+ */
 QString GrinWalletWorkflowHelpers::formatNanogrin(quint64 amount)
 {
     return QStringLiteral("%1.%2")
@@ -145,6 +179,12 @@ QString GrinWalletWorkflowHelpers::formatNanogrin(quint64 amount)
         .arg(QString::number(amount % 1000000000ULL), 9, QLatin1Char('0'));
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::findTrackedOutputByCommitment
+ * @param outputs
+ * @param commitment
+ * @return
+ */
 WalletOutput GrinWalletWorkflowHelpers::findTrackedOutputByCommitment(const QList<WalletOutput> &outputs,
                                                                       const QString &commitment)
 {
@@ -156,16 +196,24 @@ WalletOutput GrinWalletWorkflowHelpers::findTrackedOutputByCommitment(const QLis
     return WalletOutput();
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::normalizedTrackedOutput
+ * @param output
+ * @param keychain
+ * @return
+ */
 WalletOutput GrinWalletWorkflowHelpers::normalizedTrackedOutput(const WalletOutput &output,
                                                                const WalletKeychain &keychain)
 {
     if (!keychain.isValid()
+
         || output.keyPath.isEmpty()
         || !output.keyPath.startsWith(QStringLiteral("m/0/0/"))) {
         return output;
     }
 
     const WalletKeychain::OutputSecrets secrets =
+
         keychain.deriveOutputSecrets(output.childIndex, amountToNanogrin(output.amount));
     if (!secrets.success) {
         return output;
@@ -176,16 +224,32 @@ WalletOutput GrinWalletWorkflowHelpers::normalizedTrackedOutput(const WalletOutp
     return normalized;
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::invoiceContextKey
+ * @param suffix
+ * @return
+ */
 QString GrinWalletWorkflowHelpers::invoiceContextKey(const QString &suffix)
 {
     return QStringLiteral("invoice_context_%1").arg(suffix);
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::standardContextKey
+ * @param suffix
+ * @return
+ */
 QString GrinWalletWorkflowHelpers::standardContextKey(const QString &suffix)
 {
     return QStringLiteral("standard_context_%1").arg(suffix);
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::participantContextFromJson
+ * @param json
+ * @param role
+ * @return
+ */
 WalletCryptoBackend::ParticipantContext GrinWalletWorkflowHelpers::participantContextFromJson(
     const QJsonObject &json,
     const QString &role)
@@ -199,6 +263,11 @@ WalletCryptoBackend::ParticipantContext GrinWalletWorkflowHelpers::participantCo
     return context;
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::participantContextToJson
+ * @param context
+ * @return
+ */
 QJsonObject GrinWalletWorkflowHelpers::participantContextToJson(
     const WalletCryptoBackend::ParticipantContext &context)
 {
@@ -210,6 +279,11 @@ QJsonObject GrinWalletWorkflowHelpers::participantContextToJson(
     return json;
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::sortedCompactCommitments
+ * @param commits
+ * @return
+ */
 QList<SlateV4::Commit> GrinWalletWorkflowHelpers::sortedCompactCommitments(
     const QList<SlateV4::Commit> &commits)
 {
@@ -231,6 +305,12 @@ QList<SlateV4::Commit> GrinWalletWorkflowHelpers::sortedCompactCommitments(
     return ordered;
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::encodeSlatepackArmor
+ * @param payloadJson
+ * @param sender
+ * @return
+ */
 QString GrinWalletWorkflowHelpers::encodeSlatepackArmor(const QString &payloadJson, const QString &sender)
 {
     QJsonObject envelope;
@@ -238,6 +318,7 @@ QString GrinWalletWorkflowHelpers::encodeSlatepackArmor(const QString &payloadJs
     version.insert(QStringLiteral("major"), 1);
     version.insert(QStringLiteral("minor"), 0);
     envelope.insert(QStringLiteral("slatepack"), version);
+
     envelope.insert(QStringLiteral("mode"), 0);
     if (!sender.trimmed().isEmpty()) {
         envelope.insert(QStringLiteral("sender"), sender.trimmed());
@@ -254,6 +335,12 @@ QString GrinWalletWorkflowHelpers::encodeSlatepackArmor(const QString &payloadJs
 
 namespace
 {
+
+/**
+ * @brief userFacingSlatepackParseNote
+ * @param parseError
+ * @return
+ */
 QString userFacingSlatepackParseNote(const QString &parseError)
 {
     const QString trimmed = parseError.trimmed();
@@ -277,6 +364,13 @@ QString userFacingSlatepackParseNote(const QString &parseError)
     return trimmed;
 }
 
+/**
+ * @brief buildSlatepackDiagnostic
+ * @param kind
+ * @param payload
+ * @param note
+ * @return
+ */
 QString buildSlatepackDiagnostic(const QString &kind,
                                  const QByteArray &payload,
                                  const QString &note)
@@ -290,7 +384,13 @@ QString buildSlatepackDiagnostic(const QString &kind,
     return QString::fromUtf8(QJsonDocument(diagnostic).toJson(QJsonDocument::Indented));
 }
 
-QString decodeSlatepackArmor(const QString &slatepack)
+/**
+ * @brief decodeSlatepackArmor
+ * @param slatepack
+ * @param decryptionKey
+ * @return
+ */
+QString decodeSlatepackArmor(const QString &slatepack, const QByteArray &decryptionKey)
 {
     QString cleaned = slatepack;
     cleaned.remove(QRegularExpression(QStringLiteral("[>\\n\\r\\t ]")));
@@ -317,16 +417,23 @@ QString decodeSlatepackArmor(const QString &slatepack)
 
     QString decodedPayload;
     QString parseError;
-    if (!BinarySlateV4Reader::decodeSlatepackPayload(payload, QByteArray(), &decodedPayload, &parseError)) {
+    if (!BinarySlateV4Reader::decodeSlatepackPayload(payload, decryptionKey, &decodedPayload, &parseError)) {
         return buildSlatepackDiagnostic(QStringLiteral("armored"), payload, parseError);
     }
     return decodedPayload;
 }
 }
 
+/**
+ * @brief GrinWalletWorkflowHelpers::decodeIncomingSlatepack
+ * @param input
+ * @param decryptionKey
+ * @return
+ */
 QString GrinWalletWorkflowHelpers::decodeIncomingSlatepack(const QString &input,
                                                            const QByteArray &decryptionKey)
 {
+
     const QString trimmed = input.trimmed();
     if (trimmed.isEmpty()) {
         return QString();
@@ -349,7 +456,7 @@ QString GrinWalletWorkflowHelpers::decodeIncomingSlatepack(const QString &input,
         }
     }
 
-    const QString armored = decodeSlatepackArmor(trimmed);
+    const QString armored = decodeSlatepackArmor(trimmed, decryptionKey);
     if (!armored.isEmpty()) {
         return armored;
     }
@@ -357,6 +464,7 @@ QString GrinWalletWorkflowHelpers::decodeIncomingSlatepack(const QString &input,
     QString decodedPayload;
     QString parseError;
     if (BinarySlateV4Reader::decodeSlatepackPayload(
+
             trimmed.toUtf8(), decryptionKey, &decodedPayload, &parseError)) {
         return decodedPayload;
     }

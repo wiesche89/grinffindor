@@ -1,5 +1,9 @@
 #include "walletoutput.h"
 
+/**
+ * @brief WalletOutput::toJson
+ * @return
+ */
 QJsonObject WalletOutput::toJson() const
 {
     QJsonObject json;
@@ -20,6 +24,11 @@ QJsonObject WalletOutput::toJson() const
     return json;
 }
 
+/**
+ * @brief WalletOutput::fromJson
+ * @param json
+ * @return
+ */
 WalletOutput WalletOutput::fromJson(const QJsonObject &json)
 {
     WalletOutput output;
@@ -45,6 +54,7 @@ WalletOutput WalletOutput::fromJson(const QJsonObject &json)
         && output.height > 0
         && !output.pending
         && !output.locked
+
         && !output.commitment.isEmpty()) {
         output.onChain = true;
     }

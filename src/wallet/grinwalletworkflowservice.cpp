@@ -12,12 +12,27 @@
 #include <QDateTime>
 #include <QJsonDocument>
 
+/**
+ * @brief GrinWalletWorkflowService::GrinWalletWorkflowService
+ * @param controller
+ */
 GrinWalletWorkflowService::GrinWalletWorkflowService(GrinWalletController *controller)
     : QObject(controller)
     , m_controller(controller)
 {
 }
 
+// -------------------------------------------------------------------------------------------------------
+// Processing Workflow Slatepack State
+// -------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief GrinWalletWorkflowService::populatePaymentProofAddresses
+ * @param slate
+ * @param mode
+ * @param localRoleTag
+ * @param localPaymentProofAddress
+ */
 void GrinWalletWorkflowService::populatePaymentProofAddresses(
     SlateV4 *slate,
     const QString &mode,
@@ -42,6 +57,14 @@ void GrinWalletWorkflowService::populatePaymentProofAddresses(
 }
 
 
+/**
+ * @brief GrinWalletWorkflowService::continueProcessWorkflowSlatepack
+ * @param slate
+ * @param workflowId
+ * @param mode
+ * @param state
+ * @param localRoleTag
+ */
 void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
                                                                  const QString &workflowId,
                                                                  const QString &mode,
@@ -137,7 +160,7 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
             && !receiveOutput.blindingFactor.trimmed().isEmpty()) {
             WalletCryptoBackend::ParticipantContext receiverContextFromBlind =
                 WalletCryptoBackend::createParticipantFromBlindSecret(receiveOutput.blindingFactor,
-                                                                      m_controller->m_seedFingerprint,
+                                                                      m_controller->seedFingerprint(),
                                                                       workflowId,
                                                                       QStringLiteral("receiver"));
             if (!receiverContextFromBlind.blindSecret.isEmpty()
@@ -152,12 +175,12 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
         if (mode == QStringLiteral("invoice") && state == QStringLiteral("I2")) {
             WalletCryptoBackend::ParticipantContext receiverContext =
                 WalletCryptoBackend::createParticipantFromBlindSecret(receiveOutput.blindingFactor,
-                                                                      m_controller->m_seedFingerprint,
+                                                                      m_controller->seedFingerprint(),
                                                                       workflowId,
                                                                       QStringLiteral("receiver"));
             if (receiverContext.blindSecret.isEmpty()) {
                 receiverContext = WalletCryptoBackend::createParticipant(
-                    m_controller->m_seedFingerprint, workflowId, QStringLiteral("receiver"));
+                    m_controller->seedFingerprint(), workflowId, QStringLiteral("receiver"));
             }
             if (!receiveOutput.blindingFactor.isEmpty() && !receiverContext.blindSecret.isEmpty()) {
                 QString offsetError;
@@ -173,7 +196,7 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
     }
 
     if (!WalletCryptoBackend::applyRound2Signature(slate,
-                                                   m_controller->m_seedFingerprint,
+                                                   m_controller->seedFingerprint(),
                                                    localRoleTag,
                                                    signatureOverride,
                                                    &cryptoError)) {
@@ -229,15 +252,16 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
     }
 
     if (mode == QStringLiteral("send")
+
         && state == QStringLiteral("S1")
         && localRoleTag == QStringLiteral("receiver")) {
         m_controller->compactStandardSlateForReturn(workflowId, slate);
     }
 
     if (localRoleTag == QStringLiteral("receiver")
-        && m_controller->m_walletUnlocked
-        && !m_controller->m_sessionMnemonic.trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_controller->m_sessionMnemonic);
+
+        && m_controller->hasUnlockedSession()) {
+        const WalletKeychain keychain(m_controller->sessionMnemonic());
         if (keychain.isValid()
             && !WalletCryptoBackend::signPaymentProof(slate, keychain, &cryptoError)
             && slate->hasPaymentProof) {
@@ -249,13 +273,15 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
     const QString nextState = slate->stateCode();
     const bool externalBinary = slate->metadata.value(QStringLiteral("external_binary")).toBool();
     const bool compactExternalInvoiceI2 =
+
         externalBinary && nextState == QStringLiteral("I2") && mode == QStringLiteral("invoice");
     if (!compactExternalInvoiceI2) {
-        slate->metadata.insert(QStringLiteral("processed_by"), m_controller->m_walletName);
+        slate->metadata.insert(QStringLiteral("processed_by"), m_controller->walletName());
         slate->metadata.insert(QStringLiteral("processed_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
     }
 
     if ((nextState == QStringLiteral("S3") || nextState == QStringLiteral("I3"))
+
         && !WalletCryptoBackend::finalizeSlate(slate, &cryptoError)) {
         m_controller->setLastError(cryptoError.isEmpty()
                                        ? QStringLiteral("Failed to finalize slate signature.")
@@ -352,6 +378,7 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
                                               &cryptoError,
                                               outgoingSender,
                                               outgoingRecipients,
+
                                               m_controller->currentSlatepackSecret())) {
         if (externalBinary) {
             m_controller->setLastError(cryptoError.isEmpty()
@@ -369,10 +396,11 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
         externalBinary
         && (nextState == QStringLiteral("I3") || nextState == QStringLiteral("S3"))
         && slate->metadata.value(QStringLiteral("tx_ready")).toBool()
+
         && slate->metadata.value(QStringLiteral("tx_skeleton")).isObject();
     if (autoBroadcastExternalFinal) {
         m_controller->broadcastCurrentWorkflowTransaction();
-        if (!m_controller->m_pendingBroadcastWorkflowId.isEmpty()) {
+        if (m_controller->hasPendingBroadcastWorkflow()) {
             m_controller->setLastInfo(
                 QStringLiteral("Workflow %1 advanced to %2 and is being broadcast to the node.")
                     .arg(workflowId, nextState));
@@ -381,6 +409,7 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
     }
 
     if (externalBinary
+
         && (nextState == QStringLiteral("I3") || nextState == QStringLiteral("S3"))
         && !slate->metadata.value(QStringLiteral("tx_ready")).toBool()) {
         const QString txBuildError = slate->metadata.value(QStringLiteral("tx_build_error")).toString();

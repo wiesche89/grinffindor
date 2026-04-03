@@ -37,11 +37,22 @@ static const unsigned char kSigma[12][16] = {
     {14,10, 4, 8, 9,15,13, 6, 1,12, 0, 2,11, 7, 5, 3 }
 };
 
+/**
+ * @brief rotr64
+ * @param x
+ * @param c
+ * @return
+ */
 quint64 rotr64(const quint64 x, const unsigned int c)
 {
     return (x >> c) | (x << (64U - c));
 }
 
+/**
+ * @brief load64
+ * @param src
+ * @return
+ */
 quint64 load64(const unsigned char *src)
 {
     quint64 value = 0;
@@ -51,6 +62,11 @@ quint64 load64(const unsigned char *src)
     return value;
 }
 
+/**
+ * @brief store64
+ * @param dst
+ * @param value
+ */
 void store64(unsigned char *dst, quint64 value)
 {
     for (int i = 0; i < 8; ++i) {
@@ -58,6 +74,15 @@ void store64(unsigned char *dst, quint64 value)
     }
 }
 
+/**
+ * @brief g
+ * @param a
+ * @param b
+ * @param c
+ * @param d
+ * @param x
+ * @param y
+ */
 void g(quint64 &a, quint64 &b, quint64 &c, quint64 &d, quint64 x, quint64 y)
 {
     a = a + b + x;
@@ -70,6 +95,11 @@ void g(quint64 &a, quint64 &b, quint64 &c, quint64 &d, quint64 x, quint64 y)
     b = rotr64(b ^ c, 63);
 }
 
+/**
+ * @brief compress
+ * @param state
+ * @param block[128
+ */
 void compress(Blake2bState *state, const unsigned char block[128])
 {
     quint64 m[16];
@@ -105,6 +135,11 @@ void compress(Blake2bState *state, const unsigned char block[128])
     }
 }
 
+/**
+ * @brief incrementCounter
+ * @param state
+ * @param inc
+ */
 void incrementCounter(Blake2bState *state, quint64 inc)
 {
     state->t[0] += inc;
@@ -113,13 +148,21 @@ void incrementCounter(Blake2bState *state, quint64 inc)
     }
 }
 
+/**
+ * @brief init
+ * @param state
+ * @param outlen
+ * @param key
+ * @param keylen
+ * @return
+ */
 bool init(Blake2bState *state, size_t outlen, const unsigned char *key, size_t keylen)
 {
     if (!state || outlen == 0 || outlen > 64 || keylen > 64) {
         return false;
     }
 
-    std::memset(state, 0, sizeof(Blake2bState));
+    *state = Blake2bState();
     for (int i = 0; i < 8; ++i) {
         state->h[i] = kIv[i];
     }
@@ -138,6 +181,12 @@ bool init(Blake2bState *state, size_t outlen, const unsigned char *key, size_t k
     return true;
 }
 
+/**
+ * @brief update
+ * @param state
+ * @param data
+ * @param len
+ */
 void update(Blake2bState *state, const unsigned char *data, size_t len)
 {
     if (!state || !data || len == 0) {
@@ -167,6 +216,11 @@ void update(Blake2bState *state, const unsigned char *data, size_t len)
     state->buflen += len;
 }
 
+/**
+ * @brief finalize
+ * @param state
+ * @return
+ */
 QByteArray finalize(Blake2bState *state)
 {
     QByteArray out(static_cast<qsizetype>(state->outlen), Qt::Uninitialized);
@@ -188,6 +242,11 @@ QByteArray finalize(Blake2bState *state)
 
 }
 
+/**
+ * @brief WalletBlake2b::hash256
+ * @param data
+ * @return
+ */
 QByteArray WalletBlake2b::hash256(const QByteArray &data)
 {
     Blake2bState state;
@@ -200,11 +259,18 @@ QByteArray WalletBlake2b::hash256(const QByteArray &data)
     return finalize(&state);
 }
 
+/**
+ * @brief WalletBlake2b::hash256
+ * @param key
+ * @param data
+ * @return
+ */
 QByteArray WalletBlake2b::hash256(const QByteArray &key, const QByteArray &data)
 {
     Blake2bState state;
     if (!init(&state,
               32,
+
               reinterpret_cast<const unsigned char *>(key.constData()),
               static_cast<size_t>(key.size()))) {
         return QByteArray();

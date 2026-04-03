@@ -7,6 +7,11 @@
 
 namespace {
 
+/**
+ * @brief amountToNanogrin
+ * @param amount
+ * @return
+ */
 quint64 amountToNanogrin(const QString &amount)
 {
     const QString trimmed = amount.trimmed();
@@ -42,6 +47,11 @@ quint64 amountToNanogrin(const QString &amount)
     return whole * 1000000000ULL + frac;
 }
 
+/**
+ * @brief formatNanogrin
+ * @param amount
+ * @return
+ */
 QString formatNanogrin(quint64 amount)
 {
     return QStringLiteral("%1.%2")
@@ -51,10 +61,16 @@ QString formatNanogrin(quint64 amount)
 
 }
 
+/**
+ * @brief WalletScanner::outputsFromState
+ * @param walletState
+ * @return
+ */
 QList<WalletOutput> WalletScanner::outputsFromState(const QJsonObject &walletState)
 {
     QList<WalletOutput> outputs;
     const QJsonArray array = walletState.value(QStringLiteral("outputs")).toArray();
+
     outputs.reserve(array.size());
     for (int i = 0; i < array.size(); ++i) {
         if (array.at(i).isObject()) {
@@ -64,6 +80,11 @@ QList<WalletOutput> WalletScanner::outputsFromState(const QJsonObject &walletSta
     return outputs;
 }
 
+/**
+ * @brief WalletScanner::outputsToJson
+ * @param outputs
+ * @return
+ */
 QJsonArray WalletScanner::outputsToJson(const QList<WalletOutput> &outputs)
 {
     QJsonArray array;
@@ -73,6 +94,11 @@ QJsonArray WalletScanner::outputsToJson(const QList<WalletOutput> &outputs)
     return array;
 }
 
+/**
+ * @brief WalletScanner::commitmentsToJson
+ * @param outputs
+ * @return
+ */
 QJsonArray WalletScanner::commitmentsToJson(const QList<WalletOutput> &outputs)
 {
     QJsonArray commits;
@@ -84,6 +110,12 @@ QJsonArray WalletScanner::commitmentsToJson(const QList<WalletOutput> &outputs)
     return commits;
 }
 
+/**
+ * @brief WalletScanner::reconcileTrackedOutputs
+ * @param trackedOutputs
+ * @param chainOutputs
+ * @return
+ */
 QList<WalletOutput> WalletScanner::reconcileTrackedOutputs(const QList<WalletOutput> &trackedOutputs,
                                                            const QList<OutputPrintable> &chainOutputs)
 {
@@ -112,6 +144,12 @@ QList<WalletOutput> WalletScanner::reconcileTrackedOutputs(const QList<WalletOut
     return reconciled;
 }
 
+/**
+ * @brief WalletScanner::discoverOwnedOutputs
+ * @param chainOutputs
+ * @param keychain
+ * @return
+ */
 QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrintable> &chainOutputs,
                                                         const WalletKeychain &keychain)
 {
@@ -155,6 +193,12 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
     return discovered;
 }
 
+/**
+ * @brief WalletScanner::balancesFromOutputs
+ * @param outputs
+ * @param chainHeight
+ * @return
+ */
 QJsonObject WalletScanner::balancesFromOutputs(const QList<WalletOutput> &outputs, qulonglong chainHeight)
 {
     // Balance categories following grin-wallet reference implementation

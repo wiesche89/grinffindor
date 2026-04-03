@@ -8,14 +8,25 @@
 #include "grinwalletcontrollerhelpers.h"
 #include "grinwalletworkflowhelpers.h"
 
+/**
+ * @brief GrinWalletHistoryHelpers::syntheticWorkflowIdForCommitment
+ * @param commitment
+ * @return
+ */
 QString GrinWalletHistoryHelpers::syntheticWorkflowIdForCommitment(const QString &commitment)
 {
     return QStringLiteral("rescan-%1").arg(commitment.left(24));
 }
 
+/**
+ * @brief GrinWalletHistoryHelpers::transactionOutputCommitments
+ * @param entry
+ * @return
+ */
 QStringList GrinWalletHistoryHelpers::transactionOutputCommitments(const QJsonObject &entry)
 {
     QStringList commitments;
+
     const QString directCommitment = entry.value(QStringLiteral("commitment")).toString();
     if (!directCommitment.isEmpty()) {
         commitments.append(directCommitment);
@@ -26,6 +37,7 @@ QStringList GrinWalletHistoryHelpers::transactionOutputCommitments(const QJsonOb
                                .value(QStringLiteral("body"))
                                .toObject()
                                .value(QStringLiteral("outputs"))
+
                                .toArray();
     for (int i = 0; i < outputs.size(); ++i) {
         const QString commitment = outputs.at(i).toObject().value(QStringLiteral("commit")).toString();
@@ -37,6 +49,12 @@ QStringList GrinWalletHistoryHelpers::transactionOutputCommitments(const QJsonOb
     return commitments;
 }
 
+/**
+ * @brief GrinWalletHistoryHelpers::inferredConfirmedHeightForTransactionEntry
+ * @param entry
+ * @param outputs
+ * @return
+ */
 qint64 GrinWalletHistoryHelpers::inferredConfirmedHeightForTransactionEntry(const QJsonObject &entry,
                                                                             const QList<WalletOutput> &outputs)
 {
@@ -83,12 +101,18 @@ qint64 GrinWalletHistoryHelpers::inferredConfirmedHeightForTransactionEntry(cons
     return entry.value(QStringLiteral("confirmed_height")).toVariant().toLongLong();
 }
 
+/**
+ * @brief GrinWalletHistoryHelpers::transactionSortKey
+ * @param entry
+ * @return
+ */
 qint64 GrinWalletHistoryHelpers::transactionSortKey(const QJsonObject &entry)
 {
     const QStringList timeFields = QStringList()
         << QStringLiteral("cancelled_at")
         << QStringLiteral("broadcast_at")
         << QStringLiteral("last_broadcast_attempt")
+
         << QStringLiteral("timestamp");
 
     for (const QString &field : timeFields) {
@@ -110,6 +134,12 @@ qint64 GrinWalletHistoryHelpers::transactionSortKey(const QJsonObject &entry)
     return 0;
 }
 
+/**
+ * @brief GrinWalletHistoryHelpers::modeFromOutputs
+ * @param outputs
+ * @param fallbackMode
+ * @return
+ */
 QString GrinWalletHistoryHelpers::modeFromOutputs(const QList<WalletOutput> &outputs,
                                                   const QString &fallbackMode)
 {
@@ -138,6 +168,13 @@ QString GrinWalletHistoryHelpers::modeFromOutputs(const QList<WalletOutput> &out
     return QStringLiteral("receive");
 }
 
+/**
+ * @brief GrinWalletHistoryHelpers::rebuildTransactionHistoryFromOutputs
+ * @param outputs
+ * @param existingTransactions
+ * @param chainHeight
+ * @return
+ */
 QJsonArray GrinWalletHistoryHelpers::rebuildTransactionHistoryFromOutputs(const QList<WalletOutput> &outputs,
                                                                           const QJsonArray &existingTransactions,
                                                                           qulonglong chainHeight)
@@ -286,9 +323,16 @@ QJsonArray GrinWalletHistoryHelpers::rebuildTransactionHistoryFromOutputs(const 
     return transactions;
 }
 
+/**
+ * @brief GrinWalletHistoryHelpers::transactionEntryLessThan
+ * @param left
+ * @param right
+ * @return
+ */
 bool GrinWalletHistoryHelpers::transactionEntryLessThan(const QJsonObject &left, const QJsonObject &right)
 {
     const qint64 leftKey = transactionSortKey(left);
+
     const qint64 rightKey = transactionSortKey(right);
     if (leftKey != rightKey) {
         return leftKey > rightKey;

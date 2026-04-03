@@ -27,8 +27,6 @@ class GrinWalletShortcutBridge;
 class GrinWalletController : public QObject
 {
     Q_OBJECT
-    friend class GrinWalletNodeSyncService;
-    friend class GrinWalletWorkflowService;
     Q_PROPERTY(bool walletExists READ walletExists NOTIFY walletChanged)
     Q_PROPERTY(bool walletUnlocked READ walletUnlocked NOTIFY walletChanged)
     Q_PROPERTY(QString walletName READ walletName NOTIFY walletChanged)
@@ -128,27 +126,52 @@ public:
     Q_INVOKABLE void setAutoLockOnAppDeactivate(bool enabled);
     Q_INVOKABLE QString encodeSlatepack(const QString &slateJson, const QString &sender = QString()) const;
     Q_INVOKABLE QString decodeSlatepack(const QString &slatepack) const;
-signals:
-    void walletChanged();
-    void nodeConfigChanged();
-    void statusChanged();
-    void lastErrorChanged();
-    void lastInfoChanged();
-    void workflowChanged();
 
-private:
-    void loadFromStorage();
+    // Internal service API kept explicit so workflow/node-sync services do not
+    // require friend access to controller internals.
+    QString sessionMnemonic() const;
+    bool hasUnlockedSession() const;
+    NodeForeignApi *nodeApi() const;
+    void setNodeApi(NodeForeignApi *nodeApi);
+    void setSyncStatusMessage(const QString &status);
+    void notifyStatusChanged();
+    void setChainHeightValue(qulonglong height);
+    void setNodeBlockHeaderVersionValue(int version);
+    bool walletScanInFlight() const;
+    void setWalletScanInFlight(bool inFlight);
+    bool seedScanActive() const;
+    void setSeedScanActive(bool active);
+    qulonglong seedScanNextIndex() const;
+    void setSeedScanNextIndex(qulonglong nextIndex);
+    const QList<WalletOutput> &seedScanDiscovered() const;
+    void clearSeedScanDiscovered();
+    void appendSeedScanDiscovered(const WalletOutput &output);
+    QString pendingBroadcastWorkflowId() const;
+    void setPendingBroadcastWorkflowId(const QString &workflowId);
+    bool pendingBroadcastInputLookup() const;
+    void setPendingBroadcastInputLookup(bool pending);
+    QJsonObject pendingBroadcastTxSkeleton() const;
+    void setPendingBroadcastTxSkeleton(const QJsonObject &txSkeleton);
+    QJsonArray pendingBroadcastInputCommits() const;
+    void setPendingBroadcastInputCommits(const QJsonArray &commits);
+    bool hasPendingBroadcastWorkflow() const;
+    bool broadcastStatusRefreshInFlight() const;
+    void setBroadcastStatusRefreshInFlight(bool inFlight);
+    bool kernelStatusCheckInFlight() const;
+    void setKernelStatusCheckInFlight(bool inFlight);
+    void clearKernelStatusQueue();
+    bool hasPendingKernelStatusChecks() const;
+    void appendKernelStatusCheck(const QString &workflowId, const QString &excess);
+    QPair<QString, QString> takeNextKernelStatusCheck();
+    QString currentKernelWorkflowIdInternal() const;
+    QString currentKernelExcessInternal() const;
+    void setCurrentKernelCheck(const QString &workflowId, const QString &excess);
+    void clearCurrentKernelCheck();
     void setLastError(const QString &error);
     void setLastInfo(const QString &info);
     void connectNodeClient();
     void refreshStateFromStorage();
-    void startAutoRefresh();
     void setWorkflow(const QString &id, const QString &mode, const QString &state, const QString &slatepack, const QString &decoded);
-    void finalizeTransactionStoreUpdate(const QJsonObject &document, bool changed);
-    void storeOutputsState(QJsonObject *document,
-                           QJsonObject *walletState,
-                           const QList<WalletOutput> &outputs,
-                           quint32 nextChildIndex) const;
     void storeOwnedOutput(const QString &source, const QString &amount, const SlateV4::Commit &commit);
     void storeOwnedOutput(const WalletOutput &output);
     bool buildOwnedOutput(const QString &source,
@@ -163,17 +186,15 @@ private:
     void requestWalletScan();
     void startSeedScan();
     void finishSeedScan(const QString &message);
-    void updateTransactionEntry(const QString &workflowId, const std::function<void(QJsonObject &)> &updater);
     void refreshBroadcastStatuses();
     void startNextKernelStatusCheck();
-    void refreshStoragePersistenceState();
     QString kernelExcessFromEntry(const QJsonObject &entry) const;
     void refreshTransactionConfirmations();
     void touchWalletSession();
     void recoverPendingBroadcasts();
     void finalizeBroadcastedWorkflow(const QString &workflowId);
     QJsonArray rebuildTransactionHistoryFromOutputs(const QList<WalletOutput> &outputs,
-                                                   const QJsonArray &existingTransactions) const;
+                                                    const QJsonArray &existingTransactions) const;
     bool ensureWorkflowSelectionContext(const QString &workflowId,
                                         const QString &amount,
                                         QString *feeOut = 0,
@@ -197,30 +218,48 @@ private:
     QString currentSlatepackAddress() const;
     QString currentPaymentProofAddress() const;
     QByteArray currentSlatepackSecret() const;
-    QString resolvedNetworkName() const;
     void alignSlateVersionWithNode(SlateV4 *slate) const;
     void beginBroadcastWithInputPreflight(const QString &workflowId,
                                           const QJsonObject &txSkeleton);
     QString resolveWorkflowIdBySlateId(const SlateV4 &slate) const;
-    quint64 resolveWorkflowAmountNano(const QString &workflowId,
-                                      const QJsonObject &localContext,
-                                      const QString &amount) const;
-    static QJsonObject legacyInvoiceParticipantFromContext(const QJsonObject &localContext);
-    static bool transactionEntryLessThan(const QJsonObject &left, const QJsonObject &right);
-    static bool walletOutputLessThan(const WalletOutput &left, const WalletOutput &right);
+    QString resolvedNetworkName() const;
     void markTransactionBroadcastPending(const QString &workflowId);
     void markTransactionBroadcastFailed(const QString &workflowId, const QString &message);
     void markTransactionKernelConfirmed(const QString &workflowId, qulonglong confirmedHeight);
     void markTransactionKernelBroadcasted(const QString &workflowId);
     void markTransactionBroadcastRejected(const QString &workflowId, const QString &message);
     void markTransactionBroadcastSucceeded(const QString &workflowId);
-    void onSessionLockTimeout();
-    void onApplicationStateChanged(Qt::ApplicationState state);
     QJsonObject loadDocumentForService() const;
     bool saveDocumentForService(const QJsonObject &document) const;
     quint32 nextChildIndexFromStateForService(const QJsonObject &walletState) const;
     QJsonObject filterWorkflowContextsForTransactionsForService(const QJsonObject &contexts,
                                                                const QJsonArray &transactions) const;
+signals:
+    void walletChanged();
+    void nodeConfigChanged();
+    void statusChanged();
+    void lastErrorChanged();
+    void lastInfoChanged();
+    void workflowChanged();
+
+private:
+    void loadFromStorage();
+    void startAutoRefresh();
+    void finalizeTransactionStoreUpdate(const QJsonObject &document, bool changed);
+    void storeOutputsState(QJsonObject *document,
+                           QJsonObject *walletState,
+                           const QList<WalletOutput> &outputs,
+                           quint32 nextChildIndex) const;
+    void updateTransactionEntry(const QString &workflowId, const std::function<void(QJsonObject &)> &updater);
+    void refreshStoragePersistenceState();
+    quint64 resolveWorkflowAmountNano(const QString &workflowId,
+                                      const QJsonObject &localContext,
+                                      const QString &amount) const;
+    static QJsonObject legacyInvoiceParticipantFromContext(const QJsonObject &localContext);
+    static bool transactionEntryLessThan(const QJsonObject &left, const QJsonObject &right);
+    static bool walletOutputLessThan(const WalletOutput &left, const WalletOutput &right);
+    void onSessionLockTimeout();
+    void onApplicationStateChanged(Qt::ApplicationState state);
 
     NodeForeignApi *m_nodeApi;
     GrinWalletNodeSyncService *m_nodeSyncService;

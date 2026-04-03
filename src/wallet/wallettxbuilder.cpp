@@ -14,6 +14,11 @@
 
 namespace {
 
+/**
+ * @brief amountToNanogrin
+ * @param amount
+ * @return
+ */
 quint64 amountToNanogrin(const QString &amount)
 {
     const QString trimmed = amount.trimmed();
@@ -44,11 +49,22 @@ quint64 amountToNanogrin(const QString &amount)
     return whole * 1000000000ULL + frac;
 }
 
+/**
+ * @brief outputFeatureString
+ * @param coinbase
+ * @return
+ */
 QString outputFeatureString(bool coinbase)
 {
     return coinbase ? QStringLiteral("Coinbase") : QStringLiteral("Plain");
 }
 
+/**
+ * @brief containsOutputCommitment
+ * @param outputs
+ * @param commitment
+ * @return
+ */
 bool containsOutputCommitment(const QVector<Output> &outputs, const QString &commitment)
 {
     for (const Output &output : outputs) {
@@ -59,6 +75,12 @@ bool containsOutputCommitment(const QVector<Output> &outputs, const QString &com
     return false;
 }
 
+/**
+ * @brief containsInputCommitment
+ * @param inputs
+ * @param commitment
+ * @return
+ */
 bool containsInputCommitment(const QVector<Input> &inputs, const QString &commitment)
 {
     for (const Input &input : inputs) {
@@ -69,21 +91,42 @@ bool containsInputCommitment(const QVector<Input> &inputs, const QString &commit
     return false;
 }
 
+/**
+ * @brief outputSortKeyForCanonicalization
+ * @param output
+ * @return
+ */
 QString outputSortKeyForCanonicalization(const Output &output)
 {
     return WalletCryptoBackend::outputOrderHash(output);
 }
 
+/**
+ * @brief inputCanonicalLessThan
+ * @param left
+ * @param right
+ * @return
+ */
 bool inputCanonicalLessThan(const Input &left, const Input &right)
 {
     return WalletCryptoBackend::inputOrderHash(left) < WalletCryptoBackend::inputOrderHash(right);
 }
 
+/**
+ * @brief outputCanonicalLessThan
+ * @param left
+ * @param right
+ * @return
+ */
 bool outputCanonicalLessThan(const Output &left, const Output &right)
 {
     return outputSortKeyForCanonicalization(left) < outputSortKeyForCanonicalization(right);
 }
 
+/**
+ * @brief canonicalizeBody
+ * @param body
+ */
 void canonicalizeBody(TransactionBody *body)
 {
     if (!body) {
@@ -119,6 +162,12 @@ void canonicalizeBody(TransactionBody *body)
     body->setOutputs(uniqueOutputs);
 }
 
+/**
+ * @brief finalizeBuildResult
+ * @param slate
+ * @param tx
+ * @return
+ */
 WalletTxBuilder::BuildResult finalizeBuildResult(const SlateV4 &slate, Transaction tx)
 {
     WalletTxBuilder::BuildResult result;
@@ -166,6 +215,14 @@ WalletTxBuilder::BuildResult finalizeBuildResult(const SlateV4 &slate, Transacti
 
 }
 
+/**
+ * @brief WalletTxBuilder::buildTransactionSkeleton
+ * @param slate
+ * @param selectedInputs
+ * @param receiverOutput
+ * @param changeOutput
+ * @return
+ */
 WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeleton(const SlateV4 &slate,
                                                                        const QList<WalletOutput> &selectedInputs,
                                                                        const WalletOutput *receiverOutput,
@@ -216,6 +273,12 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeleton(const Sla
     return finalizeBuildResult(slate, tx);
 }
 
+/**
+ * @brief WalletTxBuilder::buildTransactionSkeletonFromCommitments
+ * @param slate
+ * @param receiverOutput
+ * @return
+ */
 WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeletonFromCommitments(const SlateV4 &slate,
                                                                                       const WalletOutput *receiverOutput)
 {
@@ -249,6 +312,7 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeletonFromCommit
     }
 
     if (receiverOutput
+
         && !receiverOutput->commitment.isEmpty()
         && !containsOutputCommitment(outputs, receiverOutput->commitment)) {
         outputs.append(Output(receiverOutput->commitment,

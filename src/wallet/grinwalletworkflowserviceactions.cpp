@@ -6,17 +6,28 @@
 #include "grinwalletcontroller.h"
 #include "walletscanner.h"
 
+// -------------------------------------------------------------------------------------------------------
+// Clearing, Broadcasting, And Cancelling Workflows
+// -------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief GrinWalletWorkflowService::clearWorkflow
+ */
 void GrinWalletWorkflowService::clearWorkflow()
 {
     m_controller->setWorkflow(QString(), QString(), QString(), QString(), QString());
     m_controller->setLastInfo(QStringLiteral("Workflow state cleared."));
 }
 
+/**
+ * @brief GrinWalletWorkflowService::cleanupLocalAndCancelledItems
+ */
 void GrinWalletWorkflowService::cleanupLocalAndCancelledItems()
 {
+
     m_controller->touchWalletSession();
 
-    if (!m_controller->m_walletUnlocked || m_controller->m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!m_controller->hasUnlockedSession()) {
         m_controller->setLastError(QStringLiteral("Unlock the wallet before cleaning up."));
         return;
     }
@@ -45,7 +56,7 @@ void GrinWalletWorkflowService::cleanupLocalAndCancelledItems()
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"),
-                       WalletScanner::balancesFromOutputs(outputs, m_controller->m_chainHeight));
+                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
     walletState.insert(QStringLiteral("transactions"), transactions);
     document.insert(QStringLiteral("wallet_state"), walletState);
     m_controller->saveDocumentForService(document);
@@ -57,10 +68,14 @@ void GrinWalletWorkflowService::cleanupLocalAndCancelledItems()
             .arg(QString::number(cancelledCount)));
 }
 
+/**
+ * @brief GrinWalletWorkflowService::broadcastCurrentWorkflowTransaction
+ */
 void GrinWalletWorkflowService::broadcastCurrentWorkflowTransaction()
 {
     m_controller->touchWalletSession();
-    const QJsonDocument workflowDoc = QJsonDocument::fromJson(m_controller->m_workflowDecoded.toUtf8());
+
+    const QJsonDocument workflowDoc = QJsonDocument::fromJson(m_controller->workflowDecoded().toUtf8());
     if (!workflowDoc.isObject()) {
         m_controller->setLastError(QStringLiteral("Current workflow does not contain decodable transaction data."));
         return;
@@ -72,14 +87,14 @@ void GrinWalletWorkflowService::broadcastCurrentWorkflowTransaction()
         return;
     }
 
-    if (!m_controller->m_nodeApi) {
+    if (!m_controller->nodeApi()) {
         m_controller->connectNodeClient();
     }
-    if (!m_controller->m_nodeApi) {
+    if (!m_controller->nodeApi()) {
         m_controller->setLastError(QStringLiteral("Node client is not configured."));
         return;
     }
-    if (!m_controller->m_pendingBroadcastWorkflowId.isEmpty()) {
+    if (m_controller->hasPendingBroadcastWorkflow()) {
         m_controller->setLastError(QStringLiteral("Another transaction broadcast is already in progress."));
         return;
     }
@@ -87,10 +102,14 @@ void GrinWalletWorkflowService::broadcastCurrentWorkflowTransaction()
     const SlateV4 slate = SlateV4::fromJson(workflowDoc.object());
     m_controller->persistWorkflowTransaction(slate, false);
     m_controller->markTransactionBroadcastPending(slate.workflowId());
-    m_controller->m_pendingBroadcastWorkflowId = slate.workflowId();
+    m_controller->setPendingBroadcastWorkflowId(slate.workflowId());
     m_controller->beginBroadcastWithInputPreflight(slate.workflowId(), txSkeleton);
 }
 
+/**
+ * @brief GrinWalletWorkflowService::broadcastTransaction
+ * @param workflowId
+ */
 void GrinWalletWorkflowService::broadcastTransaction(const QString &workflowId)
 {
     m_controller->touchWalletSession();
@@ -98,6 +117,7 @@ void GrinWalletWorkflowService::broadcastTransaction(const QString &workflowId)
                                         .value(QStringLiteral("wallet_state"))
                                         .toObject()
                                         .value(QStringLiteral("transactions"))
+
                                         .toArray();
     for (int i = 0; i < transactions.size(); ++i) {
         const QJsonObject tx = transactions.at(i).toObject();
@@ -110,14 +130,14 @@ void GrinWalletWorkflowService::broadcastTransaction(const QString &workflowId)
             m_controller->setLastError(QStringLiteral("No transaction skeleton is available for broadcast."));
             return;
         }
-        if (!m_controller->m_nodeApi) {
+        if (!m_controller->nodeApi()) {
             m_controller->connectNodeClient();
         }
-        if (!m_controller->m_nodeApi) {
+        if (!m_controller->nodeApi()) {
             m_controller->setLastError(QStringLiteral("Node client is not configured."));
             return;
         }
-        if (!m_controller->m_pendingBroadcastWorkflowId.isEmpty()) {
+        if (m_controller->hasPendingBroadcastWorkflow()) {
             m_controller->setLastError(QStringLiteral("Another transaction broadcast is already in progress."));
             return;
         }
@@ -131,7 +151,7 @@ void GrinWalletWorkflowService::broadcastTransaction(const QString &workflowId)
         slate.setStateFromCode(tx.value(QStringLiteral("state")).toString());
         m_controller->persistWorkflowTransaction(slate, false);
         m_controller->markTransactionBroadcastPending(workflowId);
-        m_controller->m_pendingBroadcastWorkflowId = workflowId;
+        m_controller->setPendingBroadcastWorkflowId(workflowId);
         m_controller->beginBroadcastWithInputPreflight(workflowId, txSkeleton);
         return;
     }
@@ -139,8 +159,13 @@ void GrinWalletWorkflowService::broadcastTransaction(const QString &workflowId)
     m_controller->setLastError(QStringLiteral("Transaction not found in wallet history."));
 }
 
+/**
+ * @brief GrinWalletWorkflowService::cancelTransaction
+ * @param workflowId
+ */
 void GrinWalletWorkflowService::cancelTransaction(const QString &workflowId)
 {
+
     m_controller->touchWalletSession();
     if (workflowId.trimmed().isEmpty()) {
         m_controller->setLastError(QStringLiteral("Workflow id is required for cancel."));
@@ -151,6 +176,7 @@ void GrinWalletWorkflowService::cancelTransaction(const QString &workflowId)
                                                 .value(QStringLiteral("wallet_state"))
                                                 .toObject()
                                                 .value(QStringLiteral("transactions"))
+
                                                 .toArray();
     for (int i = 0; i < existingTransactions.size(); ++i) {
         const QJsonObject tx = existingTransactions.at(i).toObject();
@@ -214,16 +240,17 @@ void GrinWalletWorkflowService::cancelTransaction(const QString &workflowId)
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"),
-                       WalletScanner::balancesFromOutputs(outputs, m_controller->m_chainHeight));
+                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
     walletState.insert(QStringLiteral("transactions"), transactions);
     document.insert(QStringLiteral("wallet_state"), walletState);
     QJsonObject contexts = document.value(QStringLiteral("workflow_contexts")).toObject();
     contexts.remove(workflowId);
     document.insert(QStringLiteral("workflow_contexts"), contexts);
     m_controller->saveDocumentForService(document);
+
     m_controller->refreshStateFromStorage();
 
-    if (m_controller->m_workflowId == workflowId) {
+    if (m_controller->workflowId() == workflowId) {
         clearWorkflow();
     }
     m_controller->setLastError(QString());

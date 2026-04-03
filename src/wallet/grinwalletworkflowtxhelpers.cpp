@@ -4,6 +4,12 @@
 
 #include "grinwalletworkflowhelpers.h"
 
+/**
+ * @brief GrinWalletWorkflowTxHelpers::collectSelectedInputs
+ * @param localContext
+ * @param trackedOutputs
+ * @return
+ */
 QList<WalletOutput> GrinWalletWorkflowTxHelpers::collectSelectedInputs(
     const QJsonObject &localContext,
     const QList<WalletOutput> &trackedOutputs)
@@ -27,6 +33,12 @@ QList<WalletOutput> GrinWalletWorkflowTxHelpers::collectSelectedInputs(
     return selectedInputs;
 }
 
+/**
+ * @brief GrinWalletWorkflowTxHelpers::resolveReceiverOutput
+ * @param slate
+ * @param knownChangeCommit
+ * @return
+ */
 WalletOutput GrinWalletWorkflowTxHelpers::resolveReceiverOutput(const SlateV4 &slate,
                                                                const QString &knownChangeCommit)
 {
@@ -43,10 +55,17 @@ WalletOutput GrinWalletWorkflowTxHelpers::resolveReceiverOutput(const SlateV4 &s
     return receiverOutput;
 }
 
+/**
+ * @brief GrinWalletWorkflowTxHelpers::resolveChangeOutput
+ * @param localContext
+ * @param trackedOutputs
+ * @return
+ */
 WalletOutput GrinWalletWorkflowTxHelpers::resolveChangeOutput(const QJsonObject &localContext,
                                                              const QList<WalletOutput> &trackedOutputs)
 {
     WalletOutput changeOutput;
+
     const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
     if (!changeCommit.isEmpty()) {
         changeOutput =

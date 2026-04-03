@@ -16,6 +16,11 @@ const char *kAutoLockOnDeactivateKey = "auto_lock_on_app_deactivate";
 
 } // namespace
 
+/**
+ * @brief GrinWalletController::createWallet
+ * @param walletName
+ * @param password
+ */
 void GrinWalletController::createWallet(const QString &walletName, const QString &password)
 {
     if (walletName.trimmed().isEmpty() || password.isEmpty()) {
@@ -31,6 +36,7 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
 
     QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject wallet;
+
     const QJsonObject encryptedSeed = GrinWalletSeedCrypto::encryptMnemonic(mnemonic, password);
     if (encryptedSeed.isEmpty()) {
         setLastError(QStringLiteral("Failed to encrypt wallet seed for local storage."));
@@ -45,6 +51,7 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
     document.insert(QStringLiteral("wallet"), wallet);
     GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), wallet);
     GrinWalletStorage::setWalletStateForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletState());
+
     GrinWalletStorage::setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
 
     if (!GrinWalletStorage::saveDocument(document)) {
@@ -62,19 +69,33 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
     refreshStateFromStorage();
     touchWalletSession();
     setLastError(QString());
+
     setLastInfo(QStringLiteral("Wallet created locally. Save the seed phrase now - it will not be shown again after this session."));
     if (m_scanHeight == 0) {
         rescanWallet();
     }
 }
 
+/**
+ * @brief GrinWalletController::importWallet
+ * @param walletName
+ * @param mnemonic
+ * @param password
+ */
 void GrinWalletController::importWallet(const QString &walletName, const QString &mnemonic, const QString &password)
 {
     restoreWallet(walletName, mnemonic, password);
 }
 
+/**
+ * @brief GrinWalletController::restoreWallet
+ * @param walletName
+ * @param mnemonic
+ * @param password
+ */
 void GrinWalletController::restoreWallet(const QString &walletName, const QString &mnemonic, const QString &password)
 {
+
     const QString normalizedMnemonic = GrinWalletSeedCrypto::normalizeMnemonic(mnemonic);
     if (walletName.trimmed().isEmpty() || password.isEmpty()) {
         setLastError(QStringLiteral("Wallet name and password are required."));
@@ -87,6 +108,7 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
 
     QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject wallet;
+
     const QJsonObject encryptedSeed = GrinWalletSeedCrypto::encryptMnemonic(normalizedMnemonic, password);
     if (encryptedSeed.isEmpty()) {
         setLastError(QStringLiteral("Failed to encrypt wallet seed for local storage."));
@@ -101,6 +123,7 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
     document.insert(QStringLiteral("wallet"), wallet);
     GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), wallet);
     GrinWalletStorage::setWalletStateForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletState());
+
     GrinWalletStorage::setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
 
     if (!GrinWalletStorage::saveDocument(document)) {
@@ -118,18 +141,24 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
     refreshStateFromStorage();
     touchWalletSession();
     setLastError(QString());
+
     setLastInfo(QStringLiteral("Wallet restored locally. Seed is encrypted in local storage and stays hidden after setup."));
     if (m_scanHeight == 0) {
         rescanWallet();
     }
 }
 
+/**
+ * @brief GrinWalletController::unlockWallet
+ * @param password
+ */
 void GrinWalletController::unlockWallet(const QString &password)
 {
     QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
     QString mnemonic;
     if (wallet.isEmpty()
+
         || !GrinWalletSeedCrypto::decryptMnemonic(wallet.value(QStringLiteral("encrypted_seed")).toObject(), password, &mnemonic)) {
         setLastError(QStringLiteral("Failed to unlock wallet. Password is invalid or local data is corrupted."));
         return;
@@ -162,10 +191,14 @@ void GrinWalletController::unlockWallet(const QString &password)
     }
 }
 
+/**
+ * @brief GrinWalletController::lockWallet
+ */
 void GrinWalletController::lockWallet()
 {
     m_walletUnlocked = false;
     m_sessionMnemonic.clear();
+
     m_mnemonicPreview.clear();
     if (m_sessionLockTimer) {
         m_sessionLockTimer->stop();
@@ -174,6 +207,9 @@ void GrinWalletController::lockWallet()
     setLastInfo(QStringLiteral("Wallet locked. Seed material cleared from the UI state."));
 }
 
+/**
+ * @brief GrinWalletController::dismissMnemonicPreview
+ */
 void GrinWalletController::dismissMnemonicPreview()
 {
     if (m_mnemonicPreview.isEmpty()) {
@@ -185,6 +221,11 @@ void GrinWalletController::dismissMnemonicPreview()
     setLastInfo(QStringLiteral("Seed phrase hidden. Use your password to unlock the wallet next time."));
 }
 
+/**
+ * @brief GrinWalletController::revealSeedPhrase
+ * @param password
+ * @return
+ */
 bool GrinWalletController::revealSeedPhrase(const QString &password)
 {
     if (password.isEmpty()) {
@@ -196,6 +237,7 @@ bool GrinWalletController::revealSeedPhrase(const QString &password)
     const QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
     QString mnemonic;
     if (wallet.isEmpty()
+
         || !GrinWalletSeedCrypto::decryptMnemonic(wallet.value(QStringLiteral("encrypted_seed")).toObject(), password, &mnemonic)) {
         setLastError(QStringLiteral("Failed to reveal seed phrase. Password is invalid or local data is corrupted."));
         return false;
@@ -209,6 +251,9 @@ bool GrinWalletController::revealSeedPhrase(const QString &password)
     return true;
 }
 
+/**
+ * @brief GrinWalletController::deleteWallet
+ */
 void GrinWalletController::deleteWallet()
 {
     QJsonObject document = GrinWalletStorage::loadDocument();
@@ -216,6 +261,7 @@ void GrinWalletController::deleteWallet()
     GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletMetadata());
     GrinWalletStorage::setWalletStateForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletState());
     GrinWalletStorage::setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
+
     GrinWalletStorage::syncActiveNetworkView(&document, resolvedNetworkName());
 
     if (!GrinWalletStorage::saveDocument(document)) {
@@ -229,9 +275,14 @@ void GrinWalletController::deleteWallet()
     setLastInfo(QStringLiteral("Local wallet configuration deleted. You can now create or restore a wallet."));
 }
 
+/**
+ * @brief GrinWalletController::exportEncryptedWalletBackup
+ * @return
+ */
 QString GrinWalletController::exportEncryptedWalletBackup() const
 {
     const QJsonObject document = GrinWalletStorage::loadDocument();
+
     const QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
     if (wallet.isEmpty()) {
         return QString();
@@ -247,6 +298,11 @@ QString GrinWalletController::exportEncryptedWalletBackup() const
     return QString::fromUtf8(QJsonDocument(backup).toJson(QJsonDocument::Indented));
 }
 
+/**
+ * @brief GrinWalletController::importEncryptedWalletBackup
+ * @param backupJson
+ * @return
+ */
 bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson)
 {
     if (m_walletExists) {
@@ -261,6 +317,7 @@ bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson
     }
 
     QString validationError;
+
     const QJsonObject imported = GrinWalletStorage::extractImportedBackupDocument(trimmed.toUtf8(), &validationError);
     if (imported.isEmpty()) {
         setLastError(validationError.isEmpty()
@@ -281,6 +338,9 @@ bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson
     return true;
 }
 
+/**
+ * @brief GrinWalletController::loadFromStorage
+ */
 void GrinWalletController::loadFromStorage()
 {
     const QJsonObject document = GrinWalletStorage::loadDocument();
@@ -301,6 +361,10 @@ void GrinWalletController::loadFromStorage()
     refreshStateFromStorage();
 }
 
+/**
+ * @brief GrinWalletController::setAutoLockOnAppDeactivate
+ * @param enabled
+ */
 void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
 {
     if (m_autoLockOnAppDeactivate == enabled) {
@@ -310,6 +374,7 @@ void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
     QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject appSettings = document.value(QLatin1String(kAppSettingsKey)).toObject();
     appSettings.insert(QLatin1String(kAutoLockOnDeactivateKey), enabled);
+
     document.insert(QLatin1String(kAppSettingsKey), appSettings);
     if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to persist app settings."));
@@ -324,8 +389,14 @@ void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
         : QStringLiteral("Automatic wallet lock on app deactivation disabled."));
 }
 
+/**
+ * @brief GrinWalletController::setNodeUrl
+ * @param nodeUrl
+ * @return
+ */
 bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
 {
+
     const QString trimmed = nodeUrl.trimmed();
     if (!GrinWalletControllerHelpers::isNodeUrlAccepted(trimmed)) {
         setLastError(QStringLiteral("Node URL must be a valid http or https endpoint."));
@@ -337,6 +408,7 @@ bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
     node.insert(QStringLiteral("network"),
                 GrinWalletControllerHelpers::inferNetworkName(node.value(QStringLiteral("network")).toString(), trimmed));
     node.insert(QStringLiteral("url"), trimmed);
+
     document.insert(QStringLiteral("node"), node);
     if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to persist node settings."));
@@ -353,8 +425,14 @@ bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
     return true;
 }
 
+/**
+ * @brief GrinWalletController::setSelectedNetwork
+ * @param networkName
+ * @return
+ */
 bool GrinWalletController::setSelectedNetwork(const QString &networkName)
 {
+
     const QString normalized = networkName.trimmed().toLower();
     if (!GrinWalletControllerHelpers::isAcceptedNetworkName(normalized)) {
         setLastError(QStringLiteral("Wallet network must be either mainnet or testnet."));
@@ -367,6 +445,7 @@ bool GrinWalletController::setSelectedNetwork(const QString &networkName)
     node.insert(QStringLiteral("network"), normalized);
     node.insert(QStringLiteral("url"), GrinWalletControllerHelpers::defaultNodeUrlForNetwork(normalized));
     document.insert(QStringLiteral("node"), node);
+
     GrinWalletStorage::syncActiveNetworkView(&document, normalized);
     if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to persist wallet network settings."));
@@ -382,6 +461,9 @@ bool GrinWalletController::setSelectedNetwork(const QString &networkName)
     return true;
 }
 
+/**
+ * @brief GrinWalletController::resetNodeUrl
+ */
 void GrinWalletController::resetNodeUrl()
 {
     setNodeUrl(GrinWalletControllerHelpers::defaultNodeUrlForNetwork(resolvedNetworkName()));

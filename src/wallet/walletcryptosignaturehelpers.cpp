@@ -8,6 +8,15 @@
 namespace WalletCryptoSignatureHelpers
 {
 
+/**
+ * @brief applyRound2Signature
+ * @param slate
+ * @param walletFingerprint
+ * @param roleTag
+ * @param overrideContext
+ * @param errorOut
+ * @return
+ */
 bool applyRound2Signature(SlateV4 *slate,
                           const QString &walletFingerprint,
                           const QString &roleTag,
@@ -104,6 +113,12 @@ bool applyRound2Signature(SlateV4 *slate,
     return true;
 }
 
+/**
+ * @brief verifyPartialSignatures
+ * @param slate
+ * @param errorOut
+ * @return
+ */
 bool verifyPartialSignatures(const SlateV4 &slate, QString *errorOut)
 {
     QList<QString> blindPubkeys;
@@ -191,6 +206,12 @@ bool verifyPartialSignatures(const SlateV4 &slate, QString *errorOut)
     return true;
 }
 
+/**
+ * @brief calculateExcessCommitment
+ * @param slate
+ * @param errorOut
+ * @return
+ */
 QString calculateExcessCommitment(const SlateV4 &slate, QString *errorOut)
 {
     QList<QString> blindPubkeys;
@@ -228,11 +249,22 @@ QString calculateExcessCommitment(const SlateV4 &slate, QString *errorOut)
     return WalletCryptoHelpers::toHex(serialized, sizeof(serialized));
 }
 
+/**
+ * @brief kernelSignatureMessageHex
+ * @param slate
+ * @return
+ */
 QString kernelSignatureMessageHex(const SlateV4 &slate)
 {
     return QString::fromUtf8(WalletCryptoHelpers::buildKernelSignatureMessage(slate).toHex());
 }
 
+/**
+ * @brief combinedBlindPublicKeyHex
+ * @param slate
+ * @param errorOut
+ * @return
+ */
 QString combinedBlindPublicKeyHex(const SlateV4 &slate, QString *errorOut)
 {
     QList<QString> blindPubkeys;
@@ -253,6 +285,12 @@ QString combinedBlindPublicKeyHex(const SlateV4 &slate, QString *errorOut)
     return WalletCryptoHelpers::serializePubkey(totalBlind);
 }
 
+/**
+ * @brief combinedNoncePublicKeyHex
+ * @param slate
+ * @param errorOut
+ * @return
+ */
 QString combinedNoncePublicKeyHex(const SlateV4 &slate, QString *errorOut)
 {
     QList<QString> noncePubkeys;
@@ -273,6 +311,13 @@ QString combinedNoncePublicKeyHex(const SlateV4 &slate, QString *errorOut)
     return WalletCryptoHelpers::serializePubkey(totalNonce);
 }
 
+/**
+ * @brief buildFinalSignature
+ * @param slate
+ * @param finalSignatureOut
+ * @param errorOut
+ * @return
+ */
 bool buildFinalSignature(const SlateV4 &slate, QString *finalSignatureOut, QString *errorOut)
 {
     QList<QString> allBlindPubkeys;
@@ -375,6 +420,12 @@ bool buildFinalSignature(const SlateV4 &slate, QString *finalSignatureOut, QStri
     return true;
 }
 
+/**
+ * @brief finalizeSlate
+ * @param slate
+ * @param errorOut
+ * @return
+ */
 bool finalizeSlate(SlateV4 *slate, QString *errorOut)
 {
     if (!slate) {

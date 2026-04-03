@@ -11,6 +11,12 @@
 #include <emscripten.h>
 #include <emscripten/emscripten.h>
 
+/**
+ * @brief EM_JS
+ * @param int
+ * @param browserCopyToClipboard
+ * @param value
+ */
 EM_JS(int, browserCopyToClipboard, (const char *value), {
     try {
         const text = UTF8ToString(value);
@@ -34,6 +40,12 @@ EM_JS(int, browserCopyToClipboard, (const char *value), {
     return 0;
 });
 
+/**
+ * @brief EM_JS
+ * @param char
+ * @param browserReadClipboardText
+ * @param (
+ */
 EM_JS(char *, browserReadClipboardText, (), {
     try {
         if (navigator.clipboard && navigator.clipboard.readText) {
@@ -62,6 +74,12 @@ EM_JS(char *, browserReadClipboardText, (), {
     return buffer;
 });
 
+/**
+ * @brief EM_JS
+ * @param char
+ * @param browserConsumeCapturedPasteText
+ * @param (
+ */
 EM_JS(char *, browserConsumeCapturedPasteText, (), {
     try {
         if (typeof window !== "undefined"
@@ -81,6 +99,12 @@ EM_JS(char *, browserConsumeCapturedPasteText, (), {
     return buffer;
 });
 
+/**
+ * @brief EM_JS
+ * @param int
+ * @param browserDownloadTextFile
+ * @param value
+ */
 EM_JS(int, browserDownloadTextFile, (const char *suggestedName, const char *value), {
     try {
         if (typeof document === "undefined" || typeof Blob === "undefined" || typeof URL === "undefined") {
@@ -102,6 +126,12 @@ EM_JS(int, browserDownloadTextFile, (const char *suggestedName, const char *valu
     return 0;
 });
 
+/**
+ * @brief EM_JS
+ * @param int
+ * @param browserRequestPersistentStorage
+ * @param (
+ */
 EM_JS(int, browserRequestPersistentStorage, (), {
     try {
         if (navigator.storage && navigator.storage.persist) {
@@ -112,6 +142,12 @@ EM_JS(int, browserRequestPersistentStorage, (), {
     return 0;
 });
 
+/**
+ * @brief EM_JS
+ * @param char
+ * @param browserStoragePersistenceState
+ * @param (
+ */
 EM_JS(char *, browserStoragePersistenceState, (), {
     try {
         if (navigator.storage && navigator.storage.persisted) {
@@ -141,10 +177,15 @@ EM_JS(char *, browserStoragePersistenceState, (), {
 });
 #endif
 
+/**
+ * @brief GrinWalletPlatformHelpers::requestPasteText
+ * @return
+ */
 QString GrinWalletPlatformHelpers::requestPasteText()
 {
 #ifdef Q_OS_WASM
     const char *capturedValue = browserConsumeCapturedPasteText();
+
     const QString capturedText = QString::fromUtf8(capturedValue ? capturedValue : "");
     if (capturedValue) {
         free(const_cast<char *>(capturedValue));
@@ -154,6 +195,7 @@ QString GrinWalletPlatformHelpers::requestPasteText()
     }
 
     const char *value = browserReadClipboardText();
+
     const QString clipboardText = QString::fromUtf8(value ? value : "");
     if (value) {
         free(const_cast<char *>(value));
@@ -165,6 +207,11 @@ QString GrinWalletPlatformHelpers::requestPasteText()
 #endif
 }
 
+/**
+ * @brief GrinWalletPlatformHelpers::copyTextToClipboard
+ * @param text
+ * @return
+ */
 bool GrinWalletPlatformHelpers::copyTextToClipboard(const QString &text)
 {
     if (text.isEmpty()) {
@@ -173,6 +220,7 @@ bool GrinWalletPlatformHelpers::copyTextToClipboard(const QString &text)
 #ifdef Q_OS_WASM
     return browserCopyToClipboard(text.toUtf8().constData()) == 1;
 #else
+
     QClipboard *clipboard = QGuiApplication::clipboard();
     if (!clipboard) {
         return false;
@@ -182,6 +230,12 @@ bool GrinWalletPlatformHelpers::copyTextToClipboard(const QString &text)
 #endif
 }
 
+/**
+ * @brief GrinWalletPlatformHelpers::downloadTextFile
+ * @param suggestedName
+ * @param text
+ * @return
+ */
 bool GrinWalletPlatformHelpers::downloadTextFile(const QString &suggestedName, const QString &text)
 {
     if (text.isEmpty()) {
@@ -198,6 +252,7 @@ bool GrinWalletPlatformHelpers::downloadTextFile(const QString &suggestedName, c
         : suggestedName.trimmed();
     QSaveFile outputFile(QFileInfo(fileName).isAbsolute()
                              ? fileName
+
                              : QFileInfo(QDir::current(), fileName).absoluteFilePath());
     if (!outputFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         return false;
@@ -210,6 +265,9 @@ bool GrinWalletPlatformHelpers::downloadTextFile(const QString &suggestedName, c
 #endif
 }
 
+/**
+ * @brief GrinWalletPlatformHelpers::requestPersistentBrowserStorage
+ */
 void GrinWalletPlatformHelpers::requestPersistentBrowserStorage()
 {
 #ifdef Q_OS_WASM
@@ -217,6 +275,10 @@ void GrinWalletPlatformHelpers::requestPersistentBrowserStorage()
 #endif
 }
 
+/**
+ * @brief GrinWalletPlatformHelpers::storagePersistenceState
+ * @return
+ */
 QString GrinWalletPlatformHelpers::storagePersistenceState()
 {
 #ifdef Q_OS_WASM

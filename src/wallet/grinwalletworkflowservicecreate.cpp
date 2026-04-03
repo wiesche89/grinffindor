@@ -11,9 +11,19 @@
 #include "walletscanner.h"
 #include "walletselection.h"
 
+// -------------------------------------------------------------------------------------------------------
+// Creating Send And Receive Workflows
+// -------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief GrinWalletWorkflowService::startSendWorkflow
+ * @param amount
+ * @param note
+ */
 void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const QString &note)
 {
     m_controller->touchWalletSession();
+
     const quint64 requestedAmount = GrinWalletWorkflowHelpers::amountToNanogrin(amount);
     if (requestedAmount == 0) {
         m_controller->setLastError(QStringLiteral("Send amount must be greater than zero."));
@@ -22,9 +32,10 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
 
     QJsonObject document = m_controller->loadDocumentForService();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-    if (!m_controller->m_sessionMnemonic.trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_controller->m_sessionMnemonic);
+    if (!m_controller->sessionMnemonic().trimmed().isEmpty()) {
+        const WalletKeychain keychain(m_controller->sessionMnemonic());
         if (keychain.isValid()) {
             for (int i = 0; i < outputs.size(); ++i) {
                 outputs[i] = GrinWalletWorkflowHelpers::normalizedTrackedOutput(outputs.at(i), keychain);
@@ -33,8 +44,9 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
     }
 
     const qulonglong effectiveHeight =
-        m_controller->m_chainHeight > 0 ? m_controller->m_chainHeight : m_controller->m_scanHeight;
+        m_controller->chainHeight() > 0 ? m_controller->chainHeight() : m_controller->scanHeight();
     const WalletSelection::Result selection =
+
         WalletSelection::selectSpendableOutputs(outputs, requestedAmount, effectiveHeight);
     if (!selection.success) {
         m_controller->setLastError(selection.error);
@@ -55,7 +67,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"),
-                       WalletScanner::balancesFromOutputs(outputs, m_controller->m_chainHeight));
+                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
     document.insert(QStringLiteral("wallet_state"), walletState);
     m_controller->saveDocumentForService(document);
     m_controller->refreshStateFromStorage();
@@ -71,6 +83,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
 
     const QString localSlatepackAddress = m_controller->currentSlatepackAddress();
     const QString localPaymentProofAddress = m_controller->currentPaymentProofAddress();
+
     slate.hasPaymentProof = !localPaymentProofAddress.isEmpty();
     if (slate.hasPaymentProof) {
         slate.paymentProof.senderAddress = localPaymentProofAddress;
@@ -78,7 +91,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
     slate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("grin-browser-wallet"));
     slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
     slate.metadata.insert(QStringLiteral("note"), note.trimmed());
-    slate.metadata.insert(QStringLiteral("wallet"), m_controller->m_walletName);
+    slate.metadata.insert(QStringLiteral("wallet"), m_controller->walletName());
     slate.metadata.insert(QStringLiteral("network"), m_controller->resolvedNetworkName());
     slate.metadata.insert(QStringLiteral("timestamp"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
 
@@ -131,6 +144,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
         s1PositiveBlinds.append(changeOutput.blindingFactor.trimmed());
     }
     QStringList s1NegativeBlinds;
+
     s1NegativeBlinds.append(senderContext.blindSecret.trimmed());
     for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
         const QString inputBlind = selection.selectedOutputs.at(i).blindingFactor.trimmed();
@@ -156,6 +170,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
 
     QList<SlateV4::Commit> s1Commits;
     const QJsonObject s1CoinbaseMap =
+
         localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
     for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
         const WalletOutput &inp = selection.selectedOutputs.at(i);
@@ -176,6 +191,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
     outboundSlate.metadata = QJsonObject();
     outboundSlate.metadata.insert(QStringLiteral("external_binary"), true);
     outboundSlate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
+
     outboundSlate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
     if (!localSlatepackAddress.trimmed().isEmpty()) {
         outboundSlate.metadata.insert(QStringLiteral("slatepack_sender"), localSlatepackAddress);
@@ -192,6 +208,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
                                               &armoredSlatepack,
                                               &writerError,
                                               localSlatepackAddress,
+
                                               QStringList(),
                                               m_controller->currentSlatepackSecret())) {
         armoredSlatepack = GrinWalletWorkflowHelpers::encodeSlatepackArmor(
@@ -208,6 +225,11 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
         QStringLiteral("SEND workflow started at S1. Share the generated Slatepack with the receiver."));
 }
 
+/**
+ * @brief GrinWalletWorkflowService::startReceiveWorkflow
+ * @param amount
+ * @param note
+ */
 void GrinWalletWorkflowService::startReceiveWorkflow(const QString &amount, const QString &note)
 {
     m_controller->touchWalletSession();
@@ -231,6 +253,7 @@ void GrinWalletWorkflowService::startReceiveWorkflow(const QString &amount, cons
     QString outputError;
     if (!m_controller->ensureReceiverOutputContext(workflowId,
                                                    slate.amount,
+
                                                    QStringLiteral("invoice"),
                                                    &invoiceOutput,
                                                    &invoiceCommit,
@@ -243,15 +266,16 @@ void GrinWalletWorkflowService::startReceiveWorkflow(const QString &amount, cons
 
     WalletCryptoBackend::ParticipantContext receiverContext =
         WalletCryptoBackend::createParticipantFromBlindSecret(invoiceOutput.blindingFactor,
-                                                              m_controller->m_seedFingerprint,
+                                                              m_controller->seedFingerprint(),
                                                               workflowId,
                                                               QStringLiteral("receiver"));
     if (receiverContext.blindSecret.isEmpty()
+
         || receiverContext.nonceSecret.isEmpty()
         || receiverContext.blindPublic.isEmpty()
         || receiverContext.noncePublic.isEmpty()) {
         receiverContext = WalletCryptoBackend::createParticipant(
-            m_controller->m_seedFingerprint,
+            m_controller->seedFingerprint(),
             workflowId,
             QStringLiteral("receiver"));
     }
@@ -263,6 +287,7 @@ void GrinWalletWorkflowService::startReceiveWorkflow(const QString &amount, cons
     slate.paymentProof = SlateV4::PaymentProof();
     slate.metadata.insert(QStringLiteral("external_binary"), true);
     slate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
+
     slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
     if (!localSlatepackAddress.trimmed().isEmpty()) {
         slate.metadata.insert(QStringLiteral("slatepack_sender"), localSlatepackAddress);
@@ -275,6 +300,7 @@ void GrinWalletWorkflowService::startReceiveWorkflow(const QString &amount, cons
     outboundSlate.metadata = QJsonObject();
     outboundSlate.metadata.insert(QStringLiteral("external_binary"), true);
     outboundSlate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
+
     outboundSlate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
     if (!localSlatepackAddress.trimmed().isEmpty()) {
         outboundSlate.metadata.insert(QStringLiteral("slatepack_sender"), localSlatepackAddress);
@@ -291,6 +317,7 @@ void GrinWalletWorkflowService::startReceiveWorkflow(const QString &amount, cons
                                               &armoredSlatepack,
                                               &writerError,
                                               localSlatepackAddress,
+
                                               QStringList(),
                                               m_controller->currentSlatepackSecret())) {
         armoredSlatepack = GrinWalletWorkflowHelpers::encodeSlatepackArmor(

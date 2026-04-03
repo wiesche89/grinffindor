@@ -11,17 +11,31 @@ const char *kTestnetNodeUrl = "https://testnet.grinffindor.org/v2/foreign";
 
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::defaultNetworkName
+ * @return
+ */
 QString GrinWalletControllerHelpers::defaultNetworkName()
 {
     return QStringLiteral("mainnet");
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::isAcceptedNetworkName
+ * @param networkName
+ * @return
+ */
 bool GrinWalletControllerHelpers::isAcceptedNetworkName(const QString &networkName)
 {
     const QString normalized = networkName.trimmed().toLower();
     return normalized == QStringLiteral("mainnet") || normalized == QStringLiteral("testnet");
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::defaultNodeUrlForNetwork
+ * @param networkName
+ * @return
+ */
 QString GrinWalletControllerHelpers::defaultNodeUrlForNetwork(const QString &networkName)
 {
     return networkName.trimmed().toLower() == QStringLiteral("testnet")
@@ -29,8 +43,15 @@ QString GrinWalletControllerHelpers::defaultNodeUrlForNetwork(const QString &net
         : QString::fromUtf8(kMainnetNodeUrl);
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::inferNetworkName
+ * @param networkName
+ * @param nodeUrl
+ * @return
+ */
 QString GrinWalletControllerHelpers::inferNetworkName(const QString &networkName, const QString &nodeUrl)
 {
+
     const QString normalizedNetwork = networkName.trimmed().toLower();
     if (isAcceptedNetworkName(normalizedNetwork)) {
         return normalizedNetwork;
@@ -44,6 +65,11 @@ QString GrinWalletControllerHelpers::inferNetworkName(const QString &networkName
     return defaultNetworkName();
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::isNodeUrlAccepted
+ * @param nodeUrl
+ * @return
+ */
 bool GrinWalletControllerHelpers::isNodeUrlAccepted(const QString &nodeUrl)
 {
     const QUrl parsed = QUrl::fromUserInput(nodeUrl.trimmed());
@@ -53,6 +79,11 @@ bool GrinWalletControllerHelpers::isNodeUrlAccepted(const QString &nodeUrl)
         && (parsed.scheme() == QStringLiteral("http") || parsed.scheme() == QStringLiteral("https"));
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::isFinalTransactionStatus
+ * @param status
+ * @return
+ */
 bool GrinWalletControllerHelpers::isFinalTransactionStatus(const QString &status)
 {
     return status == QStringLiteral("confirmed")
@@ -60,21 +91,40 @@ bool GrinWalletControllerHelpers::isFinalTransactionStatus(const QString &status
         || status == QStringLiteral("spent");
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::findTrackedOutputByCommitment
+ * @param outputs
+ * @param commitment
+ * @return
+ */
 WalletOutput GrinWalletControllerHelpers::findTrackedOutputByCommitment(const QList<WalletOutput> &outputs,
                                                                         const QString &commitment)
 {
     return GrinWalletWorkflowHelpers::findTrackedOutputByCommitment(outputs, commitment);
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::normalizedTrackedOutput
+ * @param output
+ * @param keychain
+ * @return
+ */
 WalletOutput GrinWalletControllerHelpers::normalizedTrackedOutput(const WalletOutput &output,
                                                                   const WalletKeychain &keychain)
 {
     return GrinWalletWorkflowHelpers::normalizedTrackedOutput(output, keychain);
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::displayAmountForTransactionEntry
+ * @param entry
+ * @param outputs
+ * @return
+ */
 QString GrinWalletControllerHelpers::displayAmountForTransactionEntry(const QJsonObject &entry,
                                                                       const QList<WalletOutput> &outputs)
 {
+
     const QString storedAmount = entry.value(QStringLiteral("amount")).toString().trimmed();
     if (!storedAmount.isEmpty()) {
         return storedAmount;
@@ -106,6 +156,7 @@ QString GrinWalletControllerHelpers::displayAmountForTransactionEntry(const QJso
                                   .value(QStringLiteral("body"))
                                   .toObject()
                                   .value(QStringLiteral("inputs"))
+
                                   .toArray();
     for (int i = 0; i < inputs.size(); ++i) {
         const QJsonObject input = inputs.at(i).toObject();
@@ -128,6 +179,12 @@ QString GrinWalletControllerHelpers::displayAmountForTransactionEntry(const QJso
     return QString();
 }
 
+/**
+ * @brief GrinWalletControllerHelpers::filterWorkflowContextsForTransactions
+ * @param contexts
+ * @param transactions
+ * @return
+ */
 QJsonObject GrinWalletControllerHelpers::filterWorkflowContextsForTransactions(const QJsonObject &contexts,
                                                                                const QJsonArray &transactions)
 {

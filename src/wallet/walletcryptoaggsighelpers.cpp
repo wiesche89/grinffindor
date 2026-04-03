@@ -7,6 +7,14 @@
 namespace WalletCryptoHelpers
 {
 
+/**
+ * @brief buildKernelSignatureMessageForFeature
+ * @param feature
+ * @param fee
+ * @param lockHeight
+ * @param errorOut
+ * @return
+ */
 QByteArray buildKernelSignatureMessageForFeature(const QString &feature,
                                                  quint64 fee,
                                                  quint64 lockHeight,
@@ -32,6 +40,11 @@ QByteArray buildKernelSignatureMessageForFeature(const QString &feature,
     return QCryptographicHash::hash(serialized, QCryptographicHash::Blake2b_256);
 }
 
+/**
+ * @brief buildKernelSignatureMessage
+ * @param slate
+ * @return
+ */
 QByteArray buildKernelSignatureMessage(const SlateV4 &slate)
 {
     QByteArray serialized;
@@ -51,6 +64,12 @@ QByteArray buildKernelSignatureMessage(const SlateV4 &slate)
     return QCryptographicHash::hash(serialized, QCryptographicHash::Blake2b_256);
 }
 
+/**
+ * @brief findParticipantIndex
+ * @param slate
+ * @param publicBlind
+ * @return
+ */
 int findParticipantIndex(const SlateV4 &slate, const QString &publicBlind)
 {
     for (int i = 0; i < slate.signatures.size(); ++i) {
@@ -61,6 +80,16 @@ int findParticipantIndex(const SlateV4 &slate, const QString &publicBlind)
     return -1;
 }
 
+/**
+ * @brief createPartialSignature
+ * @param messageHash
+ * @param seckey
+ * @param secnonce
+ * @param pubnonceTotal
+ * @param pubkeyTotal
+ * @param signatureOut
+ * @return
+ */
 bool createPartialSignature(const QByteArray &messageHash,
                             const QByteArray &seckey,
                             const QByteArray &secnonce,
@@ -98,6 +127,12 @@ bool createPartialSignature(const QByteArray &messageHash,
     return true;
 }
 
+/**
+ * @brief aggsigRawToCompact
+ * @param rawSignature
+ * @param compactOut
+ * @return
+ */
 bool aggsigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut)
 {
     if (rawSignature.size() != 64 || !compactOut) {
@@ -108,6 +143,12 @@ bool aggsigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut)
     return true;
 }
 
+/**
+ * @brief aggsigCompactToRaw
+ * @param compactSignature
+ * @param rawOut
+ * @return
+ */
 bool aggsigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut)
 {
     if (compactSignature.size() != 64 || !rawOut) {
@@ -118,6 +159,12 @@ bool aggsigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut)
     return true;
 }
 
+/**
+ * @brief kernelSigRawToCompact
+ * @param rawSignature
+ * @param compactOut
+ * @return
+ */
 bool kernelSigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut)
 {
     if (rawSignature.size() != 64 || !compactOut) {
@@ -136,6 +183,12 @@ bool kernelSigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOu
     return true;
 }
 
+/**
+ * @brief kernelSigCompactToRaw
+ * @param compactSignature
+ * @param rawOut
+ * @return
+ */
 bool kernelSigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut)
 {
     if (compactSignature.size() != 64 || !rawOut) {
@@ -154,6 +207,15 @@ bool kernelSigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOu
     return true;
 }
 
+/**
+ * @brief verifyPartialSignature
+ * @param signature
+ * @param messageHash
+ * @param pubnonceTotal
+ * @param pubkey
+ * @param pubkeyTotal
+ * @return
+ */
 bool verifyPartialSignature(const QByteArray &signature,
                             const QByteArray &messageHash,
                             const secp256k1_pubkey &pubnonceTotal,

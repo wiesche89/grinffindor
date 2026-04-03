@@ -5,6 +5,13 @@
 
 #include "walletscanner.h"
 
+/**
+ * @brief GrinWalletWorkflow::persistTransaction
+ * @param document
+ * @param slate
+ * @param broadcasted
+ * @return
+ */
 bool GrinWalletWorkflow::persistTransaction(QJsonObject *document, const SlateV4 &slate, bool broadcasted)
 {
     if (!document || slate.workflowId().isEmpty()) {
@@ -55,6 +62,7 @@ bool GrinWalletWorkflow::persistTransaction(QJsonObject *document, const SlateV4
                                     ? QStringLiteral("ready")
                                     : existingEntry.value(QStringLiteral("status")).toString().isEmpty()
                                         ? QStringLiteral("in_progress")
+
                                         : existingEntry.value(QStringLiteral("status")).toString()));
     if (existingEntry.contains(QStringLiteral("broadcast_at"))) {
         entry.insert(QStringLiteral("broadcast_at"), existingEntry.value(QStringLiteral("broadcast_at")).toString());
@@ -141,6 +149,15 @@ bool GrinWalletWorkflow::persistTransaction(QJsonObject *document, const SlateV4
     return true;
 }
 
+/**
+ * @brief GrinWalletWorkflow::finalizeOutputs
+ * @param document
+ * @param slate
+ * @param broadcasted
+ * @param chainHeight
+ * @param localContext
+ * @return
+ */
 bool GrinWalletWorkflow::finalizeOutputs(QJsonObject *document,
                                          const SlateV4 &slate,
                                          bool broadcasted,
@@ -154,6 +171,7 @@ bool GrinWalletWorkflow::finalizeOutputs(QJsonObject *document,
     QJsonObject walletState = document->value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
+
     const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
 
     for (int i = 0; i < outputs.size(); ++i) {
@@ -188,6 +206,14 @@ bool GrinWalletWorkflow::finalizeOutputs(QJsonObject *document,
     return true;
 }
 
+/**
+ * @brief GrinWalletWorkflow::finalizeBroadcastedWorkflow
+ * @param document
+ * @param workflowId
+ * @param chainHeight
+ * @param localContext
+ * @return
+ */
 bool GrinWalletWorkflow::finalizeBroadcastedWorkflow(QJsonObject *document,
                                                      const QString &workflowId,
                                                      qulonglong chainHeight,
@@ -199,6 +225,7 @@ bool GrinWalletWorkflow::finalizeBroadcastedWorkflow(QJsonObject *document,
 
     QJsonObject walletState = document->value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+
     const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
 
     for (int i = 0; i < outputs.size(); ++i) {

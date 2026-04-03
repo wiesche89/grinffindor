@@ -17,6 +17,12 @@ const size_t kBulletproofScratchSpaceSize = 8 * 1024 * 1024;
 namespace WalletCryptoHelpers
 {
 
+/**
+ * @brief parseCommitmentHex
+ * @param hex
+ * @param commitmentOut
+ * @return
+ */
 bool parseCommitmentHex(const QString &hex, secp256k1_pedersen_commitment *commitmentOut)
 {
     if (!commitmentOut) {
@@ -33,6 +39,12 @@ bool parseCommitmentHex(const QString &hex, secp256k1_pedersen_commitment *commi
                                                reinterpret_cast<const unsigned char *>(bytes.constData())) == 1;
 }
 
+/**
+ * @brief buildZeroValueCommitment
+ * @param blindHex
+ * @param commitmentOut
+ * @return
+ */
 bool buildZeroValueCommitment(const QString &blindHex, secp256k1_pedersen_commitment *commitmentOut)
 {
     if (!commitmentOut) {
@@ -57,6 +69,12 @@ bool buildZeroValueCommitment(const QString &blindHex, secp256k1_pedersen_commit
                                      &secp256k1_generator_const_g) == 1;
 }
 
+/**
+ * @brief buildValueOnlyCommitment
+ * @param value
+ * @param commitmentOut
+ * @return
+ */
 bool buildValueOnlyCommitment(quint64 value, secp256k1_pedersen_commitment *commitmentOut)
 {
     if (!commitmentOut) {
@@ -73,6 +91,11 @@ bool buildValueOnlyCommitment(quint64 value, secp256k1_pedersen_commitment *comm
                                      &secp256k1_generator_const_g) == 1;
 }
 
+/**
+ * @brief serializeCommitment
+ * @param commitment
+ * @return
+ */
 QString serializeCommitment(const secp256k1_pedersen_commitment &commitment)
 {
     unsigned char serialized[33];
@@ -82,6 +105,13 @@ QString serializeCommitment(const secp256k1_pedersen_commitment &commitment)
     return toHex(serialized, sizeof(serialized));
 }
 
+/**
+ * @brief appendFixedHexBytes
+ * @param serialized
+ * @param hex
+ * @param expectedSize
+ * @return
+ */
 bool appendFixedHexBytes(QByteArray *serialized, const QString &hex, int expectedSize)
 {
     if (!serialized) {
@@ -97,6 +127,12 @@ bool appendFixedHexBytes(QByteArray *serialized, const QString &hex, int expecte
     return true;
 }
 
+/**
+ * @brief appendOutputFeatureForOrdering
+ * @param serialized
+ * @param feature
+ * @return
+ */
 bool appendOutputFeatureForOrdering(QByteArray *serialized, const QString &feature)
 {
     if (!serialized) {
@@ -116,6 +152,12 @@ bool appendOutputFeatureForOrdering(QByteArray *serialized, const QString &featu
     return false;
 }
 
+/**
+ * @brief appendKernelFeaturesForOrdering
+ * @param serialized
+ * @param kernel
+ * @return
+ */
 bool appendKernelFeaturesForOrdering(QByteArray *serialized, const TxKernel &kernel)
 {
     if (!serialized) {
@@ -136,6 +178,12 @@ bool appendKernelFeaturesForOrdering(QByteArray *serialized, const TxKernel &ker
     return false;
 }
 
+/**
+ * @brief verifyOutputsBatchRangeproofs
+ * @param outputs
+ * @param errorOut
+ * @return
+ */
 bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *errorOut)
 {
     if (outputs.isEmpty()) {
@@ -230,6 +278,13 @@ bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *erro
     return true;
 }
 
+/**
+ * @brief verifyOutputRangeproof
+ * @param output
+ * @param scratch
+ * @param errorOut
+ * @return
+ */
 bool verifyOutputRangeproof(const Output &output,
                             secp256k1_scratch_space *scratch,
                             QString *errorOut)
@@ -271,6 +326,15 @@ bool verifyOutputRangeproof(const Output &output,
     return true;
 }
 
+/**
+ * @brief createCommitmentAndRangeproof
+ * @param walletFingerprint
+ * @param workflowId
+ * @param roleTag
+ * @param amount
+ * @param commitOut
+ * @return
+ */
 bool createCommitmentAndRangeproof(const QString &walletFingerprint,
                                    const QString &workflowId,
                                    const QString &roleTag,
@@ -383,6 +447,16 @@ bool createCommitmentAndRangeproof(const QString &walletFingerprint,
     return true;
 }
 
+/**
+ * @brief createCommitmentAndRangeproofFromSecrets
+ * @param blind
+ * @param privateNonceHash
+ * @param rewindNonceHash
+ * @param proofMessage
+ * @param value
+ * @param commitOut
+ * @return
+ */
 bool createCommitmentAndRangeproofFromSecrets(const QByteArray &blind,
                                               const QByteArray &privateNonceHash,
                                               const QByteArray &rewindNonceHash,

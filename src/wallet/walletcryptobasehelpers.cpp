@@ -8,6 +8,14 @@ namespace
 
 const char kBech32Charset[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
+/**
+ * @brief convertBits
+ * @param data
+ * @param fromBits
+ * @param toBits
+ * @param pad
+ * @return
+ */
 QVector<int> convertBits(const QByteArray &data, int fromBits, int toBits, bool pad)
 {
     QVector<int> output;
@@ -40,6 +48,11 @@ QVector<int> convertBits(const QByteArray &data, int fromBits, int toBits, bool 
     return output;
 }
 
+/**
+ * @brief hrpExpand
+ * @param hrp
+ * @return
+ */
 QVector<int> hrpExpand(const QString &hrp)
 {
     QVector<int> expanded;
@@ -54,6 +67,11 @@ QVector<int> hrpExpand(const QString &hrp)
     return expanded;
 }
 
+/**
+ * @brief bech32Polymod
+ * @param values
+ * @return
+ */
 quint32 bech32Polymod(const QVector<int> &values)
 {
     static const quint32 generators[5] = {
@@ -73,6 +91,12 @@ quint32 bech32Polymod(const QVector<int> &values)
     return checksum;
 }
 
+/**
+ * @brief bech32CreateChecksum
+ * @param hrp
+ * @param data
+ * @return
+ */
 QVector<int> bech32CreateChecksum(const QString &hrp, const QVector<int> &data)
 {
     QVector<int> values = hrpExpand(hrp);
@@ -93,16 +117,33 @@ QVector<int> bech32CreateChecksum(const QString &hrp, const QVector<int> &data)
 namespace WalletCryptoHelpers
 {
 
+/**
+ * @brief hashBytes
+ * @param input
+ * @return
+ */
 QByteArray hashBytes(const QByteArray &input)
 {
     return QCryptographicHash::hash(input, QCryptographicHash::Sha256);
 }
 
+/**
+ * @brief toHex
+ * @param data
+ * @param size
+ * @return
+ */
 QString toHex(const unsigned char *data, int size)
 {
     return QString::fromUtf8(QByteArray(reinterpret_cast<const char *>(data), size).toHex());
 }
 
+/**
+ * @brief bech32Encode
+ * @param hrp
+ * @param payload
+ * @return
+ */
 QString bech32Encode(const QString &hrp, const QByteArray &payload)
 {
     const QVector<int> data = convertBits(payload, 8, 5, true);
@@ -122,17 +163,32 @@ QString bech32Encode(const QString &hrp, const QByteArray &payload)
     return encoded;
 }
 
+/**
+ * @brief appendU8
+ * @param out
+ * @param value
+ */
 void appendU8(QByteArray &out, quint8 value)
 {
     out.append(static_cast<char>(value));
 }
 
+/**
+ * @brief appendU16
+ * @param out
+ * @param value
+ */
 void appendU16(QByteArray &out, quint16 value)
 {
     out.append(static_cast<char>((value >> 8) & 0xff));
     out.append(static_cast<char>(value & 0xff));
 }
 
+/**
+ * @brief appendU64
+ * @param out
+ * @param value
+ */
 void appendU64(QByteArray &out, quint64 value)
 {
     for (int shift = 56; shift >= 0; shift -= 8) {
@@ -140,11 +196,21 @@ void appendU64(QByteArray &out, quint64 value)
     }
 }
 
+/**
+ * @brief fromHex
+ * @param hex
+ * @return
+ */
 QByteArray fromHex(const QString &hex)
 {
     return QByteArray::fromHex(hex.toUtf8());
 }
 
+/**
+ * @brief paymentProofMessage
+ * @param slate
+ * @return
+ */
 QByteArray paymentProofMessage(const SlateV4 &slate)
 {
     return QStringLiteral("%1|%2|%3|%4|%5")

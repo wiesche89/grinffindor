@@ -22,6 +22,11 @@ const int kAgePayloadNonceSize = 16;
 const int kAgeChunkSize = 64 * 1024;
 const int kChaChaOverhead = 16;
 
+/**
+ * @brief formatNanogrin
+ * @param value
+ * @return
+ */
 QString formatNanogrin(quint64 value)
 {
     const quint64 whole = value / 1000000000ULL;
@@ -107,6 +112,11 @@ private:
     int m_offset;
 };
 
+/**
+ * @brief decodeBase64Raw
+ * @param input
+ * @return
+ */
 QByteArray decodeBase64Raw(const QString &input)
 {
     QByteArray normalized = input.trimmed().toUtf8();
@@ -117,6 +127,14 @@ QByteArray decodeBase64Raw(const QString &input)
     return QByteArray::fromBase64(normalized, QByteArray::Base64Encoding);
 }
 
+/**
+ * @brief hkdfSha256
+ * @param ikm
+ * @param salt
+ * @param info
+ * @param outputLength
+ * @return
+ */
 QByteArray hkdfSha256(const QByteArray &ikm,
                       const QByteArray &salt,
                       const QByteArray &info,
@@ -139,6 +157,11 @@ QByteArray hkdfSha256(const QByteArray &ikm,
     return output;
 }
 
+/**
+ * @brief x25519SecretFromWalletSecret
+ * @param walletSecret
+ * @return
+ */
 QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
 {
     if (walletSecret.size() != 32) {
@@ -165,6 +188,13 @@ QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
 }
 
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
+
+/**
+ * @brief deriveX25519PublicKey
+ * @param privateKey
+ * @param publicKeyOut
+ * @return
+ */
 bool deriveX25519PublicKey(const QByteArray &privateKey, QByteArray *publicKeyOut)
 {
     if (!publicKeyOut || privateKey.size() != 32) {
@@ -178,6 +208,13 @@ bool deriveX25519PublicKey(const QByteArray &privateKey, QByteArray *publicKeyOu
     return true;
 }
 
+/**
+ * @brief deriveX25519SharedSecret
+ * @param privateKey
+ * @param peerPublicKey
+ * @param sharedSecretOut
+ * @return
+ */
 bool deriveX25519SharedSecret(const QByteArray &privateKey,
                               const QByteArray &peerPublicKey,
                               QByteArray *sharedSecretOut)
@@ -194,6 +231,14 @@ bool deriveX25519SharedSecret(const QByteArray &privateKey,
     return true;
 }
 
+/**
+ * @brief chacha20Poly1305Decrypt
+ * @param key
+ * @param nonce
+ * @param ciphertext
+ * @param plaintextOut
+ * @return
+ */
 bool chacha20Poly1305Decrypt(const QByteArray &key,
                              const QByteArray &nonce,
                              const QByteArray &ciphertext,
@@ -224,6 +269,11 @@ bool chacha20Poly1305Decrypt(const QByteArray &key,
 }
 #endif
 
+/**
+ * @brief incrementStreamNonce
+ * @param nonce
+ * @return
+ */
 bool incrementStreamNonce(QByteArray *nonce)
 {
     if (!nonce || nonce->size() != 12) {
@@ -255,6 +305,12 @@ struct DecryptedSlatepackPayload
     QStringList recipients;
 };
 
+/**
+ * @brief parseSlatepackAddress
+ * @param cursor
+ * @param addressOut
+ * @return
+ */
 bool parseSlatepackAddress(ByteCursor *cursor, QString *addressOut)
 {
     if (!cursor || !addressOut) {
@@ -276,6 +332,15 @@ bool parseSlatepackAddress(ByteCursor *cursor, QString *addressOut)
     return !addressOut->trimmed().isEmpty();
 }
 
+/**
+ * @brief parseBinaryEnvelopeOptionalFields
+ * @param optFields
+ * @param optFlags
+ * @param senderOut
+ * @param recipientsOut
+ * @param errorOut
+ * @return
+ */
 bool parseBinaryEnvelopeOptionalFields(const QByteArray &optFields,
                                        quint16 optFlags,
                                        QString *senderOut,
@@ -319,6 +384,13 @@ bool parseBinaryEnvelopeOptionalFields(const QByteArray &optFields,
     return true;
 }
 
+/**
+ * @brief extractDecryptedSlatepackPayload
+ * @param decrypted
+ * @param resultOut
+ * @param errorOut
+ * @return
+ */
 bool extractDecryptedSlatepackPayload(const QByteArray &decrypted,
                                       DecryptedSlatepackPayload *resultOut,
                                       QString *errorOut)
@@ -381,6 +453,14 @@ bool extractDecryptedSlatepackPayload(const QByteArray &decrypted,
     return true;
 }
 
+/**
+ * @brief unwrapAgeFileKey
+ * @param stanzas
+ * @param x25519Secret
+ * @param x25519Public
+ * @param fileKeyOut
+ * @return
+ */
 bool unwrapAgeFileKey(const QList<AgeStanza> &stanzas,
                       const QByteArray &x25519Secret,
                       const QByteArray &x25519Public,
@@ -425,6 +505,14 @@ bool unwrapAgeFileKey(const QList<AgeStanza> &stanzas,
     return false;
 }
 
+/**
+ * @brief decryptAgePayload
+ * @param payload
+ * @param walletSecret
+ * @param plaintextOut
+ * @param errorOut
+ * @return
+ */
 bool decryptAgePayload(const QByteArray &payload,
                        const QByteArray &walletSecret,
                        QByteArray *plaintextOut,
@@ -607,6 +695,11 @@ bool decryptAgePayload(const QByteArray &payload,
 }
 #endif
 
+/**
+ * @brief formatUuid
+ * @param bytes
+ * @return
+ */
 QString formatUuid(const QByteArray &bytes)
 {
     if (bytes.size() != 16) {
@@ -617,6 +710,13 @@ QString formatUuid(const QByteArray &bytes)
         .arg(hex.mid(0, 8), hex.mid(8, 4), hex.mid(12, 4), hex.mid(16, 4), hex.mid(20, 12));
 }
 
+/**
+ * @brief decodeSlateV4BinaryPayload
+ * @param payload
+ * @param decodedOut
+ * @param errorOut
+ * @return
+ */
 bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, QString *errorOut)
 {
     ByteCursor cursor(payload);
@@ -757,6 +857,15 @@ bool decodeSlateV4BinaryPayload(const QByteArray &payload, QString *decodedOut, 
     return true;
 }
 
+/**
+ * @brief finalizeDecodedSlatePayload
+ * @param payload
+ * @param senderAddress
+ * @param recipients
+ * @param decodedOut
+ * @param errorOut
+ * @return
+ */
 bool finalizeDecodedSlatePayload(const QByteArray &payload,
                                  const QString &senderAddress,
                                  const QStringList &recipients,
@@ -798,6 +907,14 @@ bool finalizeDecodedSlatePayload(const QByteArray &payload,
     return true;
 }
 
+/**
+ * @brief decodeJsonSlatepackPayload
+ * @param object
+ * @param decryptionKey
+ * @param decodedOut
+ * @param errorOut
+ * @return
+ */
 bool decodeJsonSlatepackPayload(const QJsonObject &object,
                                 const QByteArray &decryptionKey,
                                 QString *decodedOut,
@@ -858,11 +975,20 @@ bool decodeJsonSlatepackPayload(const QJsonObject &object,
 
 }
 
+/**
+ * @brief BinarySlateV4Reader::decodeSlatepackPayload
+ * @param payload
+ * @param decryptionKey
+ * @param decodedOut
+ * @param errorOut
+ * @return
+ */
 bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload,
                                                  const QByteArray &decryptionKey,
                                                  QString *decodedOut,
                                                  QString *errorOut)
 {
+
     const QJsonDocument doc = QJsonDocument::fromJson(payload);
     if (doc.isObject()) {
         const QJsonObject object = doc.object();
@@ -887,6 +1013,7 @@ bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload,
     const quint8 minor = cursor.readU8(&ok);
     const quint8 mode = cursor.readU8(&ok);
     const quint16 optFlags = cursor.readU16(&ok);
+
     const quint32 optFieldsLen = cursor.readU32(&ok);
     if (!ok) {
         if (errorOut) *errorOut = QStringLiteral("Invalid binary slatepack header.");
@@ -910,6 +1037,7 @@ bool BinarySlateV4Reader::decodeSlatepackPayload(const QByteArray &payload,
         }
         return false;
     }
+
     const quint64 payloadSize = cursor.readU64(&ok);
     if (!ok || payloadSize > static_cast<quint64>(std::numeric_limits<int>::max())) {
         if (errorOut) *errorOut = QStringLiteral("Invalid binary slatepack payload length.");

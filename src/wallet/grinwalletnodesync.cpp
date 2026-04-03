@@ -2,12 +2,18 @@
 
 #include <QJsonArray>
 
+/**
+ * @brief GrinWalletNodeSync::hasRecoverableBroadcasts
+ * @param document
+ * @return
+ */
 bool GrinWalletNodeSync::hasRecoverableBroadcasts(const QJsonObject &document)
 {
     const QJsonArray transactions = document
                                         .value(QStringLiteral("wallet_state"))
                                         .toObject()
                                         .value(QStringLiteral("transactions"))
+
                                         .toArray();
     for (int i = 0; i < transactions.size(); ++i) {
         const QString status = transactions.at(i).toObject().value(QStringLiteral("status")).toString();
@@ -21,12 +27,18 @@ bool GrinWalletNodeSync::hasRecoverableBroadcasts(const QJsonObject &document)
     return false;
 }
 
+/**
+ * @brief GrinWalletNodeSync::shouldRefreshBroadcastStatuses
+ * @param document
+ * @return
+ */
 bool GrinWalletNodeSync::shouldRefreshBroadcastStatuses(const QJsonObject &document)
 {
     const QJsonArray transactions = document
                                         .value(QStringLiteral("wallet_state"))
                                         .toObject()
                                         .value(QStringLiteral("transactions"))
+
                                         .toArray();
     for (int i = 0; i < transactions.size(); ++i) {
         const QJsonObject entry = transactions.at(i).toObject();
@@ -43,6 +55,11 @@ bool GrinWalletNodeSync::shouldRefreshBroadcastStatuses(const QJsonObject &docum
     return false;
 }
 
+/**
+ * @brief GrinWalletNodeSync::buildSeedScanState
+ * @param walletState
+ * @return
+ */
 GrinWalletNodeSync::SeedScanState GrinWalletNodeSync::buildSeedScanState(const QJsonObject &walletState)
 {
     SeedScanState state;

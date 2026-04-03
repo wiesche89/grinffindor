@@ -62,17 +62,31 @@ static const secp256k1_pubkey kGeneratorJPub = {{
     0x53, 0x8f, 0xaa, 0x2c, 0xd3, 0x09, 0x3f, 0xa4
 }};
 
+/**
+ * @brief walletKeychainSecp
+ * @return
+ */
 KeychainSecpHolder &walletKeychainSecp()
 {
     static KeychainSecpHolder holder;
     return holder;
 }
 
+/**
+ * @brief hash256
+ * @param input
+ * @return
+ */
 QByteArray hash256(const QByteArray &input)
 {
     return QCryptographicHash::hash(input, QCryptographicHash::Blake2b_256);
 }
 
+/**
+ * @brief normalizeMnemonic
+ * @param mnemonic
+ * @return
+ */
 QString normalizeMnemonic(const QString &mnemonic)
 {
     QString normalized = mnemonic.toLower().trimmed();
@@ -80,6 +94,10 @@ QString normalizeMnemonic(const QString &mnemonic)
     return normalized;
 }
 
+/**
+ * @brief mnemonicWords
+ * @return
+ */
 QStringList mnemonicWords()
 {
     QStringList words;
@@ -98,6 +116,11 @@ QStringList mnemonicWords()
     return words;
 }
 
+/**
+ * @brief bitsFromBytes
+ * @param bytes
+ * @return
+ */
 QByteArray bitsFromBytes(const QByteArray &bytes)
 {
     QByteArray bits;
@@ -111,6 +134,11 @@ QByteArray bitsFromBytes(const QByteArray &bytes)
     return bits;
 }
 
+/**
+ * @brief bytesFromBits
+ * @param bits
+ * @return
+ */
 QByteArray bytesFromBits(const QByteArray &bits)
 {
     QByteArray bytes;
@@ -125,6 +153,11 @@ QByteArray bytesFromBits(const QByteArray &bits)
     return bytes;
 }
 
+/**
+ * @brief entropyFromMnemonic
+ * @param mnemonic
+ * @return
+ */
 QByteArray entropyFromMnemonic(const QString &mnemonic)
 {
     const QStringList parts = normalizeMnemonic(mnemonic).split(QLatin1Char(' '), Qt::SkipEmptyParts);
@@ -159,6 +192,11 @@ QByteArray entropyFromMnemonic(const QString &mnemonic)
     return entropy;
 }
 
+/**
+ * @brief createCompressedPubkey
+ * @param secretKey
+ * @return
+ */
 QByteArray createCompressedPubkey(const QByteArray &secretKey)
 {
     secp256k1_context *context = walletKeychainSecp().context();
@@ -186,11 +224,23 @@ QByteArray createCompressedPubkey(const QByteArray &secretKey)
     return QByteArray(reinterpret_cast<const char *>(serialized), static_cast<int>(serializedSize));
 }
 
+/**
+ * @brief createNonce
+ * @param commitment
+ * @param nonceHash
+ * @return
+ */
 QByteArray createNonce(const QByteArray &commitment, const QByteArray &nonceHash)
 {
     return WalletBlake2b::hash256(commitment, nonceHash);
 }
 
+/**
+ * @brief blindSwitch
+ * @param blind
+ * @param amount
+ * @return
+ */
 QByteArray blindSwitch(const QByteArray &blind, quint64 amount)
 {
     secp256k1_context *context = walletKeychainSecp().context();
@@ -215,6 +265,11 @@ QByteArray blindSwitch(const QByteArray &blind, quint64 amount)
     return QByteArray(reinterpret_cast<const char *>(blindSwitchOut), 32);
 }
 
+/**
+ * @brief appendU32
+ * @param buffer
+ * @param value
+ */
 void appendU32(QByteArray &buffer, quint32 value)
 {
     buffer.append(static_cast<char>((value >> 24) & 0xff));
@@ -223,6 +278,11 @@ void appendU32(QByteArray &buffer, quint32 value)
     buffer.append(static_cast<char>(value & 0xff));
 }
 
+/**
+ * @brief readU32
+ * @param data
+ * @return
+ */
 quint32 readU32(const unsigned char *data)
 {
     return (static_cast<quint32>(data[0]) << 24)
@@ -231,6 +291,11 @@ quint32 readU32(const unsigned char *data)
          | static_cast<quint32>(data[3]);
 }
 
+/**
+ * @brief formatKeyPath
+ * @param path
+ * @return
+ */
 QString formatKeyPath(const QVector<quint32> &path)
 {
     QString result = QStringLiteral("m");
@@ -240,6 +305,15 @@ QString formatKeyPath(const QVector<quint32> &path)
     return result;
 }
 
+/**
+ * @brief deriveChildPrivateKey
+ * @param parentSecret
+ * @param parentChainCode
+ * @param childIndex
+ * @param childSecretOut
+ * @param childChainCodeOut
+ * @return
+ */
 bool deriveChildPrivateKey(const QByteArray &parentSecret,
                            const QByteArray &parentChainCode,
                            quint32 childIndex,
@@ -287,6 +361,11 @@ bool deriveChildPrivateKey(const QByteArray &parentSecret,
     return true;
 }
 
+/**
+ * @brief buildEnhancedProofMessage
+ * @param path
+ * @return
+ */
 QByteArray buildEnhancedProofMessage(const QVector<quint32> &path)
 {
     QByteArray message(20, '\0');
@@ -304,6 +383,10 @@ QByteArray buildEnhancedProofMessage(const QVector<quint32> &path)
 
 }
 
+/**
+ * @brief WalletKeychain::WalletKeychain
+ * @param mnemonic
+ */
 WalletKeychain::WalletKeychain(const QString &mnemonic)
     : m_mnemonic(mnemonic.trimmed())
 {
@@ -326,6 +409,7 @@ WalletKeychain::WalletKeychain(const QString &mnemonic)
 
     m_masterSecret = hmac.left(32);
     m_masterChainCode = hmac.mid(32, 32);
+
     m_masterPublicKey = createCompressedPubkey(m_masterSecret);
     if (!m_masterPublicKey.isEmpty()) {
         m_rewindNonceHash = hash256(m_masterPublicKey);
@@ -333,6 +417,10 @@ WalletKeychain::WalletKeychain(const QString &mnemonic)
     }
 }
 
+/**
+ * @brief WalletKeychain::isValid
+ * @return
+ */
 bool WalletKeychain::isValid() const
 {
     return m_masterSecret.size() == 32
@@ -341,16 +429,30 @@ bool WalletKeychain::isValid() const
         && m_rewindNonceHash.size() == 32;
 }
 
+/**
+ * @brief WalletKeychain::masterPublicKey
+ * @return
+ */
 QString WalletKeychain::masterPublicKey() const
 {
     return QString::fromUtf8(m_masterPublicKey.toHex());
 }
 
+/**
+ * @brief WalletKeychain::slatepackSecretKey
+ * @return
+ */
 QByteArray WalletKeychain::slatepackSecretKey() const
 {
     return m_masterSecret;
 }
 
+/**
+ * @brief WalletKeychain::rewindOutputProof
+ * @param commitment
+ * @param proof
+ * @return
+ */
 WalletKeychain::RewindResult WalletKeychain::rewindOutputProof(const QString &commitment, const QString &proof) const
 {
     RewindResult result;
@@ -359,6 +461,7 @@ WalletKeychain::RewindResult WalletKeychain::rewindOutputProof(const QString &co
     }
 
     const QByteArray commitmentBytes = QByteArray::fromHex(commitment.toUtf8());
+
     const QByteArray proofBytes = QByteArray::fromHex(proof.toUtf8());
     if (commitmentBytes.size() != 33 || proofBytes.isEmpty()) {
         return result;
@@ -369,6 +472,7 @@ WalletKeychain::RewindResult WalletKeychain::rewindOutputProof(const QString &co
     if (secp256k1_pedersen_commitment_parse(
             context,
             &pedersenCommitment,
+
             reinterpret_cast<const unsigned char *>(commitmentBytes.constData())) != 1) {
         return result;
     }
@@ -435,6 +539,12 @@ WalletKeychain::RewindResult WalletKeychain::rewindOutputProof(const QString &co
     return result;
 }
 
+/**
+ * @brief WalletKeychain::deriveOutputSecrets
+ * @param childIndex
+ * @param amount
+ * @return
+ */
 WalletKeychain::OutputSecrets WalletKeychain::deriveOutputSecrets(quint32 childIndex, quint64 amount) const
 {
     OutputSecrets secrets;
@@ -463,6 +573,7 @@ WalletKeychain::OutputSecrets WalletKeychain::deriveOutputSecrets(quint32 childI
     secrets.blindingFactor = blindSwitch(secret, amount);
     secrets.privateNonceHash = WalletBlake2b::hash256(m_masterSecret);
     secrets.rewindNonceHash = m_rewindNonceHash;
+
     secrets.proofMessage = buildEnhancedProofMessage(path);
     if (secrets.blindingFactor.size() != 32 || secrets.proofMessage.size() != 20) {
         secrets.success = false;

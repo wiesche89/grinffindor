@@ -11,6 +11,13 @@
 
 namespace {
 
+/**
+ * @brief appendExactHexBytes
+ * @param out
+ * @param hex
+ * @param expectedSize
+ * @return
+ */
 bool appendExactHexBytes(QByteArray *out, const QString &hex, int expectedSize)
 {
     if (!out) {
@@ -26,6 +33,11 @@ bool appendExactHexBytes(QByteArray *out, const QString &hex, int expectedSize)
     return true;
 }
 
+/**
+ * @brief appendU64Network
+ * @param out
+ * @param value
+ */
 void appendU64Network(QByteArray *out, quint64 value)
 {
     if (!out) {
@@ -37,6 +49,11 @@ void appendU64Network(QByteArray *out, quint64 value)
     }
 }
 
+/**
+ * @brief inputFeatureName
+ * @param feature
+ * @return
+ */
 QString inputFeatureName(OutputFeatures::Feature feature)
 {
     return feature == OutputFeatures::Coinbase
@@ -44,6 +61,11 @@ QString inputFeatureName(OutputFeatures::Feature feature)
         : QStringLiteral("Plain");
 }
 
+/**
+ * @brief serializeKernelFeatures
+ * @param kernel
+ * @return
+ */
 QJsonObject serializeKernelFeatures(const TxKernel &kernel)
 {
     QJsonObject featureArgs;
@@ -58,6 +80,12 @@ QJsonObject serializeKernelFeatures(const TxKernel &kernel)
 
 } // namespace
 
+/**
+ * @brief GrinWalletNodePushHelpers::serializeTransactionForPoolV1
+ * @param tx
+ * @param errorOut
+ * @return
+ */
 QByteArray GrinWalletNodePushHelpers::serializeTransactionForPoolV1(const Transaction &tx, QString *errorOut)
 {
     QByteArray encoded;
@@ -76,6 +104,7 @@ QByteArray GrinWalletNodePushHelpers::serializeTransactionForPoolV1(const Transa
 
     appendU64Network(&encoded, static_cast<quint64>(inputs.size()));
     appendU64Network(&encoded, static_cast<quint64>(outputs.size()));
+
     appendU64Network(&encoded, static_cast<quint64>(kernels.size()));
 
     for (const Input &input : inputs) {
@@ -148,9 +177,16 @@ QByteArray GrinWalletNodePushHelpers::serializeTransactionForPoolV1(const Transa
     return encoded;
 }
 
+/**
+ * @brief GrinWalletNodePushHelpers::poolPushCandidateUrlsForApiUrl
+ * @param apiUrl
+ * @param fluff
+ * @return
+ */
 QList<QUrl> GrinWalletNodePushHelpers::poolPushCandidateUrlsForApiUrl(const QString &apiUrl, bool fluff)
 {
     QUrl url(apiUrl);
+
     QString path = url.path();
     if (path.endsWith(QStringLiteral("/v2/foreign"))) {
         path.chop(QStringLiteral("/v2/foreign").size());
@@ -171,6 +207,7 @@ QList<QUrl> GrinWalletNodePushHelpers::poolPushCandidateUrlsForApiUrl(const QStr
     };
 
     QList<QUrl> urls;
+
     urls.reserve(relativeCandidates.size());
     for (const QString &candidate : relativeCandidates) {
         QUrl candidateUrl = url;
@@ -185,6 +222,11 @@ QList<QUrl> GrinWalletNodePushHelpers::poolPushCandidateUrlsForApiUrl(const QStr
     return urls;
 }
 
+/**
+ * @brief GrinWalletNodePushHelpers::serializeTransactionForNode
+ * @param tx
+ * @return
+ */
 QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNode(const Transaction &tx)
 {
     QJsonObject txJson;
@@ -193,6 +235,7 @@ QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNode(const Transac
     const TransactionBody body = tx.body();
 
     QJsonArray inputsJson;
+
     const QVector<Input> inputs = body.inputs();
     for (const Input &input : inputs) {
         QJsonObject inputJson;
@@ -202,6 +245,7 @@ QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNode(const Transac
     }
 
     QJsonArray outputsJson;
+
     const QVector<Output> outputs = body.outputs();
     for (const Output &output : outputs) {
         QJsonObject outputJson;
@@ -212,6 +256,7 @@ QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNode(const Transac
     }
 
     QJsonArray kernelsJson;
+
     const QVector<TxKernel> kernels = body.kernels();
     for (const TxKernel &kernel : kernels) {
         QJsonObject kernelJson;
@@ -229,6 +274,11 @@ QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNode(const Transac
     return txJson;
 }
 
+/**
+ * @brief GrinWalletNodePushHelpers::serializeTransactionForNodeLegacyKernel
+ * @param tx
+ * @return
+ */
 QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNodeLegacyKernel(const Transaction &tx)
 {
     QJsonObject txJson;
@@ -237,6 +287,7 @@ QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNodeLegacyKernel(c
     const TransactionBody body = tx.body();
 
     QJsonArray inputsJson;
+
     const QVector<Input> inputs = body.inputs();
     for (const Input &input : inputs) {
         QJsonObject inputJson;
@@ -246,6 +297,7 @@ QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNodeLegacyKernel(c
     }
 
     QJsonArray outputsJson;
+
     const QVector<Output> outputs = body.outputs();
     for (const Output &output : outputs) {
         QJsonObject outputJson;
@@ -256,6 +308,7 @@ QJsonObject GrinWalletNodePushHelpers::serializeTransactionForNodeLegacyKernel(c
     }
 
     QJsonArray kernelsJson;
+
     const QVector<TxKernel> kernels = body.kernels();
     for (const TxKernel &kernel : kernels) {
         QJsonObject kernelJson;

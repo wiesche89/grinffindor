@@ -53,6 +53,10 @@ private:
     secp256k1_bulletproof_generators *m_generators = 0;
 };
 
+/**
+ * @brief walletSecpHolder
+ * @return
+ */
 SecpContextHolder &walletSecpHolder()
 {
     static SecpContextHolder holder;
@@ -64,16 +68,31 @@ SecpContextHolder &walletSecpHolder()
 namespace WalletCryptoHelpers
 {
 
+/**
+ * @brief walletSecpContext
+ * @return
+ */
 secp256k1_context *walletSecpContext()
 {
     return walletSecpHolder().context();
 }
 
+/**
+ * @brief walletBulletproofGenerators
+ * @return
+ */
 secp256k1_bulletproof_generators *walletBulletproofGenerators()
 {
     return walletSecpHolder().generators();
 }
 
+/**
+ * @brief deriveValidSecretBytes
+ * @param domain
+ * @param left
+ * @param right
+ * @return
+ */
 QByteArray deriveValidSecretBytes(const QString &domain, const QString &left, const QString &right)
 {
     secp256k1_context *context = walletSecpContext();
@@ -98,6 +117,13 @@ QByteArray deriveValidSecretBytes(const QString &domain, const QString &left, co
     return fallback;
 }
 
+/**
+ * @brief deriveSigningBaseSecret
+ * @param walletFingerprint
+ * @param workflowId
+ * @param roleTag
+ * @return
+ */
 QByteArray deriveSigningBaseSecret(const QString &walletFingerprint,
                                    const QString &workflowId,
                                    const QString &roleTag)
@@ -107,6 +133,13 @@ QByteArray deriveSigningBaseSecret(const QString &walletFingerprint,
                                   workflowId + QLatin1Char(':') + roleTag);
 }
 
+/**
+ * @brief deriveAggsigSecnonce
+ * @param walletFingerprint
+ * @param workflowId
+ * @param roleTag
+ * @return
+ */
 QByteArray deriveAggsigSecnonce(const QString &walletFingerprint,
                                 const QString &workflowId,
                                 const QString &roleTag)
@@ -129,6 +162,11 @@ QByteArray deriveAggsigSecnonce(const QString &walletFingerprint,
     return QByteArray(reinterpret_cast<const char *>(secnonce), sizeof(secnonce));
 }
 
+/**
+ * @brief createCompressedPubkeyHex
+ * @param secretKey
+ * @return
+ */
 QString createCompressedPubkeyHex(const QByteArray &secretKey)
 {
     secp256k1_context *context = walletSecpContext();
@@ -151,6 +189,12 @@ QString createCompressedPubkeyHex(const QByteArray &secretKey)
     return toHex(serialized, static_cast<int>(serializedSize));
 }
 
+/**
+ * @brief parsePubkey
+ * @param hex
+ * @param pubkey
+ * @return
+ */
 bool parsePubkey(const QString &hex, secp256k1_pubkey *pubkey)
 {
     const QByteArray bytes = fromHex(hex);
@@ -163,6 +207,11 @@ bool parsePubkey(const QString &hex, secp256k1_pubkey *pubkey)
                                      static_cast<size_t>(bytes.size())) == 1;
 }
 
+/**
+ * @brief serializePubkey
+ * @param pubkey
+ * @return
+ */
 QString serializePubkey(const secp256k1_pubkey &pubkey)
 {
     unsigned char serialized[33];
@@ -177,6 +226,12 @@ QString serializePubkey(const secp256k1_pubkey &pubkey)
     return toHex(serialized, static_cast<int>(serializedSize));
 }
 
+/**
+ * @brief combinePubkeys
+ * @param hexPubkeys
+ * @param combined
+ * @return
+ */
 bool combinePubkeys(const QList<QString> &hexPubkeys, secp256k1_pubkey *combined)
 {
     QVector<secp256k1_pubkey> parsed;
@@ -198,6 +253,11 @@ bool combinePubkeys(const QList<QString> &hexPubkeys, secp256k1_pubkey *combined
                                        static_cast<size_t>(ptrs.size())) == 1;
 }
 
+/**
+ * @brief amountToNanogrin
+ * @param amount
+ * @return
+ */
 quint64 amountToNanogrin(const QString &amount)
 {
     const QString simplified = amount.trimmed();
@@ -233,6 +293,13 @@ quint64 amountToNanogrin(const QString &amount)
     return whole * 1000000000ULL + frac;
 }
 
+/**
+ * @brief addScalars
+ * @param left
+ * @param right
+ * @param sumOut
+ * @return
+ */
 bool addScalars(const QByteArray &left, const QByteArray &right, QByteArray *sumOut)
 {
     if (!sumOut || left.size() != 32 || right.size() != 32) {
@@ -248,6 +315,13 @@ bool addScalars(const QByteArray &left, const QByteArray &right, QByteArray *sum
     return true;
 }
 
+/**
+ * @brief subtractScalars
+ * @param left
+ * @param right
+ * @param differenceOut
+ * @return
+ */
 bool subtractScalars(const QByteArray &left, const QByteArray &right, QByteArray *differenceOut)
 {
     if (!differenceOut || left.size() != 32 || right.size() != 32) {

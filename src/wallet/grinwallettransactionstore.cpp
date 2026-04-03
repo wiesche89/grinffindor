@@ -3,6 +3,12 @@
 #include <QDateTime>
 #include <QJsonArray>
 
+/**
+ * @brief GrinWalletTransactionStore::markBroadcastPending
+ * @param document
+ * @param workflowId
+ * @return
+ */
 bool GrinWalletTransactionStore::markBroadcastPending(QJsonObject *document, const QString &workflowId)
 {
     return updateTransaction(document,
@@ -19,6 +25,13 @@ bool GrinWalletTransactionStore::markBroadcastPending(QJsonObject *document, con
                              false);
 }
 
+/**
+ * @brief GrinWalletTransactionStore::markBroadcastFailed
+ * @param document
+ * @param workflowId
+ * @param message
+ * @return
+ */
 bool GrinWalletTransactionStore::markBroadcastFailed(QJsonObject *document,
                                                      const QString &workflowId,
                                                      const QString &message)
@@ -37,6 +50,14 @@ bool GrinWalletTransactionStore::markBroadcastFailed(QJsonObject *document,
                              false);
 }
 
+/**
+ * @brief GrinWalletTransactionStore::markKernelConfirmed
+ * @param document
+ * @param workflowId
+ * @param chainHeight
+ * @param confirmedHeight
+ * @return
+ */
 bool GrinWalletTransactionStore::markKernelConfirmed(QJsonObject *document,
                                                      const QString &workflowId,
                                                      qulonglong chainHeight,
@@ -56,6 +77,12 @@ bool GrinWalletTransactionStore::markKernelConfirmed(QJsonObject *document,
                              false);
 }
 
+/**
+ * @brief GrinWalletTransactionStore::markKernelBroadcasted
+ * @param document
+ * @param workflowId
+ * @return
+ */
 bool GrinWalletTransactionStore::markKernelBroadcasted(QJsonObject *document, const QString &workflowId)
 {
     return updateTransaction(document,
@@ -72,6 +99,12 @@ bool GrinWalletTransactionStore::markKernelBroadcasted(QJsonObject *document, co
                              true);
 }
 
+/**
+ * @brief GrinWalletTransactionStore::markBroadcastSucceeded
+ * @param document
+ * @param workflowId
+ * @return
+ */
 bool GrinWalletTransactionStore::markBroadcastSucceeded(QJsonObject *document, const QString &workflowId)
 {
     return updateTransaction(document,
@@ -88,6 +121,22 @@ bool GrinWalletTransactionStore::markBroadcastSucceeded(QJsonObject *document, c
                              false);
 }
 
+/**
+ * @brief GrinWalletTransactionStore::updateTransaction
+ * @param document
+ * @param workflowId
+ * @param status
+ * @param broadcasted
+ * @param errorMessage
+ * @param clearBroadcastError
+ * @param updateBroadcastAttempts
+ * @param setBroadcastAt
+ * @param setConfirmedHeight
+ * @param chainHeight
+ * @param confirmedHeight
+ * @param keepMempoolStatus
+ * @return
+ */
 bool GrinWalletTransactionStore::updateTransaction(QJsonObject *document,
                                                    const QString &workflowId,
                                                    const QString &status,
@@ -106,6 +155,7 @@ bool GrinWalletTransactionStore::updateTransaction(QJsonObject *document,
     }
 
     QJsonObject walletState = document->value(QStringLiteral("wallet_state")).toObject();
+
     QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
     for (int i = 0; i < transactions.size(); ++i) {
         QJsonObject entry = transactions.at(i).toObject();

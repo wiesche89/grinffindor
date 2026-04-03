@@ -8,63 +8,75 @@
 #include "transactionbody.h"
 #include "walletscanner.h"
 
+// -------------------------------------------------------------------------------------------------------
+// Driving Node Polling, Scan Control, And Broadcast Preflight
+// -------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief GrinWalletNodeSyncService::connectNodeClient
+ */
 void GrinWalletNodeSyncService::connectNodeClient()
 {
-    if (m_controller->m_nodeApi) {
-        m_controller->m_nodeApi->deleteLater();
-        m_controller->m_nodeApi = 0;
+    if (m_controller->nodeApi()) {
+        m_controller->nodeApi()->deleteLater();
+        m_controller->setNodeApi(0);
     }
-    if (m_controller->m_nodeUrl.trimmed().isEmpty()) {
+    if (m_controller->nodeUrl().trimmed().isEmpty()) {
         return;
     }
 
-    m_controller->m_nodeApi = new NodeForeignApi(m_controller->m_nodeUrl, QString());
-    m_controller->m_nodeApi->setParent(this);
+    NodeForeignApi *nodeApi = new NodeForeignApi(m_controller->nodeUrl(), QString());
+    nodeApi->setParent(this);
+    m_controller->setNodeApi(nodeApi);
 
-    connect(m_controller->m_nodeApi, &NodeForeignApi::getTipFinished, this, &GrinWalletNodeSyncService::onNodeTipFinished);
-    connect(m_controller->m_nodeApi, &NodeForeignApi::getVersionFinished, this, &GrinWalletNodeSyncService::onNodeVersionFinished);
-    connect(m_controller->m_nodeApi, &NodeForeignApi::getOutputsFinished, this, &GrinWalletNodeSyncService::onNodeOutputsFinished);
-    connect(m_controller->m_nodeApi, &NodeForeignApi::getOutputCommitmentsFinished, this, &GrinWalletNodeSyncService::onNodeOutputCommitmentsFinished);
-    connect(m_controller->m_nodeApi, &NodeForeignApi::getUnspentOutputsFinished, this, &GrinWalletNodeSyncService::onNodeUnspentOutputsFinished);
-    connect(m_controller->m_nodeApi, &NodeForeignApi::getUnconfirmedTransactionsFinished, this, &GrinWalletNodeSyncService::onNodeUnconfirmedTransactionsFinished);
-    connect(m_controller->m_nodeApi, &NodeForeignApi::getKernelFinished, this, &GrinWalletNodeSyncService::onNodeKernelFinished);
-    connect(m_controller->m_nodeApi, &NodeForeignApi::pushTransactionFinished, this, &GrinWalletNodeSyncService::onNodePushTransactionFinished);
+    connect(nodeApi, &NodeForeignApi::getTipFinished, this, &GrinWalletNodeSyncService::onNodeTipFinished);
+    connect(nodeApi, &NodeForeignApi::getVersionFinished, this, &GrinWalletNodeSyncService::onNodeVersionFinished);
+    connect(nodeApi, &NodeForeignApi::getOutputsFinished, this, &GrinWalletNodeSyncService::onNodeOutputsFinished);
+    connect(nodeApi, &NodeForeignApi::getOutputCommitmentsFinished, this, &GrinWalletNodeSyncService::onNodeOutputCommitmentsFinished);
+    connect(nodeApi, &NodeForeignApi::getUnspentOutputsFinished, this, &GrinWalletNodeSyncService::onNodeUnspentOutputsFinished);
+    connect(nodeApi, &NodeForeignApi::getUnconfirmedTransactionsFinished, this, &GrinWalletNodeSyncService::onNodeUnconfirmedTransactionsFinished);
+    connect(nodeApi, &NodeForeignApi::getKernelFinished, this, &GrinWalletNodeSyncService::onNodeKernelFinished);
+    connect(nodeApi, &NodeForeignApi::pushTransactionFinished, this, &GrinWalletNodeSyncService::onNodePushTransactionFinished);
 }
 
+/**
+ * @brief GrinWalletNodeSyncService::requestWalletScan
+ */
 void GrinWalletNodeSyncService::requestWalletScan()
 {
-    if (!m_controller->m_walletUnlocked || m_controller->m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!m_controller->hasUnlockedSession()) {
         m_controller->setLastError(QStringLiteral("Unlock the wallet before scanning outputs."));
         return;
     }
 
-    if (m_controller->m_walletScanInFlight || m_controller->m_seedScanActive) {
+    if (m_controller->walletScanInFlight() || m_controller->seedScanActive()) {
         m_controller->setLastInfo(QStringLiteral("Wallet scan is already running."));
         return;
     }
 
-    if (!m_controller->m_nodeApi) {
+    if (!m_controller->nodeApi()) {
         connectNodeClient();
     }
-    if (!m_controller->m_nodeApi) {
+    if (!m_controller->nodeApi()) {
         m_controller->setLastError(QStringLiteral("Node client is not configured."));
         return;
     }
 
     QJsonObject document = m_controller->loadDocumentForService();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+
     const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     if (outputs.isEmpty()) {
-        walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->m_chainHeight));
-        walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_controller->m_chainHeight));
+        walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
+        walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
         walletState.insert(QStringLiteral("restore_leaf_index"), 0);
         document.insert(QStringLiteral("wallet_state"), walletState);
         m_controller->saveDocumentForService(document);
         m_controller->refreshStateFromStorage();
         m_controller->setLastInfo(QStringLiteral("Wallet has no tracked outputs yet. Starting seed scan."));
-        m_controller->m_syncStatus = QStringLiteral("Scanning wallet outputs...");
-        emit m_controller->statusChanged();
-        m_controller->m_walletScanInFlight = true;
+        m_controller->setSyncStatusMessage(QStringLiteral("Scanning wallet outputs..."));
+        m_controller->notifyStatusChanged();
+        m_controller->setWalletScanInFlight(true);
         startSeedScan();
         return;
     }
@@ -85,32 +97,43 @@ void GrinWalletNodeSyncService::requestWalletScan()
         m_controller->setLastInfo(QStringLiteral("Refreshing tracked outputs via seed scan."));
     }
 
-    m_controller->m_syncStatus = QStringLiteral("Scanning wallet outputs...");
-    emit m_controller->statusChanged();
-    m_controller->m_walletScanInFlight = true;
+    m_controller->setSyncStatusMessage(QStringLiteral("Scanning wallet outputs..."));
+    m_controller->notifyStatusChanged();
+    m_controller->setWalletScanInFlight(true);
     startSeedScan();
 }
 
+/**
+ * @brief GrinWalletNodeSyncService::startSeedScan
+ */
 void GrinWalletNodeSyncService::startSeedScan()
 {
-    m_controller->m_seedScanActive = true;
+    m_controller->setSeedScanActive(true);
     const GrinWalletNodeSync::SeedScanState seedScanState =
         GrinWalletNodeSync::buildSeedScanState(m_controller->loadDocumentForService().value(QStringLiteral("wallet_state")).toObject());
-    m_controller->m_seedScanNextIndex = seedScanState.nextIndex;
-    m_controller->m_seedScanDiscovered.clear();
-    m_controller->m_syncStatus = seedScanState.syncStatus;
-    emit m_controller->statusChanged();
-    m_controller->m_nodeApi->getUnspentOutputsAsync(static_cast<int>(m_controller->m_seedScanNextIndex), -1, 1000, true);
+    m_controller->setSeedScanNextIndex(seedScanState.nextIndex);
+    m_controller->clearSeedScanDiscovered();
+    m_controller->setSyncStatusMessage(seedScanState.syncStatus);
+    m_controller->notifyStatusChanged();
+    m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, 1000, true);
 }
 
+/**
+ * @brief GrinWalletNodeSyncService::finishSeedScan
+ * @param message
+ */
 void GrinWalletNodeSyncService::finishSeedScan(const QString &message)
 {
-    m_controller->m_seedScanActive = false;
+
+    m_controller->setSeedScanActive(false);
     if (!message.isEmpty()) {
         m_controller->setLastInfo(message);
     }
 }
 
+/**
+ * @brief GrinWalletNodeSyncService::recoverPendingBroadcasts
+ */
 void GrinWalletNodeSyncService::recoverPendingBroadcasts()
 {
     if (GrinWalletNodeSync::hasRecoverableBroadcasts(m_controller->loadDocumentForService())) {
@@ -118,9 +141,12 @@ void GrinWalletNodeSyncService::recoverPendingBroadcasts()
     }
 }
 
+/**
+ * @brief GrinWalletNodeSyncService::refreshBroadcastStatuses
+ */
 void GrinWalletNodeSyncService::refreshBroadcastStatuses()
 {
-    if (!m_controller->m_nodeApi || m_controller->m_broadcastStatusRefreshInFlight || m_controller->m_kernelStatusCheckInFlight) {
+    if (!m_controller->nodeApi() || m_controller->broadcastStatusRefreshInFlight() || m_controller->kernelStatusCheckInFlight()) {
         return;
     }
 
@@ -128,42 +154,51 @@ void GrinWalletNodeSyncService::refreshBroadcastStatuses()
         return;
     }
 
-    m_controller->m_broadcastStatusRefreshInFlight = true;
-    m_controller->m_nodeApi->getUnconfirmedTransactionsAsync();
+    m_controller->setBroadcastStatusRefreshInFlight(true);
+    m_controller->nodeApi()->getUnconfirmedTransactionsAsync();
 }
 
+/**
+ * @brief GrinWalletNodeSyncService::startNextKernelStatusCheck
+ */
 void GrinWalletNodeSyncService::startNextKernelStatusCheck()
 {
-    if (!m_controller->m_nodeApi || m_controller->m_kernelStatusCheckInFlight || m_controller->m_kernelStatusQueue.isEmpty()) {
+    if (!m_controller->nodeApi() || m_controller->kernelStatusCheckInFlight() || !m_controller->hasPendingKernelStatusChecks()) {
         return;
     }
 
-    const QPair<QString, QString> next = m_controller->m_kernelStatusQueue.takeFirst();
-    m_controller->m_currentKernelWorkflowId = next.first;
-    m_controller->m_currentKernelExcess = next.second;
-    if (m_controller->m_currentKernelExcess.isEmpty()) {
+    const QPair<QString, QString> next = m_controller->takeNextKernelStatusCheck();
+
+    m_controller->setCurrentKernelCheck(next.first, next.second);
+    if (m_controller->currentKernelExcessInternal().isEmpty()) {
         startNextKernelStatusCheck();
         return;
     }
 
-    m_controller->m_kernelStatusCheckInFlight = true;
-    m_controller->m_nodeApi->getKernelAsync(m_controller->m_currentKernelExcess,
+    m_controller->setKernelStatusCheckInFlight(true);
+    m_controller->nodeApi()->getKernelAsync(m_controller->currentKernelExcessInternal(),
                                             0,
-                                            static_cast<int>(m_controller->m_chainHeight > 0 ? m_controller->m_chainHeight + 2 : 0));
+                                            static_cast<int>(m_controller->chainHeight() > 0 ? m_controller->chainHeight() + 2 : 0));
 }
 
+/**
+ * @brief GrinWalletNodeSyncService::beginBroadcastWithInputPreflight
+ * @param workflowId
+ * @param txSkeleton
+ */
 void GrinWalletNodeSyncService::beginBroadcastWithInputPreflight(const QString &workflowId,
                                                                  const QJsonObject &txSkeleton)
 {
-    if (!m_controller->m_nodeApi) {
+    if (!m_controller->nodeApi()) {
         m_controller->setLastError(QStringLiteral("Node client is not configured."));
         return;
     }
 
     const Transaction tx = Transaction::fromJson(txSkeleton);
+
     const QVector<Input> inputs = tx.body().inputs();
     if (inputs.isEmpty()) {
-        m_controller->m_pendingBroadcastWorkflowId.clear();
+        m_controller->setPendingBroadcastWorkflowId(QString());
         m_controller->markTransactionBroadcastFailed(workflowId, QStringLiteral("Transaction has no inputs."));
         m_controller->setLastError(QStringLiteral("Transaction has no inputs."));
         return;
@@ -174,8 +209,8 @@ void GrinWalletNodeSyncService::beginBroadcastWithInputPreflight(const QString &
         commits.append(inputs.at(i).commit().hex());
     }
 
-    m_controller->m_pendingBroadcastInputLookup = true;
-    m_controller->m_pendingBroadcastTxSkeleton = txSkeleton;
-    m_controller->m_pendingBroadcastInputCommits = commits;
-    m_controller->m_nodeApi->getOutputCommitmentsAsync(commits);
+    m_controller->setPendingBroadcastInputLookup(true);
+    m_controller->setPendingBroadcastTxSkeleton(txSkeleton);
+    m_controller->setPendingBroadcastInputCommits(commits);
+    m_controller->nodeApi()->getOutputCommitmentsAsync(commits);
 }

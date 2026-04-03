@@ -14,11 +14,23 @@
 
 namespace {
 
+/**
+ * @brief invokeNoArgMethod
+ * @param object
+ * @param methodName
+ * @return
+ */
 bool invokeNoArgMethod(QObject *object, const char *methodName)
 {
     return object && QMetaObject::invokeMethod(object, methodName, Qt::DirectConnection);
 }
 
+/**
+ * @brief replaceFocusedObjectSelection
+ * @param object
+ * @param text
+ * @return
+ */
 bool replaceFocusedObjectSelection(QObject *object, const QString &text)
 {
     if (!object) {
@@ -64,6 +76,11 @@ bool replaceFocusedObjectSelection(QObject *object, const QString &text)
     return textSet;
 }
 
+/**
+ * @brief focusedObjectText
+ * @param object
+ * @return
+ */
 QString focusedObjectText(QObject *object)
 {
     if (!object) {
@@ -93,6 +110,9 @@ extern "C" {
 EMSCRIPTEN_KEEPALIVE int grinffindorHandleShortcut(int key);
 }
 
+/**
+ * @brief browserInstallWalletShortcutBridge
+ */
 EM_JS(void, browserInstallWalletShortcutBridge, (), {
     try {
         if (typeof window === "undefined" || window.__grinffindorWalletShortcutBridgeInstalled) {
@@ -347,6 +367,12 @@ EM_JS(void, browserInstallWalletShortcutBridge, (), {
     } catch (e) {}
 });
 
+/**
+ * @brief browserUpdateShortcutContext
+ * @param text
+ * @param selectedText
+ * @param focused
+ */
 EM_JS(void, browserUpdateShortcutContext, (const char *text, const char *selectedText, int focused), {
     try {
         if (typeof window === "undefined") {
@@ -361,6 +387,11 @@ EM_JS(void, browserUpdateShortcutContext, (const char *text, const char *selecte
     } catch (e) {}
 });
 
+/**
+ * @brief grinffindorHandleShortcut
+ * @param key
+ * @return
+ */
 extern "C" EMSCRIPTEN_KEEPALIVE int grinffindorHandleShortcut(int key)
 {
     if (!g_shortcutBridge) {
@@ -372,11 +403,18 @@ extern "C" EMSCRIPTEN_KEEPALIVE int grinffindorHandleShortcut(int key)
 
 } // namespace
 
+/**
+ * @brief GrinWalletShortcutBridge::GrinWalletShortcutBridge
+ * @param parent
+ */
 GrinWalletShortcutBridge::GrinWalletShortcutBridge(QObject *parent)
     : QObject(parent)
 {
 }
 
+/**
+ * @brief GrinWalletShortcutBridge::install
+ */
 void GrinWalletShortcutBridge::install()
 {
 #ifdef Q_OS_WASM
@@ -386,8 +424,15 @@ void GrinWalletShortcutBridge::install()
     qApp->installEventFilter(this);
 }
 
+/**
+ * @brief GrinWalletShortcutBridge::eventFilter
+ * @param watched
+ * @param event
+ * @return
+ */
 bool GrinWalletShortcutBridge::eventFilter(QObject *watched, QEvent *event)
 {
+
     Q_UNUSED(watched)
 
     if (!event || event->type() != QEvent::KeyPress) {
@@ -411,6 +456,11 @@ bool GrinWalletShortcutBridge::eventFilter(QObject *watched, QEvent *event)
     return QObject::eventFilter(watched, event);
 }
 
+/**
+ * @brief GrinWalletShortcutBridge::handleShortcutKey
+ * @param key
+ * @return
+ */
 bool GrinWalletShortcutBridge::handleShortcutKey(int key)
 {
     if (key != Qt::Key_A && key != Qt::Key_C && key != Qt::Key_V) {
@@ -439,6 +489,12 @@ bool GrinWalletShortcutBridge::handleShortcutKey(int key)
     return !copiedText.isEmpty() && GrinWalletPlatformHelpers::copyTextToClipboard(copiedText);
 }
 
+/**
+ * @brief GrinWalletShortcutBridge::updateBrowserShortcutContext
+ * @param text
+ * @param selectedText
+ * @param focused
+ */
 void GrinWalletShortcutBridge::updateBrowserShortcutContext(const QString &text,
                                                             const QString &selectedText,
                                                             bool focused) const

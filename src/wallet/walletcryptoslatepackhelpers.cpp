@@ -11,6 +11,12 @@ extern "C" {
 namespace WalletCryptoSlatepackHelpers
 {
 
+/**
+ * @brief slatepackAddress
+ * @param keychain
+ * @param networkName
+ * @return
+ */
 QString slatepackAddress(const WalletKeychain &keychain, const QString &networkName)
 {
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
@@ -37,6 +43,11 @@ QString slatepackAddress(const WalletKeychain &keychain, const QString &networkN
 #endif
 }
 
+/**
+ * @brief paymentProofAddress
+ * @param keychain
+ * @return
+ */
 QString paymentProofAddress(const WalletKeychain &keychain)
 {
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
@@ -58,6 +69,13 @@ QString paymentProofAddress(const WalletKeychain &keychain)
 #endif
 }
 
+/**
+ * @brief signPaymentProof
+ * @param slate
+ * @param keychain
+ * @param errorOut
+ * @return
+ */
 bool signPaymentProof(SlateV4 *slate, const WalletKeychain &keychain, QString *errorOut)
 {
     if (!slate) {
@@ -122,6 +140,12 @@ bool signPaymentProof(SlateV4 *slate, const WalletKeychain &keychain, QString *e
 #endif
 }
 
+/**
+ * @brief verifyPaymentProof
+ * @param slate
+ * @param errorOut
+ * @return
+ */
 bool verifyPaymentProof(const SlateV4 &slate, QString *errorOut)
 {
     if (!slate.hasPaymentProof) {

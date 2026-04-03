@@ -8,6 +8,10 @@
 #include "walletscanner.h"
 #include "walletselection.h"
 
+/**
+ * @brief GrinWalletController::currentSlatepackAddress
+ * @return
+ */
 QString GrinWalletController::currentSlatepackAddress() const
 {
     if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
@@ -18,6 +22,10 @@ QString GrinWalletController::currentSlatepackAddress() const
     return keychain.isValid() ? WalletCryptoBackend::slatepackAddress(keychain, m_selectedNetwork) : QString();
 }
 
+/**
+ * @brief GrinWalletController::currentPaymentProofAddress
+ * @return
+ */
 QString GrinWalletController::currentPaymentProofAddress() const
 {
     if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
@@ -28,6 +36,10 @@ QString GrinWalletController::currentPaymentProofAddress() const
     return keychain.isValid() ? WalletCryptoBackend::paymentProofAddress(keychain) : QString();
 }
 
+/**
+ * @brief GrinWalletController::currentSlatepackSecret
+ * @return
+ */
 QByteArray GrinWalletController::currentSlatepackSecret() const
 {
     if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
@@ -38,6 +50,10 @@ QByteArray GrinWalletController::currentSlatepackSecret() const
     return keychain.isValid() ? keychain.slatepackSecretKey() : QByteArray();
 }
 
+/**
+ * @brief GrinWalletController::alignSlateVersionWithNode
+ * @param slate
+ */
 void GrinWalletController::alignSlateVersionWithNode(SlateV4 *slate) const
 {
     if (!slate) {
@@ -50,6 +66,7 @@ void GrinWalletController::alignSlateVersionWithNode(SlateV4 *slate) const
 
     const bool preserveIncomingInvoiceVersion =
         slate->metadata.value(QStringLiteral("external_binary")).toBool()
+
         && slate->modeCode() == QStringLiteral("invoice");
     if (preserveIncomingInvoiceVersion) {
         return;
@@ -60,6 +77,11 @@ void GrinWalletController::alignSlateVersionWithNode(SlateV4 *slate) const
     }
 }
 
+/**
+ * @brief GrinWalletController::resolveWorkflowIdBySlateId
+ * @param slate
+ * @return
+ */
 QString GrinWalletController::resolveWorkflowIdBySlateId(const SlateV4 &slate) const
 {
     if (slate.id.trimmed().isEmpty()) {
@@ -70,6 +92,7 @@ QString GrinWalletController::resolveWorkflowIdBySlateId(const SlateV4 &slate) c
                                         .value(QStringLiteral("wallet_state"))
                                         .toObject()
                                         .value(QStringLiteral("transactions"))
+
                                         .toArray();
     for (int i = 0; i < transactions.size(); ++i) {
         const QJsonObject tx = transactions.at(i).toObject();
@@ -85,10 +108,18 @@ QString GrinWalletController::resolveWorkflowIdBySlateId(const SlateV4 &slate) c
     return QString();
 }
 
+/**
+ * @brief GrinWalletController::resolveWorkflowAmountNano
+ * @param workflowId
+ * @param localContext
+ * @param amount
+ * @return
+ */
 quint64 GrinWalletController::resolveWorkflowAmountNano(const QString &workflowId,
                                                         const QJsonObject &localContext,
                                                         const QString &amount) const
 {
+
     quint64 resolvedAmount = GrinWalletWorkflowHelpers::amountToNanogrin(amount);
     if (resolvedAmount == 0) {
         resolvedAmount = localContext.value(QStringLiteral("amount_nano")).toVariant().toULongLong();
@@ -101,6 +132,7 @@ quint64 GrinWalletController::resolveWorkflowAmountNano(const QString &workflowI
                                         .value(QStringLiteral("wallet_state"))
                                         .toObject()
                                         .value(QStringLiteral("transactions"))
+
                                         .toArray();
     for (int i = 0; i < transactions.size(); ++i) {
         const QJsonObject tx = transactions.at(i).toObject();
@@ -112,12 +144,18 @@ quint64 GrinWalletController::resolveWorkflowAmountNano(const QString &workflowI
     return 0;
 }
 
+/**
+ * @brief GrinWalletController::legacyInvoiceParticipantFromContext
+ * @param localContext
+ * @return
+ */
 QJsonObject GrinWalletController::legacyInvoiceParticipantFromContext(const QJsonObject &localContext)
 {
     QJsonObject json;
     const QString secKey = localContext.value(QStringLiteral("invoice_sender_blind_secret")).toString();
     const QString secNonce = localContext.value(QStringLiteral("invoice_sender_nonce_secret")).toString();
     const QString pubKey = localContext.value(QStringLiteral("invoice_sender_blind_public")).toString();
+
     const QString pubNonce = localContext.value(QStringLiteral("invoice_sender_nonce_public")).toString();
     if (secKey.isEmpty() || secNonce.isEmpty() || pubKey.isEmpty() || pubNonce.isEmpty()) {
         return QJsonObject();
@@ -130,6 +168,14 @@ QJsonObject GrinWalletController::legacyInvoiceParticipantFromContext(const QJso
     return json;
 }
 
+/**
+ * @brief GrinWalletController::ensureWorkflowSelectionContext
+ * @param workflowId
+ * @param amount
+ * @param feeOut
+ * @param errorOut
+ * @return
+ */
 bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflowId,
                                                           const QString &amount,
                                                           QString *feeOut,
@@ -323,6 +369,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     const WalletSelection::Result selection =
+
         WalletSelection::selectSpendableOutputs(outputs, requestedAmount, m_chainHeight);
     if (!selection.success) {
         if (errorOut) {
@@ -351,6 +398,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
+
     document.insert(QStringLiteral("wallet_state"), walletState);
     if (!GrinWalletStorage::saveDocument(document)) {
         if (errorOut) {
@@ -367,6 +415,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     localContext.insert(QStringLiteral("amount_nano"), QString::number(requestedAmount));
     localContext.insert(QStringLiteral("amount_display"), amount.trimmed());
     localContext.insert(QStringLiteral("fee_nano"), QString::number(selection.fee));
+
     localContext.insert(QStringLiteral("fee_amount_display"), GrinWalletWorkflowHelpers::formatNanogrin(selection.fee));
     if (!localContext.value(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant"))).isObject()) {
         localContext.insert(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant")),
@@ -396,6 +445,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     }
 
     storeWorkflowContext(workflowId, localContext);
+
     refreshStateFromStorage();
     if (feeOut) {
         *feeOut = GrinWalletWorkflowHelpers::formatNanogrin(selection.fee);
@@ -403,6 +453,14 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     return true;
 }
 
+/**
+ * @brief GrinWalletController::prepareInvoiceSenderContext
+ * @param workflowId
+ * @param slate
+ * @param signatureOverrideOut
+ * @param errorOut
+ * @return
+ */
 bool GrinWalletController::prepareInvoiceSenderContext(
     const QString &workflowId,
     SlateV4 *slate,
@@ -422,6 +480,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
             localContext.value(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant"))).toObject(),
             QStringLiteral("sender"));
     if (senderAggsig.blindSecret.isEmpty()
+
         || senderAggsig.nonceSecret.isEmpty()
         || senderAggsig.blindPublic.isEmpty()
         || senderAggsig.noncePublic.isEmpty()) {
@@ -435,6 +494,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     const QJsonObject selectedInputCoinbase =
         localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
     const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
+
     QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
     if (!m_sessionMnemonic.trimmed().isEmpty()) {
         const WalletKeychain keychain(m_sessionMnemonic);
@@ -446,10 +506,12 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     }
 
     QStringList positiveBlinds;
+
     const QString priorOffset = slate->offset.trimmed();
     if (!priorOffset.isEmpty() && priorOffset != QStringLiteral("0000000000000000000000000000000000000000000000000000000000000000")) {
         positiveBlinds.append(priorOffset);
     }
+
     const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
     if (!changeCommit.isEmpty()) {
         const WalletOutput changeOutput = GrinWalletControllerHelpers::findTrackedOutputByCommitment(trackedOutputs, changeCommit);
@@ -459,6 +521,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     }
 
     QStringList negativeBlinds;
+
     negativeBlinds.append(senderAggsig.blindSecret);
     for (int i = 0; i < selectedCommitments.size(); ++i) {
         const WalletOutput input = GrinWalletControllerHelpers::findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
@@ -535,6 +598,14 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     return true;
 }
 
+/**
+ * @brief GrinWalletController::prepareStandardSenderContext
+ * @param workflowId
+ * @param slate
+ * @param signatureOverrideOut
+ * @param errorOut
+ * @return
+ */
 bool GrinWalletController::prepareStandardSenderContext(
     const QString &workflowId,
     SlateV4 *slate,
@@ -554,6 +625,7 @@ bool GrinWalletController::prepareStandardSenderContext(
             localContext.value(GrinWalletWorkflowHelpers::standardContextKey(QStringLiteral("participant"))).toObject(),
             QStringLiteral("sender"));
     if (senderAggsig.blindSecret.isEmpty()
+
         || senderAggsig.nonceSecret.isEmpty()
         || senderAggsig.blindPublic.isEmpty()
         || senderAggsig.noncePublic.isEmpty()) {
@@ -567,6 +639,7 @@ bool GrinWalletController::prepareStandardSenderContext(
     const QJsonObject selectedInputCoinbase =
         localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
     const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
+
     QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
     if (!m_sessionMnemonic.trimmed().isEmpty()) {
         const WalletKeychain keychain(m_sessionMnemonic);
@@ -658,6 +731,11 @@ bool GrinWalletController::prepareStandardSenderContext(
     return true;
 }
 
+/**
+ * @brief GrinWalletController::compactInvoiceSlateForReturn
+ * @param workflowId
+ * @param slate
+ */
 void GrinWalletController::compactInvoiceSlateForReturn(const QString &workflowId, SlateV4 *slate)
 {
     if (!slate) {
@@ -666,6 +744,7 @@ void GrinWalletController::compactInvoiceSlateForReturn(const QString &workflowI
 
     WalletCryptoBackend::ParticipantContext senderContext = GrinWalletWorkflowHelpers::participantContextFromJson(
         workflowContext(workflowId).value(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant"))).toObject(),
+
         QStringLiteral("sender"));
     if (senderContext.blindPublic.isEmpty() || senderContext.noncePublic.isEmpty()) {
         senderContext = WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("sender"));
@@ -693,6 +772,11 @@ void GrinWalletController::compactInvoiceSlateForReturn(const QString &workflowI
     slate->metadata.remove(QStringLiteral("network"));
 }
 
+/**
+ * @brief GrinWalletController::compactStandardSlateForReturn
+ * @param workflowId
+ * @param slate
+ */
 void GrinWalletController::compactStandardSlateForReturn(const QString &workflowId, SlateV4 *slate)
 {
     if (!slate) {
@@ -709,6 +793,7 @@ void GrinWalletController::compactStandardSlateForReturn(const QString &workflow
             QStringLiteral("receiver"));
     }
     if (receiverContext.blindSecret.isEmpty()
+
         || receiverContext.nonceSecret.isEmpty()
         || receiverContext.blindPublic.isEmpty()
         || receiverContext.noncePublic.isEmpty()) {
@@ -746,6 +831,16 @@ void GrinWalletController::compactStandardSlateForReturn(const QString &workflow
     slate->fee.clear();
 }
 
+/**
+ * @brief GrinWalletController::ensureReceiverOutputContext
+ * @param workflowId
+ * @param amount
+ * @param source
+ * @param outputOut
+ * @param commitOut
+ * @param errorOut
+ * @return
+ */
 bool GrinWalletController::ensureReceiverOutputContext(const QString &workflowId,
                                                        const QString &amount,
                                                        const QString &source,
@@ -761,6 +856,7 @@ bool GrinWalletController::ensureReceiverOutputContext(const QString &workflowId
     }
 
     QJsonObject localContext = workflowContext(workflowId);
+
     const QString existingCommitment = localContext.value(QStringLiteral("receiver_commit")).toString();
     if (!existingCommitment.isEmpty()) {
         const QList<WalletOutput> outputs = WalletScanner::outputsFromState(
@@ -815,6 +911,11 @@ bool GrinWalletController::ensureReceiverOutputContext(const QString &workflowId
     return true;
 }
 
+/**
+ * @brief GrinWalletController::persistWorkflowTransaction
+ * @param slate
+ * @param broadcasted
+ */
 void GrinWalletController::persistWorkflowTransaction(const SlateV4 &slate, bool broadcasted)
 {
     if (slate.workflowId().isEmpty()) {
@@ -827,6 +928,11 @@ void GrinWalletController::persistWorkflowTransaction(const SlateV4 &slate, bool
     }
 }
 
+/**
+ * @brief GrinWalletController::finalizeWorkflowOutputs
+ * @param slate
+ * @param broadcasted
+ */
 void GrinWalletController::finalizeWorkflowOutputs(const SlateV4 &slate, bool broadcasted)
 {
     if (slate.workflowId().isEmpty()) {
@@ -834,6 +940,7 @@ void GrinWalletController::finalizeWorkflowOutputs(const SlateV4 &slate, bool br
     }
 
     QJsonObject document = GrinWalletStorage::loadDocument();
+
     const QJsonObject localContext = workflowContext(slate.workflowId());
     if (GrinWalletWorkflow::finalizeOutputs(&document, slate, broadcasted, m_chainHeight, localContext)) {
         GrinWalletStorage::saveDocument(document);
@@ -841,6 +948,10 @@ void GrinWalletController::finalizeWorkflowOutputs(const SlateV4 &slate, bool br
     }
 }
 
+/**
+ * @brief GrinWalletController::finalizeBroadcastedWorkflow
+ * @param workflowId
+ */
 void GrinWalletController::finalizeBroadcastedWorkflow(const QString &workflowId)
 {
     if (workflowId.isEmpty()) {
@@ -848,6 +959,7 @@ void GrinWalletController::finalizeBroadcastedWorkflow(const QString &workflowId
     }
 
     QJsonObject document = GrinWalletStorage::loadDocument();
+
     const QJsonObject localContext = workflowContext(workflowId);
     if (GrinWalletWorkflow::finalizeBroadcastedWorkflow(&document, workflowId, m_chainHeight, localContext)) {
         GrinWalletStorage::saveDocument(document);
@@ -855,6 +967,11 @@ void GrinWalletController::finalizeBroadcastedWorkflow(const QString &workflowId
     }
 }
 
+/**
+ * @brief GrinWalletController::storeWorkflowContext
+ * @param workflowId
+ * @param context
+ */
 void GrinWalletController::storeWorkflowContext(const QString &workflowId, const QJsonObject &context)
 {
     if (workflowId.isEmpty()) {
@@ -867,6 +984,11 @@ void GrinWalletController::storeWorkflowContext(const QString &workflowId, const
     }
 }
 
+/**
+ * @brief GrinWalletController::workflowContext
+ * @param workflowId
+ * @return
+ */
 QJsonObject GrinWalletController::workflowContext(const QString &workflowId) const
 {
     return GrinWalletStorage::workflowContext(GrinWalletStorage::loadDocument(), workflowId);
