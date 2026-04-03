@@ -27,6 +27,10 @@ SOURCES += src/main.cpp \
            src/wallet/walletselection.cpp \
            src/wallet/walletkeychain.cpp \
            src/wallet/walletblake2b.cpp \
+           src/wallet/walletcryptohelpers.cpp \
+           src/wallet/walletcryptokernelhelpers.cpp \
+           src/wallet/walletcryptosignaturehelpers.cpp \
+           src/wallet/walletcryptoslatepackhelpers.cpp \
            src/wallet/wallettxbuilder.cpp \
            src/wallet/binaryslatev4reader.cpp \
            src/wallet/binaryslatev4writer.cpp \
@@ -56,6 +60,10 @@ HEADERS += src/nodefooterstatus.h \
            src/wallet/walletselection.h \
            src/wallet/walletkeychain.h \
            src/wallet/walletblake2b.h \
+           src/wallet/walletcryptohelpers.h \
+           src/wallet/walletcryptokernelhelpers.h \
+           src/wallet/walletcryptosignaturehelpers.h \
+           src/wallet/walletcryptoslatepackhelpers.h \
            src/wallet/wallettxbuilder.h \
            src/wallet/binaryslatev4reader.h \
            src/wallet/binaryslatev4writer.h \
