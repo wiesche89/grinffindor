@@ -1,10 +1,11 @@
 #ifndef GRINWALLETWORKFLOWSERVICE_H
 #define GRINWALLETWORKFLOWSERVICE_H
 
-#include <QByteArray>
-#include <QJsonDocument>
 #include <QObject>
-#include <QString>
+
+class QByteArray;
+class QJsonDocument;
+class QString;
 
 class SlateV4;
 class GrinWalletController;
@@ -42,6 +43,10 @@ private:
                                           const QString &mode,
                                           const QString &state,
                                           const QString &localRoleTag);
+    void populatePaymentProofAddresses(SlateV4 *slate,
+                                       const QString &mode,
+                                       const QString &localRoleTag,
+                                       const QString &localPaymentProofAddress) const;
 
     GrinWalletController *m_controller;
 };

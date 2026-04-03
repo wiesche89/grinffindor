@@ -3,7 +3,6 @@
 
 #include <QObject>
 #include <QJsonObject>
-#include <QUrl>
 #include <QString>
 #include <QVariantList>
 #include <functional>
@@ -145,6 +144,11 @@ private:
     void refreshStateFromStorage();
     void startAutoRefresh();
     void setWorkflow(const QString &id, const QString &mode, const QString &state, const QString &slatepack, const QString &decoded);
+    void finalizeTransactionStoreUpdate(const QJsonObject &document, bool changed);
+    void storeOutputsState(QJsonObject *document,
+                           QJsonObject *walletState,
+                           const QList<WalletOutput> &outputs,
+                           quint32 nextChildIndex) const;
     void storeOwnedOutput(const QString &source, const QString &amount, const SlateV4::Commit &commit);
     void storeOwnedOutput(const WalletOutput &output);
     bool buildOwnedOutput(const QString &source,

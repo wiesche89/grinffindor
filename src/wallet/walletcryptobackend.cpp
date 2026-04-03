@@ -1,6 +1,9 @@
 #include "walletcryptobackend.h"
 
-#include "walletcryptohelpers.h"
+#include "walletcryptoaggsighelpers.h"
+#include "walletcryptobasehelpers.h"
+#include "walletcryptocommitmenthelpers.h"
+#include "walletcryptosecphelpers.h"
 #include "walletcryptokernelhelpers.h"
 #include "walletcryptosignaturehelpers.h"
 #include "walletcryptoslatepackhelpers.h"

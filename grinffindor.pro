@@ -9,6 +9,9 @@ SOURCES += src/main.cpp \
            src/wallet/grinwalletstorage.cpp \
            src/wallet/grinwalletplatformhelpers.cpp \
            src/wallet/grinwalletcontrollerhelpers.cpp \
+           src/wallet/grinwalletcontrollerlifecycle.cpp \
+           src/wallet/grinwalletcontrollerstatehelpers.cpp \
+           src/wallet/grinwalletcontrollerworkflowhelpers.cpp \
            src/wallet/grinwallethistoryhelpers.cpp \
            src/wallet/grinwalletseedcrypto.cpp \
            src/wallet/grinwalletshortcutbridge.cpp \
@@ -18,7 +21,11 @@ SOURCES += src/main.cpp \
            src/wallet/grinwalletworkflowtxhelpers.cpp \
            src/wallet/grinwalletnodesync.cpp \
            src/wallet/grinwalletnodesyncservice.cpp \
+           src/wallet/grinwalletnodesyncservicecontrol.cpp \
            src/wallet/grinwalletworkflowservice.cpp \
+           src/wallet/grinwalletworkflowserviceactions.cpp \
+           src/wallet/grinwalletworkflowservicecreate.cpp \
+           src/wallet/grinwalletworkflowserviceprocess.cpp \
            src/wallet/grinwalletcontroller.cpp \
            src/wallet/grinwalletnodepushhelpers.cpp \
            src/wallet/slatev4.cpp \
@@ -27,7 +34,11 @@ SOURCES += src/main.cpp \
            src/wallet/walletselection.cpp \
            src/wallet/walletkeychain.cpp \
            src/wallet/walletblake2b.cpp \
+           src/wallet/walletcryptobasehelpers.cpp \
            src/wallet/walletcryptohelpers.cpp \
+           src/wallet/walletcryptoaggsighelpers.cpp \
+           src/wallet/walletcryptocommitmenthelpers.cpp \
+           src/wallet/walletcryptosecphelpers.cpp \
            src/wallet/walletcryptokernelhelpers.cpp \
            src/wallet/walletcryptosignaturehelpers.cpp \
            src/wallet/walletcryptoslatepackhelpers.cpp \
@@ -60,6 +71,10 @@ HEADERS += src/nodefooterstatus.h \
            src/wallet/walletselection.h \
            src/wallet/walletkeychain.h \
            src/wallet/walletblake2b.h \
+           src/wallet/walletcryptobasehelpers.h \
+           src/wallet/walletcryptoaggsighelpers.h \
+           src/wallet/walletcryptocommitmenthelpers.h \
+           src/wallet/walletcryptosecphelpers.h \
            src/wallet/walletcryptohelpers.h \
            src/wallet/walletcryptokernelhelpers.h \
            src/wallet/walletcryptosignaturehelpers.h \

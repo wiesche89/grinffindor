@@ -45,6 +45,9 @@ private slots:
     void onNodePushTransactionFinished(const Result<bool> &result);
 
 private:
+    void clearPendingBroadcastState();
+    void failPendingBroadcast(const QString &workflowId, const QString &message);
+
     GrinWalletController *m_controller;
 };
 

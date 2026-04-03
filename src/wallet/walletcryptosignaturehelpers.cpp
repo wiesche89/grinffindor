@@ -1,6 +1,9 @@
 #include "walletcryptosignaturehelpers.h"
 
-#include "walletcryptohelpers.h"
+#include "walletcryptoaggsighelpers.h"
+#include "walletcryptobasehelpers.h"
+#include "walletcryptocommitmenthelpers.h"
+#include "walletcryptosecphelpers.h"
 
 namespace WalletCryptoSignatureHelpers
 {
@@ -274,6 +277,7 @@ bool buildFinalSignature(const SlateV4 &slate, QString *finalSignatureOut, QStri
 {
     QList<QString> allBlindPubkeys;
     QList<QString> allNoncePubkeys;
+    int partialSignatureCount = 0;
     QVector<QByteArray> sigBuffers;
 
     for (int i = 0; i < slate.signatures.size(); ++i) {
@@ -281,6 +285,7 @@ bool buildFinalSignature(const SlateV4 &slate, QString *finalSignatureOut, QStri
         allBlindPubkeys.append(participant.xs);
         allNoncePubkeys.append(participant.nonce);
         if (!participant.part.isEmpty()) {
+            ++partialSignatureCount;
             const QByteArray compactPartialBytes = WalletCryptoHelpers::fromHex(participant.part);
             if (compactPartialBytes.size() != 64) {
                 if (errorOut) {
@@ -297,6 +302,13 @@ bool buildFinalSignature(const SlateV4 &slate, QString *finalSignatureOut, QStri
             }
             sigBuffers.append(partialBytes);
         }
+    }
+
+    if (partialSignatureCount < slate.numParticipants) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Not enough partial signatures to finalize.");
+        }
+        return false;
     }
 
     if (sigBuffers.isEmpty()) {

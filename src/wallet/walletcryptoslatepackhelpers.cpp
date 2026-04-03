@@ -1,6 +1,6 @@
 #include "walletcryptoslatepackhelpers.h"
 
-#include "walletcryptohelpers.h"
+#include "walletcryptobasehelpers.h"
 
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
 extern "C" {

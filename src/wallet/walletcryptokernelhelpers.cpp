@@ -1,7 +1,10 @@
 #include "walletcryptokernelhelpers.h"
 
 #include "walletblake2b.h"
-#include "walletcryptohelpers.h"
+#include "walletcryptoaggsighelpers.h"
+#include "walletcryptobasehelpers.h"
+#include "walletcryptocommitmenthelpers.h"
+#include "walletcryptosecphelpers.h"
 
 #include "../submodules/grin-node-api/src/attributes/transaction.h"
 
@@ -255,11 +258,18 @@ bool validateTransactionKernelSums(const Transaction &tx, QString *errorOut)
         negativePointers.append(&negativeCommitments[i]);
     }
 
+    secp256k1_pedersen_commitment emptyCommitment;
+    const secp256k1_pedersen_commitment *emptyPointer = &emptyCommitment;
+    const secp256k1_pedersen_commitment * const *positivePointerData =
+        positivePointers.isEmpty() ? &emptyPointer : positivePointers.constData();
+    const secp256k1_pedersen_commitment * const *negativePointerData =
+        negativePointers.isEmpty() ? &emptyPointer : negativePointers.constData();
+
     const int tallyOk = secp256k1_pedersen_verify_tally(
         WalletCryptoHelpers::walletSecpContext(),
-        positivePointers.isEmpty() ? 0 : positivePointers.constData(),
+        positivePointerData,
         static_cast<size_t>(positivePointers.size()),
-        negativePointers.isEmpty() ? 0 : negativePointers.constData(),
+        negativePointerData,
         static_cast<size_t>(negativePointers.size()));
 
     if (tallyOk != 1) {
@@ -269,17 +279,17 @@ bool validateTransactionKernelSums(const Transaction &tx, QString *errorOut)
         QString negativeHex;
         if (secp256k1_pedersen_commit_sum(WalletCryptoHelpers::walletSecpContext(),
                                           &positiveSum,
-                                          positivePointers.isEmpty() ? 0 : positivePointers.constData(),
+                                          positivePointerData,
                                           static_cast<size_t>(positivePointers.size()),
-                                          0,
+                                          &emptyPointer,
                                           0) == 1) {
             positiveHex = WalletCryptoHelpers::serializeCommitment(positiveSum);
         }
         if (secp256k1_pedersen_commit_sum(WalletCryptoHelpers::walletSecpContext(),
                                           &negativeSum,
-                                          negativePointers.isEmpty() ? 0 : negativePointers.constData(),
+                                          negativePointerData,
                                           static_cast<size_t>(negativePointers.size()),
-                                          0,
+                                          &emptyPointer,
                                           0) == 1) {
             negativeHex = WalletCryptoHelpers::serializeCommitment(negativeSum);
         }
