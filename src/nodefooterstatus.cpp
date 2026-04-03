@@ -5,8 +5,8 @@ NodeFooterStatus::NodeFooterStatus(QObject *parent)
     , m_mainnetApi(QStringLiteral("https://mainnet.grinffindor.org/v2/foreign"), QString())
     , m_testnetApi(QStringLiteral("https://testnet.grinffindor.org/v2/foreign"), QString())
 {
-    connectApi(&m_mainnetApi, m_mainnetAvailable, m_mainnetTip, m_mainnetVersion);
-    connectApi(&m_testnetApi, m_testnetAvailable, m_testnetTip, m_testnetVersion);
+    connectApi(&m_mainnetApi);
+    connectApi(&m_testnetApi);
 
     m_refreshTimer.setInterval(30000);
     m_refreshTimer.setSingleShot(false);
@@ -54,23 +54,67 @@ void NodeFooterStatus::refresh()
     m_testnetApi.getVersionAsync();
 }
 
-void NodeFooterStatus::connectApi(NodeForeignApi *api, bool &availableTarget, QString &tipTarget, QString &versionTarget)
+void NodeFooterStatus::connectApi(NodeForeignApi *api)
 {
-    connect(api, &NodeForeignApi::getTipFinished, this, [this, &availableTarget, &tipTarget](const Result<Tip> &result) {
-        availableTarget = !result.hasError();
-        tipTarget = result.hasError() ? QStringLiteral("offline") : formatTip(result.value());
-        emit dataChanged();
-    });
+    connect(api, &NodeForeignApi::getTipFinished, this, &NodeFooterStatus::handleTipFinished);
+    connect(api, &NodeForeignApi::getVersionFinished, this, &NodeFooterStatus::handleVersionFinished);
+}
 
-    connect(api, &NodeForeignApi::getVersionFinished, this, [this, &availableTarget, &versionTarget](const Result<NodeVersion> &result) {
-        if (result.hasError()) {
-            availableTarget = false;
-        } else {
-            availableTarget = true;
-        }
-        versionTarget = result.hasError() ? QStringLiteral("offline") : formatVersion(result.value());
-        emit dataChanged();
-    });
+void NodeFooterStatus::updateApiAvailability(NodeForeignApi *api, bool available)
+{
+    if (api == &m_mainnetApi) {
+        m_mainnetAvailable = available;
+        return;
+    }
+    if (api == &m_testnetApi) {
+        m_testnetAvailable = available;
+    }
+}
+
+void NodeFooterStatus::updateApiTip(NodeForeignApi *api, const QString &tipText)
+{
+    if (api == &m_mainnetApi) {
+        m_mainnetTip = tipText;
+        return;
+    }
+    if (api == &m_testnetApi) {
+        m_testnetTip = tipText;
+    }
+}
+
+void NodeFooterStatus::updateApiVersion(NodeForeignApi *api, const QString &versionText)
+{
+    if (api == &m_mainnetApi) {
+        m_mainnetVersion = versionText;
+        return;
+    }
+    if (api == &m_testnetApi) {
+        m_testnetVersion = versionText;
+    }
+}
+
+void NodeFooterStatus::handleTipFinished(const Result<Tip> &result)
+{
+    NodeForeignApi *api = qobject_cast<NodeForeignApi *>(sender());
+    if (!api) {
+        return;
+    }
+
+    updateApiAvailability(api, !result.hasError());
+    updateApiTip(api, result.hasError() ? QStringLiteral("offline") : formatTip(result.value()));
+    emit dataChanged();
+}
+
+void NodeFooterStatus::handleVersionFinished(const Result<NodeVersion> &result)
+{
+    NodeForeignApi *api = qobject_cast<NodeForeignApi *>(sender());
+    if (!api) {
+        return;
+    }
+
+    updateApiAvailability(api, !result.hasError());
+    updateApiVersion(api, result.hasError() ? QStringLiteral("offline") : formatVersion(result.value()));
+    emit dataChanged();
 }
 
 QString NodeFooterStatus::formatTip(const Tip &tip)

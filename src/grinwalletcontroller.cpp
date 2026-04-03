@@ -3,480 +3,20 @@
 #include <QByteArray>
 #include <QCryptographicHash>
 #include <QDateTime>
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
 #include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QGuiApplication>
-#include <QKeyEvent>
-#include <QRandomGenerator>
 #include <QRegularExpression>
-#include <QSaveFile>
 #include <QSet>
 #include <QStringList>
-#include <QStandardPaths>
-#include <QTextStream>
 #include <QTimer>
-#include <QClipboard>
 #include <QDebug>
 #include <QUrl>
 #include <QUuid>
 #include <QVector>
 #include <cstdlib>
 #include <algorithm>
-
-#ifdef Q_OS_WASM
-#include <emscripten.h>
-#include <emscripten/emscripten.h>
-
-class GrinWalletController;
-static GrinWalletController *g_shortcutController = nullptr;
-
-extern "C" {
-EMSCRIPTEN_KEEPALIVE int grinffindorHandleShortcut(int key);
-}
-
-EM_JS(void, browserLocalStorageSet, (const char *key, const char *value), {
-    try {
-        if (typeof localStorage !== "undefined") {
-            localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
-        }
-    } catch (e) {}
-});
-
-EM_JS(char *, browserLocalStorageGet, (const char *key), {
-    try {
-        if (typeof localStorage !== "undefined") {
-            const value = localStorage.getItem(UTF8ToString(key));
-            if (value !== null && value !== undefined) {
-                const length = lengthBytesUTF8(value) + 1;
-                const buffer = _malloc(length);
-                stringToUTF8(value, buffer, length);
-                return buffer;
-            }
-        }
-    } catch (e) {}
-    return 0;
-});
-
-EM_JS(int, browserCopyToClipboard, (const char *value), {
-    try {
-        const text = UTF8ToString(value);
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text);
-            return 1;
-        }
-        if (typeof document !== "undefined") {
-            const area = document.createElement("textarea");
-            area.value = text;
-            area.style.position = "fixed";
-            area.style.left = "-1000px";
-            document.body.appendChild(area);
-            area.focus();
-            area.select();
-            const ok = document.execCommand("copy");
-            document.body.removeChild(area);
-            return ok ? 1 : 0;
-        }
-    } catch (e) {}
-    return 0;
-});
-
-EM_JS(char *, browserReadClipboardText, (), {
-    try {
-        if (navigator.clipboard && navigator.clipboard.readText) {
-            return Asyncify.handleAsync(async () => {
-                try {
-                    const value = await navigator.clipboard.readText();
-                    const text = value || "";
-                    const length = lengthBytesUTF8(text) + 1;
-                    const buffer = _malloc(length);
-                    stringToUTF8(text, buffer, length);
-                    return buffer;
-                } catch (e) {
-                    const fallback = "";
-                    const length = lengthBytesUTF8(fallback) + 1;
-                    const buffer = _malloc(length);
-                    stringToUTF8(fallback, buffer, length);
-                    return buffer;
-                }
-            });
-        }
-    } catch (e) {}
-    const fallback = "";
-    const length = lengthBytesUTF8(fallback) + 1;
-    const buffer = _malloc(length);
-    stringToUTF8(fallback, buffer, length);
-    return buffer;
-});
-
-EM_JS(char *, browserConsumeCapturedPasteText, (), {
-    try {
-        if (typeof window !== "undefined"
-            && typeof window.__grinffindorCapturedPasteText === "string") {
-            const value = window.__grinffindorCapturedPasteText;
-            window.__grinffindorCapturedPasteText = "";
-            const length = lengthBytesUTF8(value) + 1;
-            const buffer = _malloc(length);
-            stringToUTF8(value, buffer, length);
-            return buffer;
-        }
-    } catch (e) {}
-    const fallback = "";
-    const length = lengthBytesUTF8(fallback) + 1;
-    const buffer = _malloc(length);
-    stringToUTF8(fallback, buffer, length);
-    return buffer;
-});
-
-EM_JS(int, browserDownloadTextFile, (const char *suggestedName, const char *value), {
-    try {
-        if (typeof document === "undefined" || typeof Blob === "undefined" || typeof URL === "undefined") {
-            return 0;
-        }
-        const filename = UTF8ToString(suggestedName) || "grinffindor-wallet-backup.json";
-        const text = UTF8ToString(value);
-        const blob = new Blob([text], { type: "application/json;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(function() { URL.revokeObjectURL(url); }, 0);
-        return 1;
-    } catch (e) {}
-    return 0;
-});
-
-EM_JS(int, browserRequestPersistentStorage, (), {
-    try {
-        if (navigator.storage && navigator.storage.persist) {
-            navigator.storage.persist();
-            return 1;
-        }
-    } catch (e) {}
-    return 0;
-});
-
-EM_JS(char *, browserStoragePersistenceState, (), {
-    try {
-        if (navigator.storage && navigator.storage.persisted) {
-            return Asyncify.handleAsync(async () => {
-                try {
-                    const persisted = await navigator.storage.persisted();
-                    const value = persisted ? "persistent" : "best-effort";
-                    const length = lengthBytesUTF8(value) + 1;
-                    const buffer = _malloc(length);
-                    stringToUTF8(value, buffer, length);
-                    return buffer;
-                } catch (e) {
-                    const value = "best-effort";
-                    const length = lengthBytesUTF8(value) + 1;
-                    const buffer = _malloc(length);
-                    stringToUTF8(value, buffer, length);
-                    return buffer;
-                }
-            });
-        }
-    } catch (e) {}
-    const fallback = "best-effort";
-    const length = lengthBytesUTF8(fallback) + 1;
-    const buffer = _malloc(length);
-    stringToUTF8(fallback, buffer, length);
-    return buffer;
-});
-
-EM_JS(void, browserInstallWalletShortcutBridge, (), {
-    try {
-        if (typeof window === "undefined" || window.__grinffindorWalletShortcutBridgeInstalled) {
-            return;
-        }
-
-        const debug = function(label, payload) {
-            void label;
-            void payload;
-        };
-
-        const qtCanvas = function() {
-            if (typeof document === "undefined") {
-                return null;
-            }
-            return document.querySelector("canvas");
-        };
-
-        const qtShortcutTarget = function() {
-            if (typeof document === "undefined") {
-                return null;
-            }
-            const active = document.activeElement;
-            if (active) {
-                const tag = (active.tagName || "").toUpperCase();
-                const isEditable = active.isContentEditable
-                    || tag === "INPUT"
-                    || tag === "TEXTAREA"
-                    || active.getAttribute("contenteditable") === "true"
-                    || active.getAttribute("role") === "textbox";
-                if (isEditable || tag === "DIV") {
-                    return active;
-                }
-            }
-            return qtCanvas();
-        };
-
-        const shortcutContextFocused = function() {
-            try {
-                return !!(window.__grinffindorShortcutContext && window.__grinffindorShortcutContext.focused);
-            } catch (e) {}
-            return false;
-        };
-
-        const isQtCanvasFocused = function() {
-            if (typeof document === "undefined") {
-                return false;
-            }
-            const active = document.activeElement;
-            if (!active) {
-                return false;
-            }
-            const tag = (active.tagName || "").toUpperCase();
-            return tag === "CANVAS" || active === document.body;
-        };
-
-        const shouldIntercept = function(event) {
-            if (!event) {
-                return false;
-            }
-            const ctrlOrMeta = !!event.ctrlKey || !!event.metaKey;
-            if (!ctrlOrMeta || !!event.altKey) {
-                return false;
-            }
-            const key = (event.key || "").toLowerCase();
-            if (key !== "a" && key !== "c") {
-                return false;
-            }
-            return isQtCanvasFocused() || shortcutContextFocused();
-        };
-
-        const triggerQtShortcut = function(event) {
-            const key = (event && event.key ? event.key : "").toLowerCase();
-            let qtKey = 0;
-            if (key === "a") {
-                qtKey = 65;
-            } else if (key === "c") {
-                qtKey = 67;
-            } else if (key === "v") {
-                qtKey = 86;
-            }
-            if (!qtKey || typeof Module === "undefined" || typeof Module._grinffindorHandleShortcut !== "function") {
-                debug("shortcut-dispatch-unavailable", {
-                    key: key,
-                    hasModule: typeof Module !== "undefined"
-                });
-                return false;
-            }
-            const result = Module._grinffindorHandleShortcut(qtKey);
-            debug("shortcut-dispatch-result", {
-                key: key,
-                result: result
-            });
-            return !!result;
-        };
-
-        const ensureHiddenTextarea = function() {
-            if (typeof document === "undefined") {
-                return null;
-            }
-            let area = document.getElementById("__grinffindor_shortcut_bridge");
-            if (area) {
-                return area;
-            }
-            area = document.createElement("textarea");
-            area.id = "__grinffindor_shortcut_bridge";
-            area.setAttribute("readonly", "readonly");
-            area.style.position = "fixed";
-            area.style.left = "-10000px";
-            area.style.top = "0";
-            area.style.opacity = "0";
-            area.style.pointerEvents = "none";
-            document.body.appendChild(area);
-            return area;
-        };
-
-        const bridgeCopyText = function(text) {
-            try {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(text);
-                    return true;
-                }
-            } catch (e) {}
-
-            try {
-                const area = ensureHiddenTextarea();
-                if (!area) {
-                    return false;
-                }
-                area.value = text;
-                area.focus();
-                area.select();
-                area.setSelectionRange(0, area.value.length);
-                const ok = document.execCommand("copy");
-                const canvas = qtCanvas();
-                if (canvas) {
-                    canvas.focus();
-                }
-                return !!ok;
-            } catch (e) {}
-            return false;
-        };
-
-        const browserFallbackShortcut = function(event) {
-            const ctx = window.__grinffindorShortcutContext || null;
-            if (!ctx || !ctx.focused) {
-                return false;
-            }
-            const key = (event.key || "").toLowerCase();
-            if (key === "a") {
-                ctx.selectedAll = true;
-                return true;
-            }
-            if (key === "c") {
-                const text = (ctx.selectedText && ctx.selectedText.length > 0)
-                    ? ctx.selectedText
-                    : (ctx.selectedAll ? (ctx.text || "") : (ctx.text || ""));
-                return bridgeCopyText(text);
-            }
-            return false;
-        };
-
-        const capturePasteText = function(value) {
-            window.__grinffindorCapturedPasteText = value || "";
-            debug("captured-paste", {
-                length: (value || "").length
-            });
-        };
-
-        window.addEventListener("paste", function(event) {
-            try {
-                if (!isQtCanvasFocused() && !shortcutContextFocused()) {
-                    return;
-                }
-                debug("dom-paste", {
-                    focused: shortcutContextFocused()
-                });
-                if (event && event.preventDefault) {
-                    event.preventDefault();
-                }
-                if (event && event.stopPropagation) {
-                    event.stopPropagation();
-                }
-                const clipboard = event.clipboardData || window.clipboardData;
-                if (!clipboard || !clipboard.getData) {
-                    return;
-                }
-                capturePasteText(clipboard.getData("text") || "");
-                const handled = (typeof Module !== "undefined"
-                    && typeof Module._grinffindorHandleShortcut === "function")
-                    ? !!Module._grinffindorHandleShortcut(86)
-                    : false;
-                debug("paste-dispatch", {
-                    handled: handled
-                });
-            } catch (e) {}
-        }, true);
-
-        window.addEventListener("beforeinput", function(event) {
-            try {
-                if (!event) {
-                    return;
-                }
-                const inputType = String(event.inputType || "");
-                debug("beforeinput", {
-                    inputType: inputType,
-                    focused: shortcutContextFocused()
-                });
-                if (inputType !== "insertFromPaste" && inputType !== "insertFromPasteAsQuotation") {
-                    return;
-                }
-                if (!isQtCanvasFocused() && !shortcutContextFocused()) {
-                    return;
-                }
-                if (event.preventDefault) {
-                    event.preventDefault();
-                }
-                if (event.stopPropagation) {
-                    event.stopPropagation();
-                }
-            } catch (e) {}
-        }, true);
-
-        if (typeof document !== "undefined" && document.addEventListener) {
-            document.addEventListener("contextmenu", function(event) {
-                try {
-                    debug("contextmenu", {
-                        focused: shortcutContextFocused(),
-                        activeTag: document.activeElement ? (document.activeElement.tagName || "") : ""
-                    });
-                    if (!shortcutContextFocused()) {
-                        return;
-                    }
-                    if (event && event.preventDefault) {
-                        event.preventDefault();
-                    }
-                    if (event && event.stopPropagation) {
-                        event.stopPropagation();
-                    }
-                } catch (e) {}
-            }, true);
-        }
-
-        window.addEventListener("keydown", function(event) {
-            if (shouldIntercept(event)) {
-                debug("keydown-intercept", {
-                    key: event.key || "",
-                    focused: shortcutContextFocused()
-                });
-                event.preventDefault();
-                const handled = triggerQtShortcut(event);
-                if (!handled) {
-                    browserFallbackShortcut(event);
-                }
-                debug("keydown-dispatch", {
-                    key: event.key || "",
-                    handled: handled
-                });
-            }
-        }, true);
-
-        window.addEventListener("keyup", function(event) {
-            if (shouldIntercept(event)) {
-                event.preventDefault();
-                debug("keyup-intercept", event.key || "");
-            }
-        }, true);
-
-        debug("installed");
-        window.__grinffindorWalletShortcutBridgeInstalled = true;
-    } catch (e) {}
-});
-
-EM_JS(void, browserUpdateShortcutContext, (const char *text, const char *selectedText, int focused), {
-    try {
-        if (typeof window === "undefined") {
-            return;
-        }
-        window.__grinffindorShortcutContext = {
-            text: UTF8ToString(text),
-            selectedText: UTF8ToString(selectedText),
-            focused: !!focused,
-            selectedAll: false
-        };
-    } catch (e) {}
-});
-#endif
 
 #include "../3rdparty/monocypher/monocypher.h"
 
@@ -486,6 +26,18 @@ EM_JS(void, browserUpdateShortcutContext, (const char *text, const char *selecte
 #include "wallet/walletselection.h"
 #include "wallet/walletkeychain.h"
 #include "wallet/wallettxbuilder.h"
+#include "grinwalletstorage.h"
+#include "grinwalletplatformhelpers.h"
+#include "grinwalletcontrollerhelpers.h"
+#include "grinwallethistoryhelpers.h"
+#include "grinwalletseedcrypto.h"
+#include "grinwalletshortcutbridge.h"
+#include "grinwalletworkflow.h"
+#include "grinwalletnodesync.h"
+#include "grinwalletnodesyncservice.h"
+#include "grinwallettransactionstore.h"
+#include "grinwalletworkflowhelpers.h"
+#include "grinwalletworkflowservice.h"
 #include "wallet/binaryslatev4reader.h"
 #include "wallet/binaryslatev4writer.h"
 #include "wallet/walletcryptobackend.h"
@@ -498,1687 +50,25 @@ EM_JS(void, browserUpdateShortcutContext, (const char *text, const char *selecte
 
 namespace {
 
-const char *kWalletStorePath = "/grin-wallet/browser-wallet.json";
-const char *kWalletLocalStorageKey = "grinffindor.browserWallet";
-const int kMnemonicEntropyBytes = 32;
-const char *kBase58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-const char *kMainnetNodeUrl = "https://mainnet.grinffindor.org/v2/foreign";
-const char *kTestnetNodeUrl = "https://testnet.grinffindor.org/v2/foreign";
 const int kSessionAutoLockIntervalMs = 15 * 60 * 1000;
 const int kSeedCipherVersion = 3;
-const int kSeedCipherArgon2Blocks = 256;
-const int kSeedCipherArgon2Passes = 3;
-const int kSeedCipherArgon2Lanes = 1;
-const int kSeedCipherKeyBytes = 32;
-const int kSeedCipherMacBytes = 16;
-QString defaultNetworkName()
-{
-    return QStringLiteral("mainnet");
-}
-
 const char *kAppSettingsKey = "app_settings";
 const char *kAutoLockOnDeactivateKey = "auto_lock_on_app_deactivate";
 
-bool isAcceptedNetworkName(const QString &networkName)
-{
-    const QString normalized = networkName.trimmed().toLower();
-    return normalized == QStringLiteral("mainnet") || normalized == QStringLiteral("testnet");
-}
-
-QString defaultNodeUrlForNetwork(const QString &networkName)
-{
-    return networkName.trimmed().toLower() == QStringLiteral("testnet")
-        ? QString::fromUtf8(kTestnetNodeUrl)
-        : QString::fromUtf8(kMainnetNodeUrl);
-}
-
-QString inferNetworkName(const QString &networkName, const QString &nodeUrl)
-{
-    const QString normalizedNetwork = networkName.trimmed().toLower();
-    if (isAcceptedNetworkName(normalizedNetwork)) {
-        return normalizedNetwork;
-    }
-
-    const QString normalizedUrl = nodeUrl.trimmed().toLower();
-    if (normalizedUrl.contains(QStringLiteral("testnet."))) {
-        return QStringLiteral("testnet");
-    }
-
-    return defaultNetworkName();
-}
-
-bool isNodeUrlAccepted(const QString &nodeUrl)
-{
-    const QUrl parsed = QUrl::fromUserInput(nodeUrl.trimmed());
-    return parsed.isValid()
-        && !parsed.scheme().trimmed().isEmpty()
-        && !parsed.host().trimmed().isEmpty()
-        && (parsed.scheme() == QStringLiteral("http") || parsed.scheme() == QStringLiteral("https"));
-}
-
-QString storageRootPath()
-{
-#ifdef Q_OS_WASM
-    return QStringLiteral("/persistent");
-#else
-    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    return appData.isEmpty() ? QStringLiteral(".wallet-data") : appData;
-#endif
-}
-
-QString storageFilePath()
-{
-    return storageRootPath() + QString::fromUtf8(kWalletStorePath);
-}
-
-void ensureStorageReady()
-{
-    const QFileInfo info(storageFilePath());
-    QDir().mkpath(info.absolutePath());
-#ifdef Q_OS_WASM
-    EM_ASM({
-        if (typeof FS !== "undefined" && typeof IDBFS !== "undefined") {
-            try {
-                FS.mkdir('/persistent');
-            } catch (e) {}
-            if (!Module.grinWalletIdbMounted) {
-                FS.mount(IDBFS, {}, '/persistent');
-                Module.grinWalletIdbMounted = true;
-                FS.syncfs(true, function(err) {});
-            }
-        }
-    });
-#endif
-}
-
-void flushStorage()
-{
-#ifdef Q_OS_WASM
-    EM_ASM({
-        if (typeof FS !== "undefined" && Module.grinWalletIdbMounted) {
-            FS.syncfs(false, function(err) {});
-        }
-    });
-#endif
-}
-
-QString prettyJson(const QJsonObject &object)
-{
-    return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Indented));
-}
-
-void logWorkflowJson(const QString &label,
-                     const QString &workflowId,
-                     const QString &state,
-                     const QJsonObject &object)
-{
-    Q_UNUSED(label)
-    Q_UNUSED(workflowId)
-    Q_UNUSED(state)
-    Q_UNUSED(object)
-}
-
-QJsonObject defaultWalletState()
-{
-    QJsonObject balances;
-    balances.insert(QStringLiteral("total"), QStringLiteral("0.000000000"));
-    balances.insert(QStringLiteral("spendable"), QStringLiteral("0.000000000"));
-    balances.insert(QStringLiteral("locked"), QStringLiteral("0.000000000"));
-    balances.insert(QStringLiteral("immature"), QStringLiteral("0.000000000"));
-
-    QJsonObject walletState;
-    walletState.insert(QStringLiteral("balances"), balances);
-    walletState.insert(QStringLiteral("scan_height"), 0);
-    walletState.insert(QStringLiteral("restore_leaf_index"), 1);
-    walletState.insert(QStringLiteral("next_child_index"), 0);
-    walletState.insert(QStringLiteral("outputs"), QJsonArray());
-    walletState.insert(QStringLiteral("transactions"), QJsonArray());
-    return walletState;
-}
-
-QJsonObject defaultWalletMetadata()
-{
-    return QJsonObject();
-}
-
-QJsonObject defaultDocument()
-{
-    const QJsonObject walletState = defaultWalletState();
-    QJsonObject root;
-    root.insert(QStringLiteral("wallet"), defaultWalletMetadata());
-    QJsonObject nodeConfig;
-    nodeConfig.insert(QStringLiteral("network"), defaultNetworkName());
-    nodeConfig.insert(QStringLiteral("url"), defaultNodeUrlForNetwork(defaultNetworkName()));
-    root.insert(QStringLiteral("node"), nodeConfig);
-    root.insert(QStringLiteral("wallet_state"), walletState);
-    root.insert(QStringLiteral("workflow_contexts"), QJsonObject());
-    QJsonObject walletStates;
-    walletStates.insert(defaultNetworkName(), walletState);
-    walletStates.insert(QStringLiteral("testnet"), defaultWalletState());
-    root.insert(QStringLiteral("wallet_states"), walletStates);
-    QJsonObject walletsByNetwork;
-    walletsByNetwork.insert(defaultNetworkName(), defaultWalletMetadata());
-    walletsByNetwork.insert(QStringLiteral("testnet"), defaultWalletMetadata());
-    root.insert(QStringLiteral("wallets_by_network"), walletsByNetwork);
-    QJsonObject workflowContextsByNetwork;
-    workflowContextsByNetwork.insert(defaultNetworkName(), QJsonObject());
-    workflowContextsByNetwork.insert(QStringLiteral("testnet"), QJsonObject());
-    root.insert(QStringLiteral("workflow_contexts_by_network"), workflowContextsByNetwork);
-    return root;
-}
-
-QJsonObject walletForNetwork(const QJsonObject &document, const QString &networkName)
-{
-    const QJsonObject walletsByNetwork = document.value(QStringLiteral("wallets_by_network")).toObject();
-    return walletsByNetwork.value(networkName).toObject();
-}
-
-QJsonObject walletStateForNetwork(const QJsonObject &document, const QString &networkName)
-{
-    const QJsonObject walletStates = document.value(QStringLiteral("wallet_states")).toObject();
-    const QJsonObject state = walletStates.value(networkName).toObject();
-    return state.isEmpty() ? defaultWalletState() : state;
-}
-
-QJsonObject workflowContextsForNetwork(const QJsonObject &document, const QString &networkName)
-{
-    const QJsonObject contextsByNetwork = document.value(QStringLiteral("workflow_contexts_by_network")).toObject();
-    return contextsByNetwork.value(networkName).toObject();
-}
-
-void setWalletForNetwork(QJsonObject *document, const QString &networkName, const QJsonObject &wallet)
-{
-    if (!document) {
-        return;
-    }
-
-    QJsonObject walletsByNetwork = document->value(QStringLiteral("wallets_by_network")).toObject();
-    walletsByNetwork.insert(networkName, wallet);
-    document->insert(QStringLiteral("wallets_by_network"), walletsByNetwork);
-}
-
-void setWalletStateForNetwork(QJsonObject *document, const QString &networkName, const QJsonObject &walletState)
-{
-    if (!document) {
-        return;
-    }
-
-    QJsonObject walletStates = document->value(QStringLiteral("wallet_states")).toObject();
-    walletStates.insert(networkName, walletState);
-    document->insert(QStringLiteral("wallet_states"), walletStates);
-}
-
-void setWorkflowContextsForNetwork(QJsonObject *document, const QString &networkName, const QJsonObject &contexts)
-{
-    if (!document) {
-        return;
-    }
-
-    QJsonObject contextsByNetwork = document->value(QStringLiteral("workflow_contexts_by_network")).toObject();
-    contextsByNetwork.insert(networkName, contexts);
-    document->insert(QStringLiteral("workflow_contexts_by_network"), contextsByNetwork);
-}
-
-void syncActiveNetworkView(QJsonObject *document, const QString &networkName)
-{
-    if (!document) {
-        return;
-    }
-
-    document->insert(QStringLiteral("wallet"), walletForNetwork(*document, networkName));
-    document->insert(QStringLiteral("wallet_state"), walletStateForNetwork(*document, networkName));
-    document->insert(QStringLiteral("workflow_contexts"), workflowContextsForNetwork(*document, networkName));
-}
-
-void persistActiveNetworkView(QJsonObject *document, const QString &networkName)
-{
-    if (!document) {
-        return;
-    }
-
-    setWalletForNetwork(document,
-                        networkName,
-                        document->value(QStringLiteral("wallet")).toObject());
-    setWalletStateForNetwork(document,
-                             networkName,
-                             document->value(QStringLiteral("wallet_state")).toObject());
-    setWorkflowContextsForNetwork(document,
-                                  networkName,
-                                  document->value(QStringLiteral("workflow_contexts")).toObject());
-}
-
-QJsonObject ensureDocumentSchema(const QJsonObject &rawDocument)
-{
-    QJsonObject document = rawDocument.isEmpty() ? defaultDocument() : rawDocument;
-    const QString networkName = inferNetworkName(document.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
-                                                 document.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
-
-    QJsonObject walletStates = document.value(QStringLiteral("wallet_states")).toObject();
-    if (walletStates.isEmpty()) {
-        walletStates.insert(networkName,
-                            document.value(QStringLiteral("wallet_state")).toObject().isEmpty()
-                                ? defaultWalletState()
-                                : document.value(QStringLiteral("wallet_state")).toObject());
-    }
-    if (walletStates.value(QStringLiteral("mainnet")).toObject().isEmpty()) {
-        walletStates.insert(QStringLiteral("mainnet"), defaultWalletState());
-    }
-    if (walletStates.value(QStringLiteral("testnet")).toObject().isEmpty()) {
-        walletStates.insert(QStringLiteral("testnet"), defaultWalletState());
-    }
-    document.insert(QStringLiteral("wallet_states"), walletStates);
-
-    QJsonObject walletsByNetwork = document.value(QStringLiteral("wallets_by_network")).toObject();
-    if (walletsByNetwork.isEmpty()) {
-        walletsByNetwork.insert(networkName, document.value(QStringLiteral("wallet")).toObject());
-    }
-    if (walletsByNetwork.value(QStringLiteral("mainnet")).toObject().isEmpty()
-        && networkName != QStringLiteral("mainnet")) {
-        walletsByNetwork.insert(QStringLiteral("mainnet"), defaultWalletMetadata());
-    }
-    if (walletsByNetwork.value(QStringLiteral("testnet")).toObject().isEmpty()
-        && networkName != QStringLiteral("testnet")) {
-        walletsByNetwork.insert(QStringLiteral("testnet"), defaultWalletMetadata());
-    }
-    if (!walletsByNetwork.contains(QStringLiteral("mainnet"))) {
-        walletsByNetwork.insert(QStringLiteral("mainnet"), defaultWalletMetadata());
-    }
-    if (!walletsByNetwork.contains(QStringLiteral("testnet"))) {
-        walletsByNetwork.insert(QStringLiteral("testnet"), defaultWalletMetadata());
-    }
-    document.insert(QStringLiteral("wallets_by_network"), walletsByNetwork);
-
-    QJsonObject contextsByNetwork = document.value(QStringLiteral("workflow_contexts_by_network")).toObject();
-    if (contextsByNetwork.isEmpty()) {
-        contextsByNetwork.insert(networkName, document.value(QStringLiteral("workflow_contexts")).toObject());
-    }
-    if (contextsByNetwork.value(QStringLiteral("mainnet")).toObject().isEmpty()) {
-        contextsByNetwork.insert(QStringLiteral("mainnet"), QJsonObject());
-    }
-    if (contextsByNetwork.value(QStringLiteral("testnet")).toObject().isEmpty()) {
-        contextsByNetwork.insert(QStringLiteral("testnet"), QJsonObject());
-    }
-    document.insert(QStringLiteral("workflow_contexts_by_network"), contextsByNetwork);
-
-    QJsonObject node = document.value(QStringLiteral("node")).toObject();
-    node.insert(QStringLiteral("network"), networkName);
-    if (!isNodeUrlAccepted(node.value(QStringLiteral("url")).toString())) {
-        node.insert(QStringLiteral("url"), defaultNodeUrlForNetwork(networkName));
-    }
-    document.insert(QStringLiteral("node"), node);
-    return document;
-}
-
-QJsonObject normalizeDocumentSchema(const QJsonObject &rawDocument)
-{
-    QJsonObject document = ensureDocumentSchema(rawDocument);
-    const QString networkName = inferNetworkName(document.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
-                                                 document.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
-    syncActiveNetworkView(&document, networkName);
-    return document;
-}
-
-bool validateEncryptedSeedObject(const QJsonObject &encryptedSeed, QString *errorOut)
-{
-    const int version = encryptedSeed.value(QStringLiteral("version")).toInt();
-    const QStringList requiredFields = {
-        QStringLiteral("salt"),
-        QStringLiteral("nonce"),
-        QStringLiteral("cipher"),
-        QStringLiteral("mac")
-    };
-
-    if (version < 1) {
-        if (errorOut) {
-            *errorOut = QStringLiteral("Backup seed payload is missing a valid encryption version.");
-        }
-        return false;
-    }
-
-    for (int i = 0; i < requiredFields.size(); ++i) {
-        if (encryptedSeed.value(requiredFields.at(i)).toString().trimmed().isEmpty()) {
-            if (errorOut) {
-                *errorOut = QStringLiteral("Backup seed payload is incomplete.");
-            }
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool normalizeImportedDocument(const QJsonObject &candidate, QJsonObject *documentOut, QString *errorOut)
-{
-    if (!documentOut) {
-        return false;
-    }
-
-    QJsonObject document = defaultDocument();
-    QJsonObject wallet = candidate.value(QStringLiteral("wallet")).toObject();
-    if (wallet.isEmpty()) {
-        if (errorOut) {
-            *errorOut = QStringLiteral("Backup does not contain a wallet section.");
-        }
-        return false;
-    }
-
-    const QJsonObject encryptedSeed = wallet.value(QStringLiteral("encrypted_seed")).toObject();
-    if (!validateEncryptedSeedObject(encryptedSeed, errorOut)) {
-        return false;
-    }
-
-    const QString walletName = wallet.value(QStringLiteral("name")).toString().trimmed();
-    if (walletName.isEmpty()) {
-        if (errorOut) {
-            *errorOut = QStringLiteral("Backup wallet name is missing.");
-        }
-        return false;
-    }
-
-    QJsonObject node = candidate.value(QStringLiteral("node")).toObject();
-    const QString importedNodeUrl = node.value(QStringLiteral("url")).toString().trimmed();
-    QJsonObject normalizedNode = document.value(QStringLiteral("node")).toObject();
-    const QString importedNetwork =
-        inferNetworkName(node.value(QStringLiteral("network")).toString(), importedNodeUrl);
-    normalizedNode.insert(QStringLiteral("network"), importedNetwork);
-    normalizedNode.insert(QStringLiteral("url"),
-                          isNodeUrlAccepted(importedNodeUrl)
-                              ? importedNodeUrl
-                              : defaultNodeUrlForNetwork(importedNetwork));
-    document.insert(QStringLiteral("node"), normalizedNode);
-
-    QJsonObject normalizedWallet = wallet;
-    normalizedWallet.insert(QStringLiteral("name"), walletName);
-    setWalletForNetwork(&document, importedNetwork, normalizedWallet);
-    document.insert(QStringLiteral("wallet"), normalizedWallet);
-
-    QJsonObject walletState = candidate.value(QStringLiteral("wallet_state")).toObject();
-    QJsonObject normalizedState = document.value(QStringLiteral("wallet_state")).toObject();
-    if (!walletState.isEmpty()) {
-        normalizedState.insert(QStringLiteral("balances"),
-                               walletState.value(QStringLiteral("balances")).isObject()
-                                   ? walletState.value(QStringLiteral("balances")).toObject()
-                                   : normalizedState.value(QStringLiteral("balances")).toObject());
-        normalizedState.insert(QStringLiteral("scan_height"),
-                               walletState.value(QStringLiteral("scan_height")).toVariant().toLongLong());
-        normalizedState.insert(QStringLiteral("restore_leaf_index"),
-                               qMax<qint64>(0, walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toLongLong()));
-        normalizedState.insert(QStringLiteral("next_child_index"),
-                               qMax<qint64>(0, walletState.value(QStringLiteral("next_child_index")).toVariant().toLongLong()));
-        normalizedState.insert(QStringLiteral("outputs"),
-                               walletState.value(QStringLiteral("outputs")).isArray()
-                                   ? walletState.value(QStringLiteral("outputs")).toArray()
-                                   : QJsonArray());
-        normalizedState.insert(QStringLiteral("transactions"),
-                               walletState.value(QStringLiteral("transactions")).isArray()
-                                   ? walletState.value(QStringLiteral("transactions")).toArray()
-                                   : QJsonArray());
-        if (walletState.value(QStringLiteral("transaction_rescan_backup")).isArray()) {
-            normalizedState.insert(QStringLiteral("transaction_rescan_backup"),
-                                   walletState.value(QStringLiteral("transaction_rescan_backup")).toArray());
-        }
-        if (walletState.contains(QStringLiteral("last_sync_mode"))) {
-            normalizedState.insert(QStringLiteral("last_sync_mode"),
-                                   walletState.value(QStringLiteral("last_sync_mode")).toString());
-        }
-        if (walletState.contains(QStringLiteral("last_synced_at"))) {
-            normalizedState.insert(QStringLiteral("last_synced_at"),
-                                   walletState.value(QStringLiteral("last_synced_at")).toString());
-        }
-    }
-    document.insert(QStringLiteral("wallet_state"), normalizedState);
-    setWalletStateForNetwork(&document, importedNetwork, normalizedState);
-
-    const QJsonObject normalizedContexts =
-        candidate.value(QStringLiteral("workflow_contexts")).isObject()
-            ? candidate.value(QStringLiteral("workflow_contexts")).toObject()
-            : QJsonObject();
-    document.insert(QStringLiteral("workflow_contexts"), normalizedContexts);
-    setWorkflowContextsForNetwork(&document, importedNetwork, normalizedContexts);
-
-    *documentOut = document;
-    return true;
-}
-
-QJsonObject extractImportedBackupDocument(const QByteArray &json, QString *errorOut)
-{
-    QJsonParseError parseError;
-    const QJsonDocument parsed = QJsonDocument::fromJson(json, &parseError);
-    if (!parsed.isObject()) {
-        if (errorOut) {
-            *errorOut = parseError.error == QJsonParseError::NoError
-                ? QStringLiteral("Backup text is not a JSON object.")
-                : QStringLiteral("Backup JSON could not be parsed: %1").arg(parseError.errorString());
-        }
-        return QJsonObject();
-    }
-
-    const QJsonObject root = parsed.object();
-    QJsonObject candidate = root;
-    if (root.value(QStringLiteral("backup_kind")).toString() == QStringLiteral("grinffindor.encrypted_wallet_backup")) {
-        candidate = root.value(QStringLiteral("document")).toObject();
-    }
-
-    QJsonObject normalized;
-    if (!normalizeImportedDocument(candidate, &normalized, errorOut)) {
-        return QJsonObject();
-    }
-    return normalized;
-}
-
-
-QJsonObject loadDocument()
-{
-    ensureStorageReady();
-#ifdef Q_OS_WASM
-    if (char *storedJson = browserLocalStorageGet(kWalletLocalStorageKey)) {
-        const QByteArray localJson(storedJson);
-        free(storedJson);
-        const QJsonDocument localDoc = QJsonDocument::fromJson(localJson);
-        if (localDoc.isObject()) {
-            return normalizeDocumentSchema(localDoc.object());
-        }
-    }
-#endif
-    QFile file(storageFilePath());
-    if (!file.exists()) {
-        return defaultDocument();
-    }
-    if (!file.open(QIODevice::ReadOnly)) {
-        return defaultDocument();
-    }
-
-    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-    return doc.isObject() ? normalizeDocumentSchema(doc.object()) : defaultDocument();
-}
-
-bool saveDocument(const QJsonObject &document)
-{
-    ensureStorageReady();
-    QJsonObject normalized = ensureDocumentSchema(document);
-    const QString networkName =
-        inferNetworkName(normalized.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
-                         normalized.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
-    persistActiveNetworkView(&normalized, networkName);
-    const QByteArray json = QJsonDocument(normalized).toJson(QJsonDocument::Indented);
-#ifdef Q_OS_WASM
-    browserLocalStorageSet(kWalletLocalStorageKey, json.constData());
-#endif
-    QSaveFile file(storageFilePath());
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        return false;
-    }
-    file.write(json);
-    if (!file.commit()) {
-        return false;
-    }
-    flushStorage();
-    return true;
-}
-
-QByteArray randomBytes(int size)
-{
-    QByteArray data(size, Qt::Uninitialized);
-    for (int i = 0; i < size; ++i) {
-        data[i] = static_cast<char>(QRandomGenerator::global()->bounded(256));
-    }
-    return data;
-}
-
-quint64 amountToNanogrin(const QString &amount)
-{
-    const QString trimmed = amount.trimmed();
-    if (trimmed.isEmpty()) {
-        return 0;
-    }
-
-    const QStringList parts = trimmed.split(QLatin1Char('.'));
-    if (parts.isEmpty() || parts.size() > 2) {
-        return 0;
-    }
-
-    bool wholeOk = false;
-    const quint64 whole = parts.at(0).toULongLong(&wholeOk);
-    if (!wholeOk) {
-        return 0;
-    }
-
-    QString fractional = parts.size() == 2 ? parts.at(1) : QString();
-    if (fractional.size() > 9) {
-        fractional = fractional.left(9);
-    }
-    while (fractional.size() < 9) {
-        fractional.append(QLatin1Char('0'));
-    }
-
-    bool fracOk = false;
-    const quint64 frac = fractional.isEmpty() ? 0 : fractional.toULongLong(&fracOk);
-    if (!fractional.isEmpty() && !fracOk) {
-        return 0;
-    }
-
-    return whole * 1000000000ULL + frac;
-}
-
-QString formatNanogrin(quint64 amount)
-{
-    return QStringLiteral("%1.%2")
-        .arg(QString::number(amount / 1000000000ULL))
-        .arg(QString::number(amount % 1000000000ULL), 9, QLatin1Char('0'));
-}
-
-QStringList &mnemonicWords()
-{
-    static QStringList words;
-    if (!words.isEmpty()) {
-        return words;
-    }
-
-    QFile file(QStringLiteral(":/qml/src/wallet/resources/bip39_english.txt"));
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return words;
-    }
-
-    QTextStream stream(&file);
-    while (!stream.atEnd()) {
-        const QString line = stream.readLine().trimmed();
-        if (!line.isEmpty()) {
-            words.append(line);
-        }
-    }
-    return words;
-}
-
-QByteArray bitsFromBytes(const QByteArray &bytes)
-{
-    QByteArray bits;
-    bits.reserve(bytes.size() * 8);
-    for (int i = 0; i < bytes.size(); ++i) {
-        const unsigned char value = static_cast<unsigned char>(bytes.at(i));
-        for (int bit = 7; bit >= 0; --bit) {
-            bits.append((value & (1u << bit)) ? '\x01' : '\x00');
-        }
-    }
-    return bits;
-}
-
-QByteArray bytesFromBits(const QByteArray &bits)
-{
-    QByteArray bytes;
-    bytes.reserve(bits.size() / 8);
-    for (int i = 0; i + 7 < bits.size(); i += 8) {
-        unsigned char value = 0;
-        for (int bit = 0; bit < 8; ++bit) {
-            value = static_cast<unsigned char>((value << 1) | (bits.at(i + bit) ? 1 : 0));
-        }
-        bytes.append(static_cast<char>(value));
-    }
-    return bytes;
-}
-
-QString normalizeMnemonic(const QString &mnemonic)
-{
-    QString normalized = mnemonic.toLower().trimmed();
-    normalized.replace(QRegularExpression(QStringLiteral("\\s+")), QStringLiteral(" "));
-    return normalized;
-}
-
-quint32 nextChildIndexFromState(const QJsonObject &walletState)
-{
-    return static_cast<quint32>(walletState.value(QStringLiteral("next_child_index")).toInt());
-}
-
-QString mnemonicFromEntropy(const QByteArray &entropy)
-{
-    const QStringList &words = mnemonicWords();
-    if (entropy.size() != kMnemonicEntropyBytes || words.size() != 2048) {
-        return QString();
-    }
-
-    QByteArray bits = bitsFromBytes(entropy);
-    const QByteArray checksumBits = bitsFromBytes(QCryptographicHash::hash(entropy, QCryptographicHash::Sha256));
-    const int checksumLength = entropy.size() * 8 / 32;
-    bits.append(checksumBits.left(checksumLength));
-
-    QStringList mnemonic;
-    for (int i = 0; i + 10 < bits.size(); i += 11) {
-        int index = 0;
-        for (int bit = 0; bit < 11; ++bit) {
-            index = (index << 1) | (bits.at(i + bit) ? 1 : 0);
-        }
-        mnemonic.append(words.at(index));
-    }
-    return mnemonic.join(QStringLiteral(" "));
-}
-
-bool entropyFromMnemonic(const QString &mnemonic, QByteArray *entropyOut)
-{
-    const QString normalized = normalizeMnemonic(mnemonic);
-    const QStringList parts = normalized.split(QLatin1Char(' '), Qt::SkipEmptyParts);
-    const QStringList &words = mnemonicWords();
-    if (parts.size() != 24 || words.size() != 2048) {
-        return false;
-    }
-
-    QByteArray bits;
-    for (int i = 0; i < parts.size(); ++i) {
-        const int index = words.indexOf(parts.at(i));
-        if (index < 0) {
-            return false;
-        }
-        for (int bit = 10; bit >= 0; --bit) {
-            bits.append((index & (1 << bit)) ? '\x01' : '\x00');
-        }
-    }
-
-    const int checksumLength = bits.size() / 33;
-    const int entropyLength = bits.size() - checksumLength;
-    const QByteArray entropy = bytesFromBits(bits.left(entropyLength));
-    if (entropy.size() != kMnemonicEntropyBytes) {
-        return false;
-    }
-
-    const QByteArray checksumBits = bitsFromBytes(QCryptographicHash::hash(entropy, QCryptographicHash::Sha256));
-    if (bits.mid(entropyLength, checksumLength) != checksumBits.left(checksumLength)) {
-        return false;
-    }
-
-    if (entropyOut) {
-        *entropyOut = entropy;
-    }
-    return true;
-}
-
-bool validateMnemonicValue(const QString &mnemonic)
-{
-    return entropyFromMnemonic(mnemonic, 0);
-}
-
-bool isFinalTransactionStatus(const QString &status)
-{
-    return status == QStringLiteral("confirmed")
-        || status == QStringLiteral("cancelled")
-        || status == QStringLiteral("spent");
-}
-
-QByteArray deriveLegacyKeyMaterial(const QString &password, const QByteArray &salt)
-{
-    const QByteArray material = password.toUtf8() + salt;
-    QByteArray digest = QCryptographicHash::hash(material, QCryptographicHash::Sha256);
-    for (int i = 0; i < 120000; ++i) {
-        digest = QCryptographicHash::hash(digest + material, QCryptographicHash::Sha256);
-    }
-    return digest;
-}
-
-QByteArray xorStream(const QByteArray &data, const QByteArray &key, const QByteArray &nonce)
-{
-    QByteArray output(data.size(), Qt::Uninitialized);
-    int offset = 0;
-    quint32 counter = 0;
-    while (offset < data.size()) {
-        const QByteArray block = QCryptographicHash::hash(
-            key + nonce + QByteArray::number(counter++), QCryptographicHash::Sha256);
-        for (int i = 0; i < block.size() && offset < data.size(); ++i, ++offset) {
-            output[offset] = static_cast<char>(
-                static_cast<unsigned char>(data.at(offset)) ^ static_cast<unsigned char>(block.at(i)));
-        }
-    }
-    return output;
-}
-
-QByteArray deriveKeyMaterialV2(const QString &password, const QByteArray &salt, int iterations, int outputLength)
-{
-    const QByteArray material = password.toUtf8() + salt;
-    QByteArray state = QCryptographicHash::hash(material, QCryptographicHash::Sha512);
-    for (int i = 0; i < iterations; ++i) {
-        state = QCryptographicHash::hash(state + material + QByteArray::number(i), QCryptographicHash::Sha512);
-    }
-
-    QByteArray output;
-    output.reserve(outputLength);
-    QByteArray blockSeed = state;
-    quint32 counter = 0;
-    while (output.size() < outputLength) {
-        blockSeed = QCryptographicHash::hash(
-            blockSeed + material + QByteArray::number(counter++),
-            QCryptographicHash::Sha512);
-        output.append(blockSeed);
-    }
-    output.truncate(outputLength);
-    return output;
-}
-
-bool deriveKeyMaterialV3(const QString &password,
-                         const QByteArray &salt,
-                         int blocks,
-                         int passes,
-                         QByteArray *keyOut)
-{
-    if (!keyOut || salt.isEmpty() || blocks < 8 || passes < 1) {
-        return false;
-    }
-
-    QByteArray keyMaterial(kSeedCipherKeyBytes, Qt::Uninitialized);
-    QByteArray workArea(blocks * 1024, Qt::Uninitialized);
-    const QByteArray passwordBytes = password.toUtf8();
-    static const QByteArray additionalData("grinffindor.seed.v3", 19);
-
-    crypto_argon2_config config;
-    config.algorithm = CRYPTO_ARGON2_ID;
-    config.nb_blocks = static_cast<uint32_t>(blocks);
-    config.nb_passes = static_cast<uint32_t>(passes);
-    config.nb_lanes = kSeedCipherArgon2Lanes;
-
-    crypto_argon2_inputs inputs;
-    inputs.pass = reinterpret_cast<const uint8_t *>(passwordBytes.constData());
-    inputs.salt = reinterpret_cast<const uint8_t *>(salt.constData());
-    inputs.pass_size = static_cast<uint32_t>(passwordBytes.size());
-    inputs.salt_size = static_cast<uint32_t>(salt.size());
-
-    crypto_argon2_extras extras = crypto_argon2_no_extras;
-    extras.ad = reinterpret_cast<const uint8_t *>(additionalData.constData());
-    extras.ad_size = static_cast<uint32_t>(additionalData.size());
-
-    crypto_argon2(reinterpret_cast<uint8_t *>(keyMaterial.data()),
-                  static_cast<uint32_t>(keyMaterial.size()),
-                  workArea.data(),
-                  config,
-                  inputs,
-                  extras);
-
-    crypto_wipe(workArea.data(), static_cast<size_t>(workArea.size()));
-    *keyOut = keyMaterial;
-    crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
-    return true;
-}
-
-QJsonObject encryptMnemonic(const QString &mnemonic, const QString &password)
-{
-    const QByteArray salt = randomBytes(16);
-    const QByteArray nonce = randomBytes(24);
-    const QByteArray plain = normalizeMnemonic(mnemonic).toUtf8();
-    QByteArray keyMaterial;
-    if (!deriveKeyMaterialV3(password,
-                             salt,
-                             kSeedCipherArgon2Blocks,
-                             kSeedCipherArgon2Passes,
-                             &keyMaterial)) {
-        return QJsonObject();
-    }
-
-    QByteArray cipher(plain.size(), Qt::Uninitialized);
-    QByteArray mac(kSeedCipherMacBytes, Qt::Uninitialized);
-    static const QByteArray associatedData("grinffindor.seed-store", 22);
-    crypto_aead_lock(reinterpret_cast<uint8_t *>(cipher.data()),
-                     reinterpret_cast<uint8_t *>(mac.data()),
-                     reinterpret_cast<const uint8_t *>(keyMaterial.constData()),
-                     reinterpret_cast<const uint8_t *>(nonce.constData()),
-                     reinterpret_cast<const uint8_t *>(associatedData.constData()),
-                     static_cast<size_t>(associatedData.size()),
-                     reinterpret_cast<const uint8_t *>(plain.constData()),
-                     static_cast<size_t>(plain.size()));
-
-    QJsonObject encrypted;
-    encrypted.insert(QStringLiteral("version"), kSeedCipherVersion);
-    encrypted.insert(QStringLiteral("kdf_algorithm"), QStringLiteral("argon2id"));
-    encrypted.insert(QStringLiteral("kdf_blocks"), kSeedCipherArgon2Blocks);
-    encrypted.insert(QStringLiteral("kdf_passes"), kSeedCipherArgon2Passes);
-    encrypted.insert(QStringLiteral("kdf_lanes"), kSeedCipherArgon2Lanes);
-    encrypted.insert(QStringLiteral("salt"), QString::fromUtf8(salt.toBase64()));
-    encrypted.insert(QStringLiteral("nonce"), QString::fromUtf8(nonce.toBase64()));
-    encrypted.insert(QStringLiteral("cipher"), QString::fromUtf8(cipher.toBase64()));
-    encrypted.insert(QStringLiteral("mac"), QString::fromUtf8(mac.toBase64()));
-    crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
-    return encrypted;
-}
-
-bool decryptMnemonic(const QJsonObject &encrypted, const QString &password, QString *mnemonicOut)
-{
-    const int version = encrypted.value(QStringLiteral("version")).toInt(1);
-    const QByteArray salt = QByteArray::fromBase64(encrypted.value(QStringLiteral("salt")).toString().toUtf8());
-    const QByteArray nonce = QByteArray::fromBase64(encrypted.value(QStringLiteral("nonce")).toString().toUtf8());
-    const QByteArray cipher = QByteArray::fromBase64(encrypted.value(QStringLiteral("cipher")).toString().toUtf8());
-    const QByteArray mac = QByteArray::fromBase64(encrypted.value(QStringLiteral("mac")).toString().toUtf8());
-
-    if (version >= kSeedCipherVersion) {
-        const int blocks = std::max(8, encrypted.value(QStringLiteral("kdf_blocks")).toInt(kSeedCipherArgon2Blocks));
-        const int passes = std::max(1, encrypted.value(QStringLiteral("kdf_passes")).toInt(kSeedCipherArgon2Passes));
-        QByteArray keyMaterial;
-        if (!deriveKeyMaterialV3(password, salt, blocks, passes, &keyMaterial)) {
-            return false;
-        }
-
-        if (nonce.size() != 24 || mac.size() != kSeedCipherMacBytes) {
-            crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
-            return false;
-        }
-
-        QByteArray plain(cipher.size(), Qt::Uninitialized);
-        static const QByteArray associatedData("grinffindor.seed-store", 22);
-        const int unlockResult =
-            crypto_aead_unlock(reinterpret_cast<uint8_t *>(plain.data()),
-                               reinterpret_cast<const uint8_t *>(mac.constData()),
-                               reinterpret_cast<const uint8_t *>(keyMaterial.constData()),
-                               reinterpret_cast<const uint8_t *>(nonce.constData()),
-                               reinterpret_cast<const uint8_t *>(associatedData.constData()),
-                               static_cast<size_t>(associatedData.size()),
-                               reinterpret_cast<const uint8_t *>(cipher.constData()),
-                               static_cast<size_t>(cipher.size()));
-        crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
-        if (unlockResult != 0) {
-            crypto_wipe(plain.data(), static_cast<size_t>(plain.size()));
-            return false;
-        }
-
-        const QString mnemonic = normalizeMnemonic(QString::fromUtf8(plain));
-        crypto_wipe(plain.data(), static_cast<size_t>(plain.size()));
-        if (!validateMnemonicValue(mnemonic)) {
-            return false;
-        }
-        if (mnemonicOut) {
-            *mnemonicOut = mnemonic;
-        }
-        return true;
-    }
-
-    QByteArray encryptionKey;
-    QByteArray macKey;
-    if (version == 2) {
-        const int iterations = std::max(1, encrypted.value(QStringLiteral("kdf_iterations")).toInt(240000));
-        const QByteArray keyMaterial = deriveKeyMaterialV2(password, salt, iterations, 64);
-        encryptionKey = keyMaterial.left(32);
-        macKey = keyMaterial.mid(32, 32);
-    } else {
-        const QByteArray legacyKey = deriveLegacyKeyMaterial(password, salt);
-        encryptionKey = legacyKey;
-        macKey = legacyKey;
-    }
-
-    const QByteArray expectedMac = QCryptographicHash::hash(macKey + nonce + cipher + macKey, QCryptographicHash::Sha256);
-    if (expectedMac != mac) {
-        return false;
-    }
-
-    const QString mnemonic = normalizeMnemonic(QString::fromUtf8(xorStream(cipher, encryptionKey, nonce)));
-    if (!validateMnemonicValue(mnemonic)) {
-        return false;
-    }
-    if (mnemonicOut) {
-        *mnemonicOut = mnemonic;
-    }
-    return true;
-}
-
-QString seedFingerprintForMnemonic(const QString &mnemonic)
-{
-    return QString::fromUtf8(
-        QCryptographicHash::hash(normalizeMnemonic(mnemonic).toUtf8(), QCryptographicHash::Sha256).toHex().left(16));
-}
-
-QString generateWorkflowId()
-{
-    return QString::fromUtf8(randomBytes(16).toHex());
-}
-
-QString amountStringFromJson(const QJsonObject &balances, const QString &field)
-{
-    return balances.value(field).toString(QStringLiteral("0.000000000"));
-}
-
-WalletOutput findTrackedOutputByCommitment(const QList<WalletOutput> &outputs, const QString &commitment)
-{
-    for (int i = 0; i < outputs.size(); ++i) {
-        if (outputs.at(i).commitment == commitment) {
-            return outputs.at(i);
-        }
-    }
-    return WalletOutput();
-}
-
-QString displayAmountForTransactionEntry(const QJsonObject &entry, const QList<WalletOutput> &outputs)
-{
-    const QString storedAmount = entry.value(QStringLiteral("amount")).toString().trimmed();
-    if (!storedAmount.isEmpty()) {
-        return storedAmount;
-    }
-
-    const QString workflowId = entry.value(QStringLiteral("workflow_id")).toString();
-    quint64 receivedAmount = 0;
-    quint64 changeAmount = 0;
-    for (int i = 0; i < outputs.size(); ++i) {
-        const WalletOutput &output = outputs.at(i);
-        if (output.workflowId != workflowId) {
-            continue;
-        }
-        const quint64 amount = amountToNanogrin(output.amount);
-        if (output.source == QStringLiteral("change")) {
-            changeAmount += amount;
-        } else if (output.source == QStringLiteral("receive") || output.source == QStringLiteral("invoice")) {
-            receivedAmount += amount;
-        }
-    }
-
-    if (receivedAmount > 0) {
-        return formatNanogrin(receivedAmount);
-    }
-
-    quint64 inputAmount = 0;
-    const QJsonArray inputs = entry.value(QStringLiteral("tx_skeleton"))
-                                  .toObject()
-                                  .value(QStringLiteral("body"))
-                                  .toObject()
-                                  .value(QStringLiteral("inputs"))
-                                  .toArray();
-    for (int i = 0; i < inputs.size(); ++i) {
-        const QJsonObject input = inputs.at(i).toObject();
-        QString commitment = input.value(QStringLiteral("commit")).toString();
-        if (commitment.isEmpty()) {
-            commitment = input.value(QStringLiteral("commit")).toObject().value(QStringLiteral("hex")).toString();
-        }
-        if (commitment.isEmpty()) {
-            continue;
-        }
-        inputAmount += amountToNanogrin(findTrackedOutputByCommitment(outputs, commitment).amount);
-    }
-
-    const quint64 feeAmount = amountToNanogrin(entry.value(QStringLiteral("fee")).toString());
-    if (inputAmount > 0 && inputAmount >= changeAmount + feeAmount) {
-        return formatNanogrin(inputAmount - changeAmount - feeAmount);
-    }
-
-    return QString();
-}
-
-WalletOutput normalizedTrackedOutput(const WalletOutput &output, const WalletKeychain &keychain)
-{
-    if (!keychain.isValid()
-        || output.keyPath.isEmpty()
-        || !output.keyPath.startsWith(QStringLiteral("m/0/0/"))) {
-        return output;
-    }
-
-    const WalletKeychain::OutputSecrets secrets =
-        keychain.deriveOutputSecrets(output.childIndex, amountToNanogrin(output.amount));
-    if (!secrets.success) {
-        return output;
-    }
-
-    WalletOutput normalized = output;
-    normalized.blindingFactor = QString::fromUtf8(secrets.blindingFactor.toHex());
-    return normalized;
-}
-
-void logStandardSenderBlindOffsetDiagnostics(const QString &workflowId,
-                                             const SlateV4 &slate,
-                                             const QJsonObject &localContext,
-                                             const QList<WalletOutput> &selectedInputs,
-                                             const WalletOutput &receiverOutput,
-                                             const WalletOutput &changeOutput)
-{
-    const QString localSenderOffset = localContext.value(QStringLiteral("standard_sender_offset")).toString().trimmed();
-    const QString importedSlateOffset = localContext.value(QStringLiteral("incoming_s2_offset")).toString().trimmed();
-    const QString finalTxOffsetUsedForKernelExcess = slate.offset.trimmed();
-
-    const QString receiverBlind = receiverOutput.blindingFactor.trimmed();
-    const QString changeBlind = changeOutput.blindingFactor.trimmed();
-
-    const QJsonObject senderContextJson =
-        localContext.value(QStringLiteral("standard_context_participant")).toObject();
-    const QString senderBlindSecret = senderContextJson.value(QStringLiteral("sec_key")).toString().trimmed();
-    const QString senderBlindPublic = senderContextJson.value(QStringLiteral("pub_key")).toString().trimmed();
-
-    QString receiverExcessContributionPublic;
-    for (int i = 0; i < slate.signatures.size(); ++i) {
-        const QString participantXs = slate.signatures.at(i).xs.trimmed();
-        if (!participantXs.isEmpty() && participantXs != senderBlindPublic) {
-            receiverExcessContributionPublic = participantXs;
-            break;
-        }
-    }
-
-    QString combinedExcessPublicError;
-    const QString kernelExcessPublic = WalletCryptoBackend::combinedBlindPublicKeyHex(slate, &combinedExcessPublicError);
-    QString kernelExcessCommitmentError;
-    const QString kernelExcessCommitment = WalletCryptoBackend::calculateExcessCommitment(slate, &kernelExcessCommitmentError);
-
-    Q_UNUSED(workflowId)
-    Q_UNUSED(localSenderOffset)
-    Q_UNUSED(importedSlateOffset)
-    Q_UNUSED(finalTxOffsetUsedForKernelExcess)
-    Q_UNUSED(selectedInputs)
-    Q_UNUSED(changeBlind)
-    Q_UNUSED(receiverBlind)
-    Q_UNUSED(senderBlindSecret)
-    Q_UNUSED(senderBlindPublic)
-    Q_UNUSED(receiverExcessContributionPublic)
-    Q_UNUSED(kernelExcessPublic)
-    Q_UNUSED(kernelExcessCommitment)
-    Q_UNUSED(combinedExcessPublicError)
-    Q_UNUSED(kernelExcessCommitmentError)
-}
-
-QString syntheticWorkflowIdForCommitment(const QString &commitment)
-{
-    return QStringLiteral("rescan-%1").arg(commitment.left(24));
-}
-
-QString invoiceContextKey(const QString &suffix)
-{
-    return QStringLiteral("invoice_context_%1").arg(suffix);
-}
-
-QString standardContextKey(const QString &suffix)
-{
-    return QStringLiteral("standard_context_%1").arg(suffix);
-}
-
-WalletCryptoBackend::ParticipantContext participantContextFromJson(const QJsonObject &json,
-                                                                  const QString &role)
-{
-    WalletCryptoBackend::ParticipantContext context;
-    context.role = role;
-    context.blindSecret = json.value(QStringLiteral("sec_key")).toString();
-    context.nonceSecret = json.value(QStringLiteral("sec_nonce")).toString();
-    context.blindPublic = json.value(QStringLiteral("pub_key")).toString();
-    context.noncePublic = json.value(QStringLiteral("pub_nonce")).toString();
-    return context;
-}
-
-QJsonObject participantContextToJson(const WalletCryptoBackend::ParticipantContext &context)
-{
-    QJsonObject json;
-    json.insert(QStringLiteral("sec_key"), context.blindSecret);
-    json.insert(QStringLiteral("sec_nonce"), context.nonceSecret);
-    json.insert(QStringLiteral("pub_key"), context.blindPublic);
-    json.insert(QStringLiteral("pub_nonce"), context.noncePublic);
-    return json;
-}
-
-QStringList transactionOutputCommitments(const QJsonObject &entry)
-{
-    QStringList commitments;
-    const QString directCommitment = entry.value(QStringLiteral("commitment")).toString();
-    if (!directCommitment.isEmpty()) {
-        commitments.append(directCommitment);
-    }
-
-    const QJsonArray outputs = entry.value(QStringLiteral("tx_skeleton"))
-                               .toObject()
-                               .value(QStringLiteral("body"))
-                               .toObject()
-                               .value(QStringLiteral("outputs"))
-                               .toArray();
-    for (int i = 0; i < outputs.size(); ++i) {
-        const QString commitment = outputs.at(i).toObject().value(QStringLiteral("commit")).toString();
-        if (!commitment.isEmpty() && !commitments.contains(commitment)) {
-            commitments.append(commitment);
-        }
-    }
-
-    return commitments;
-}
-
-qint64 inferredConfirmedHeightForTransactionEntry(const QJsonObject &entry, const QList<WalletOutput> &outputs)
-{
-    // Always try live output state first: it reflects the actual on-chain block and
-    // overrides any stale stored height that might have been written from old input UTXOs.
-    const QString workflowId = entry.value(QStringLiteral("workflow_id")).toString();
-    // For receive/invoice transactions the owned UTXO may later be spent (used as input
-    // in a subsequent send), but its creation height is still correct as the receive height.
-    const QString mode = entry.value(QStringLiteral("mode")).toString();
-    const bool isReceiveSide = (mode == QStringLiteral("receive") || mode == QStringLiteral("invoice"));
-    quint64 inferredHeight = 0;
-    for (int i = 0; i < outputs.size(); ++i) {
-        const WalletOutput &output = outputs.at(i);
-        if (!output.onChain || output.height == 0) {
-            continue;
-        }
-        // For send transactions skip spent inputs: their height predates the send.
-        // For receive/invoice keep spent outputs: creation height = receive height.
-        if (!isReceiveSide && output.spent) {
-            continue;
-        }
-        if (!workflowId.isEmpty() && output.workflowId == workflowId) {
-            if (inferredHeight == 0 || output.height < inferredHeight) {
-                inferredHeight = output.height;
-            }
-        }
-    }
-
-    if (inferredHeight == 0) {
-        const QStringList commitments = transactionOutputCommitments(entry);
-        for (int i = 0; i < commitments.size(); ++i) {
-            const WalletOutput output = findTrackedOutputByCommitment(outputs, commitments.at(i));
-            if (!output.onChain || output.height == 0) {
-                continue;
-            }
-            if (!isReceiveSide && output.spent) {
-                continue;
-            }
-            if (inferredHeight == 0 || output.height < inferredHeight) {
-                inferredHeight = output.height;
-            }
-        }
-    }
-
-    if (inferredHeight > 0) {
-        return static_cast<qint64>(inferredHeight);
-    }
-
-    // Fall back to the stored height (e.g. set by kernel check or from a previous scan
-    // before the output was discovered on-chain).
-    return entry.value(QStringLiteral("confirmed_height")).toVariant().toLongLong();
-}
-
-qint64 transactionSortKey(const QJsonObject &entry)
-{
-    const QStringList timeFields = QStringList()
-        << QStringLiteral("cancelled_at")
-        << QStringLiteral("broadcast_at")
-        << QStringLiteral("last_broadcast_attempt")
-        << QStringLiteral("timestamp");
-
-    for (const QString &field : timeFields) {
-        const QString value = entry.value(field).toString().trimmed();
-        if (value.isEmpty()) {
-            continue;
-        }
-        const QDateTime parsed = QDateTime::fromString(value, Qt::ISODate);
-        if (parsed.isValid()) {
-            return parsed.toUTC().toMSecsSinceEpoch();
-        }
-    }
-
-    const qint64 confirmedHeight = entry.value(QStringLiteral("confirmed_height")).toVariant().toLongLong();
-    if (confirmedHeight > 0) {
-        return confirmedHeight;
-    }
-
-    return 0;
-}
-
-QJsonObject filterWorkflowContextsForTransactions(const QJsonObject &contexts,
-                                                  const QJsonArray &transactions)
-{
-    QJsonObject filtered;
-    for (int i = 0; i < transactions.size(); ++i) {
-        const QJsonObject entry = transactions.at(i).toObject();
-        const QString workflowId = entry.value(QStringLiteral("workflow_id")).toString();
-        const QString status = entry.value(QStringLiteral("status")).toString();
-        if (workflowId.isEmpty() || isFinalTransactionStatus(status)) {
-            continue;
-        }
-        if (contexts.contains(workflowId)) {
-            filtered.insert(workflowId, contexts.value(workflowId).toObject());
-        }
-    }
-    return filtered;
-}
-
-QString modeFromOutputs(const QList<WalletOutput> &outputs, const QString &fallbackMode)
-{
-    if (!fallbackMode.trimmed().isEmpty()) {
-        return fallbackMode;
-    }
-
-    bool hasChange = false;
-    bool hasReceiveLike = false;
-    for (int i = 0; i < outputs.size(); ++i) {
-        const QString source = outputs.at(i).source;
-        if (source == QStringLiteral("change")) {
-            hasChange = true;
-        }
-        if (source == QStringLiteral("receive") || source == QStringLiteral("invoice")) {
-            hasReceiveLike = true;
-        }
-    }
-
-    if (hasChange) {
-        return QStringLiteral("send");
-    }
-    if (hasReceiveLike) {
-        return QStringLiteral("receive");
-    }
-    return QStringLiteral("receive");
-}
-
-bool compactCommitLessThan(const SlateV4::Commit &left, const SlateV4::Commit &right)
-{
-    const QByteArray leftBytes = QByteArray::fromHex(left.commitment.toUtf8());
-    const QByteArray rightBytes = QByteArray::fromHex(right.commitment.toUtf8());
-    if (leftBytes.size() == rightBytes.size() && !leftBytes.isEmpty()) {
-        return leftBytes < rightBytes;
-    }
-    return left.commitment < right.commitment;
-}
-
-QList<SlateV4::Commit> sortedCompactCommitments(const QList<SlateV4::Commit> &commits)
-{
-    QList<SlateV4::Commit> inputs;
-    QList<SlateV4::Commit> outputs;
-    for (const SlateV4::Commit &commit : commits) {
-        if (commit.proof.trimmed().isEmpty()) {
-            inputs.append(commit);
-        } else {
-            outputs.append(commit);
-        }
-    }
-
-    std::sort(inputs.begin(), inputs.end(), compactCommitLessThan);
-    std::sort(outputs.begin(), outputs.end(), compactCommitLessThan);
-
-    QList<SlateV4::Commit> ordered = inputs;
-    ordered.append(outputs);
-    return ordered;
-}
-
-QString encodeBase58(const QByteArray &input)
-{
-    if (input.isEmpty()) {
-        return QString();
-    }
-
-    QVector<int> digits(1, 0);
-    for (int i = 0; i < input.size(); ++i) {
-        int carry = static_cast<unsigned char>(input.at(i));
-        for (int j = 0; j < digits.size(); ++j) {
-            carry += digits[j] << 8;
-            digits[j] = carry % 58;
-            carry /= 58;
-        }
-        while (carry > 0) {
-            digits.append(carry % 58);
-            carry /= 58;
-        }
-    }
-
-    QString result;
-    for (int i = 0; i < input.size() && input.at(i) == '\0'; ++i) {
-        result.append(QLatin1Char('1'));
-    }
-    for (int i = digits.size() - 1; i >= 0; --i) {
-        result.append(QLatin1Char(kBase58Alphabet[digits.at(i)]));
-    }
-    return result;
-}
-
-QByteArray decodeBase58(const QString &text)
-{
-    QByteArray output;
-    if (text.isEmpty()) {
-        return output;
-    }
-
-    QVector<int> bytes(1, 0);
-    for (int i = 0; i < text.size(); ++i) {
-        const int value = QByteArray(kBase58Alphabet).indexOf(text.at(i).toLatin1());
-        if (value < 0) {
-            return QByteArray();
-        }
-
-        int carry = value;
-        for (int j = 0; j < bytes.size(); ++j) {
-            carry += bytes[j] * 58;
-            bytes[j] = carry & 0xff;
-            carry >>= 8;
-        }
-        while (carry > 0) {
-            bytes.append(carry & 0xff);
-            carry >>= 8;
-        }
-    }
-
-    for (int i = 0; i < text.size() && text.at(i) == QLatin1Char('1'); ++i) {
-        output.append('\0');
-    }
-    for (int i = bytes.size() - 1; i >= 0; --i) {
-        output.append(static_cast<char>(bytes.at(i)));
-    }
-    return output;
-}
-
-QString formatArmored(const QString &data)
-{
-    QString out;
-    for (int i = 0; i < data.size(); ++i) {
-        if (i > 0) {
-            if (i % (15 * 200) == 0) {
-                out.append(QLatin1Char('\n'));
-            } else if (i % 15 == 0) {
-                out.append(QLatin1Char(' '));
-            }
-        }
-        out.append(data.at(i));
-    }
-    return out;
-}
-
-QString shortHexPreview(const QByteArray &data, int bytes = 16)
-{
-    return QString::fromUtf8(data.left(bytes).toHex());
-}
-
-QString shortTextPreview(const QString &text, int maxChars = 48)
-{
-    const QString trimmed = text.trimmed();
-    if (trimmed.size() <= maxChars) {
-        return trimmed;
-    }
-    return trimmed.left(maxChars) + QStringLiteral("...");
-}
-
-QString summarizeSlatepackPayload(const QByteArray &payload)
-{
-    const QJsonDocument jsonDocument = QJsonDocument::fromJson(payload);
-    if (jsonDocument.isObject()) {
-        const QJsonObject object = jsonDocument.object();
-        const QString sender = object.value(QStringLiteral("sender")).toString().trimmed();
-        const QString payloadText = object.value(QStringLiteral("payload")).toString();
-        return QStringLiteral("json-envelope mode=%1 sender=%2 payloadChars=%3")
-            .arg(QString::number(object.value(QStringLiteral("mode")).toInt(-1)),
-                 sender.isEmpty() ? QStringLiteral("-") : sender,
-                 QString::number(payloadText.size()));
-    }
-
-    if (payload.size() >= 17) {
-        const quint8 major = static_cast<quint8>(payload.at(0));
-        const quint8 minor = static_cast<quint8>(payload.at(1));
-        const quint8 mode = static_cast<quint8>(payload.at(2));
-        const quint16 optFlags =
-            (static_cast<quint8>(payload.at(3)) << 8)
-            | static_cast<quint8>(payload.at(4));
-        quint32 optFieldsLen = 0;
-        for (int i = 5; i < 9; ++i) {
-            optFieldsLen = (optFieldsLen << 8) | static_cast<quint8>(payload.at(i));
-        }
-        quint64 innerPayloadLen = 0;
-        const int payloadLenOffset = 9 + static_cast<int>(optFieldsLen);
-        if (payloadLenOffset + 8 <= payload.size()) {
-            for (int i = payloadLenOffset; i < payloadLenOffset + 8; ++i) {
-                innerPayloadLen = (innerPayloadLen << 8) | static_cast<quint8>(payload.at(i));
-            }
-        } else {
-            return QStringLiteral("binary-envelope major=%1 minor=%2 mode=%3 optFlags=%4 optFieldsLen=%5 innerPayloadLen=truncated")
-                .arg(QString::number(major),
-                     QString::number(minor),
-                     QString::number(mode),
-                     QString::number(optFlags),
-                     QString::number(optFieldsLen));
-        }
-        return QStringLiteral("binary-envelope major=%1 minor=%2 mode=%3 optFlags=%4 optFieldsLen=%5 innerPayloadLen=%6")
-            .arg(QString::number(major),
-                 QString::number(minor),
-                 QString::number(mode),
-                 QString::number(optFlags),
-                 QString::number(optFieldsLen),
-                 QString::number(innerPayloadLen));
-    }
-
-    return QStringLiteral("unknown-payload size=%1 preview=%2")
-        .arg(QString::number(payload.size()), shortHexPreview(payload));
-}
-
-QString summarizeArmoredSlatepack(const QString &slatepack)
-{
-    const QString trimmed = slatepack.trimmed();
-    const QJsonDocument jsonDocument = QJsonDocument::fromJson(trimmed.toUtf8());
-    if (jsonDocument.isObject()) {
-        return summarizeSlatepackPayload(trimmed.toUtf8());
-    }
-
-    QString cleaned = trimmed;
-    cleaned.remove(QRegularExpression(QStringLiteral("[>\\n\\r\\t ]")));
-    const QStringList parts = cleaned.split(QLatin1Char('.'), Qt::SkipEmptyParts);
-    if (parts.size() >= 3
-        && parts.at(0) == QStringLiteral("BEGINSLATEPACK")
-        && parts.at(2) == QStringLiteral("ENDSLATEPACK")) {
-        const QByteArray decoded = decodeBase58(parts.at(1));
-        if (decoded.size() >= 5) {
-            const QByteArray payload = decoded.mid(4);
-            return QStringLiteral("armored %1").arg(summarizeSlatepackPayload(payload));
-        }
-        return QStringLiteral("armored invalid-base58 decodedSize=%1").arg(QString::number(decoded.size()));
-    }
-
-    return QStringLiteral("plain-text chars=%1 preview=%2")
-        .arg(QString::number(trimmed.size()), shortTextPreview(trimmed));
-}
-
-QString encodeSlatepackArmor(const QString &payloadJson, const QString &sender)
-{
-    QJsonObject envelope;
-    QJsonObject version;
-    version.insert(QStringLiteral("major"), 1);
-    version.insert(QStringLiteral("minor"), 0);
-    envelope.insert(QStringLiteral("slatepack"), version);
-    envelope.insert(QStringLiteral("mode"), 0);
-    if (!sender.trimmed().isEmpty()) {
-        envelope.insert(QStringLiteral("sender"), sender.trimmed());
-    }
-    envelope.insert(QStringLiteral("payload"), QString::fromUtf8(payloadJson.toUtf8().toBase64()));
-
-    const QByteArray serialized = QJsonDocument(envelope).toJson(QJsonDocument::Compact);
-    const QByteArray checksum = QCryptographicHash::hash(
-        QCryptographicHash::hash(serialized, QCryptographicHash::Sha256),
-        QCryptographicHash::Sha256).left(4);
-    return QStringLiteral("BEGINSLATEPACK. %1. ENDSLATEPACK.\n").arg(formatArmored(encodeBase58(checksum + serialized)));
-}
-
-QString userFacingSlatepackParseNote(const QString &parseError);
-QString buildSlatepackDiagnostic(const QString &kind,
-                                 const QByteArray &payload,
-                                 const QString &note);
-
-QString decodeSlatepackArmor(const QString &slatepack)
-{
-    QString cleaned = slatepack;
-    cleaned.remove(QRegularExpression(QStringLiteral("[>\\n\\r\\t ]")));
-    const QStringList parts = cleaned.split(QLatin1Char('.'), Qt::SkipEmptyParts);
-    if (parts.size() < 3
-        || parts.at(0) != QStringLiteral("BEGINSLATEPACK")
-        || parts.at(2) != QStringLiteral("ENDSLATEPACK")) {
-        return QString();
-    }
-
-    const QByteArray decoded = decodeBase58(parts.at(1));
-    if (decoded.size() < 5) {
-        return QString();
-    }
-
-    const QByteArray checksum = decoded.left(4);
-    const QByteArray payload = decoded.mid(4);
-    const QByteArray expected = QCryptographicHash::hash(
-        QCryptographicHash::hash(payload, QCryptographicHash::Sha256),
-        QCryptographicHash::Sha256).left(4);
-    if (checksum != expected) {
-        return QString();
-    }
-
-    QString decodedPayload;
-    QString parseError;
-    if (!BinarySlateV4Reader::decodeSlatepackPayload(payload, QByteArray(), &decodedPayload, &parseError)) {
-        return buildSlatepackDiagnostic(QStringLiteral("armored"), payload, parseError);
-    }
-    return decodedPayload;
-}
-
-QString userFacingSlatepackParseNote(const QString &parseError)
-{
-    const QString trimmed = parseError.trimmed();
-    if (trimmed.isEmpty()) {
-        return QStringLiteral("Slatepack payload could not be parsed.");
-    }
-
-    if (trimmed.contains(QStringLiteral("Wallet secret is unavailable"), Qt::CaseInsensitive)) {
-        return QStringLiteral("This Slatepack is encrypted. Unlock the wallet that owns the recipient address before decoding it.");
-    }
-    if (trimmed.contains(QStringLiteral("not addressed to this wallet"), Qt::CaseInsensitive)) {
-        return QStringLiteral("This Slatepack is encrypted for a different recipient wallet.");
-    }
-    if (trimmed.contains(QStringLiteral("authentication failed"), Qt::CaseInsensitive)
-        || trimmed.contains(QStringLiteral("invalid base64"), Qt::CaseInsensitive)
-        || trimmed.contains(QStringLiteral("truncated"), Qt::CaseInsensitive)
-        || trimmed.contains(QStringLiteral("malformed"), Qt::CaseInsensitive)) {
-        return QStringLiteral("The Slatepack looks damaged or incomplete. Copy it again and make sure no characters are missing.");
-    }
-
-    return trimmed;
-}
-
-QString buildSlatepackDiagnostic(const QString &kind,
-                                const QByteArray &payload,
-                                const QString &note)
-{
-    QJsonObject diagnostic;
-    diagnostic.insert(QStringLiteral("external_slatepack"), true);
-    diagnostic.insert(QStringLiteral("diagnostic_kind"), kind);
-    diagnostic.insert(QStringLiteral("payload_size"), payload.size());
-    diagnostic.insert(QStringLiteral("payload_hex_preview"), QString::fromUtf8(payload.left(96).toHex()));
-    diagnostic.insert(QStringLiteral("note"), userFacingSlatepackParseNote(note));
-    return QString::fromUtf8(QJsonDocument(diagnostic).toJson(QJsonDocument::Indented));
-}
-
-QString decodeIncomingSlatepack(const QString &input, const QByteArray &decryptionKey)
-{
-    const QString trimmed = input.trimmed();
-    if (trimmed.isEmpty()) {
-        return QString();
-    }
-
-    const QJsonDocument jsonDocument = QJsonDocument::fromJson(trimmed.toUtf8());
-    if (jsonDocument.isObject()) {
-        QString decodedPayload;
-        QString parseError;
-        if (BinarySlateV4Reader::decodeSlatepackPayload(trimmed.toUtf8(), decryptionKey, &decodedPayload, &parseError)) {
-            return decodedPayload;
-        }
-
-        const QJsonObject object = jsonDocument.object();
-        if (object.contains(QStringLiteral("slatepack")) || object.contains(QStringLiteral("payload"))) {
-            const QByteArray payload = QByteArray::fromBase64(object.value(QStringLiteral("payload")).toString().toUtf8());
-            return buildSlatepackDiagnostic(QStringLiteral("json"), payload, parseError);
-        }
-
-        return QString::fromUtf8(jsonDocument.toJson(QJsonDocument::Indented));
-    }
-
-    QString cleaned = trimmed;
-    cleaned.remove(QRegularExpression(QStringLiteral("[>\\n\\r\\t ]")));
-    const QStringList parts = cleaned.split(QLatin1Char('.'), Qt::SkipEmptyParts);
-    if (parts.size() >= 3
-        && parts.at(0) == QStringLiteral("BEGINSLATEPACK")
-        && parts.at(2) == QStringLiteral("ENDSLATEPACK")) {
-        const QByteArray decoded = decodeBase58(parts.at(1));
-        if (decoded.size() >= 5) {
-            const QByteArray payload = decoded.mid(4);
-            QString decodedPayload;
-            QString parseError;
-            if (BinarySlateV4Reader::decodeSlatepackPayload(payload, decryptionKey, &decodedPayload, &parseError)) {
-                return decodedPayload;
-            }
-            return buildSlatepackDiagnostic(QStringLiteral("armored"), payload, parseError);
-        }
-    }
-
-    return decodeSlatepackArmor(trimmed);
-}
-
-bool invokeNoArgMethod(QObject *object, const char *methodName)
-{
-    return object && QMetaObject::invokeMethod(object, methodName, Qt::DirectConnection);
-}
-
-bool replaceFocusedObjectSelection(QObject *object, const QString &text)
-{
-    if (!object) {
-        return false;
-    }
-
-    const QVariant selectionStartValue = object->property("selectionStart");
-    const QVariant selectionEndValue = object->property("selectionEnd");
-    if (selectionStartValue.isValid() && selectionEndValue.isValid()) {
-        bool okStart = false;
-        bool okEnd = false;
-        const int selectionStart = selectionStartValue.toInt(&okStart);
-        const int selectionEnd = selectionEndValue.toInt(&okEnd);
-        if (okStart && okEnd) {
-            const int start = std::min(selectionStart, selectionEnd);
-            const int end = std::max(selectionStart, selectionEnd);
-            if (end > start) {
-                QMetaObject::invokeMethod(object,
-                                          "remove",
-                                          Qt::DirectConnection,
-                                          Q_ARG(int, start),
-                                          Q_ARG(int, end));
-            }
-            const bool inserted = QMetaObject::invokeMethod(object,
-                                                            "insert",
-                                                            Qt::DirectConnection,
-                                                            Q_ARG(int, start),
-                                                            Q_ARG(QString, text));
-            if (inserted) {
-                object->setProperty("cursorPosition", start + text.length());
-                return true;
-            }
-        }
-    }
-
-    const QVariant currentText = object->property("text");
-    if (!currentText.isValid()) {
-        return false;
-    }
-
-    const bool textSet = object->setProperty("text", text);
-    const bool cursorSet = object->setProperty("cursorPosition", text.length());
-    return textSet;
-}
-
-QString focusedObjectText(QObject *object)
-{
-    if (!object) {
-        return QString();
-    }
-
-    const QVariant selectedText = object->property("selectedText");
-    if (selectedText.isValid()) {
-        const QString selected = selectedText.toString();
-        if (!selected.isEmpty()) {
-            return selected;
-        }
-    }
-
-    const QVariant text = object->property("text");
-    if (text.isValid()) {
-        return text.toString();
-    }
-
-    return QString();
-}
-
 } // namespace
-
-#ifdef Q_OS_WASM
-extern "C" EMSCRIPTEN_KEEPALIVE int grinffindorHandleShortcut(int key)
-{
-    if (!g_shortcutController) {
-        return 0;
-    }
-    return g_shortcutController->processShortcutKey(key) ? 1 : 0;
-}
-#endif
 
 GrinWalletController::GrinWalletController(QObject *parent) :
     QObject(parent),
     m_nodeApi(0),
+    m_nodeSyncService(new GrinWalletNodeSyncService(this)),
+    m_workflowService(new GrinWalletWorkflowService(this)),
+    m_shortcutBridge(new GrinWalletShortcutBridge(this)),
     m_autoRefreshTimer(0),
     m_sessionLockTimer(0),
     m_walletExists(false),
     m_walletUnlocked(false),
-    m_selectedNetwork(defaultNetworkName()),
+    m_selectedNetwork(GrinWalletControllerHelpers::defaultNetworkName()),
     m_storagePersistenceState(QStringLiteral("unknown")),
-    m_autoLockOnAppDeactivate(false),
     m_chainHeight(0),
     m_nodeBlockHeaderVersion(0),
     m_syncStatus(QStringLiteral("Idle")),
@@ -2189,6 +79,7 @@ GrinWalletController::GrinWalletController(QObject *parent) :
     m_awaitingConfirmationBalance(QStringLiteral("0.000000000")),
     m_awaitingFinalizationBalance(QStringLiteral("0.000000000")),
     m_scanHeight(0),
+    m_autoLockOnAppDeactivate(false),
     m_walletScanInFlight(false),
     m_seedScanActive(false),
     m_seedScanNextIndex(1),
@@ -2226,14 +117,14 @@ bool GrinWalletController::autoLockOnAppDeactivate() const { return m_autoLockOn
 QVariantList GrinWalletController::transactionHistory() const
 {
     QVariantList history;
-    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
     const QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
     const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     QList<QJsonObject> entries;
     entries.reserve(transactions.size());
     for (int i = 0; i < transactions.size(); ++i) {
         QJsonObject entry = transactions.at(i).toObject();
-        const qint64 confirmedHeight = inferredConfirmedHeightForTransactionEntry(entry, outputs);
+        const qint64 confirmedHeight = GrinWalletHistoryHelpers::inferredConfirmedHeightForTransactionEntry(entry, outputs);
         const QString status = entry.value(QStringLiteral("status")).toString();
         qint64 confirmations = 0;
         if (confirmedHeight > 0 && m_chainHeight >= static_cast<qulonglong>(confirmedHeight)) {
@@ -2246,22 +137,14 @@ QVariantList GrinWalletController::transactionHistory() const
         if (confirmedHeight > 0 && confirmations > 0 && status != QStringLiteral("cancelled")) {
             entry.insert(QStringLiteral("status"), QStringLiteral("confirmed"));
         }
-        const QString displayAmount = displayAmountForTransactionEntry(entry, outputs);
+        const QString displayAmount = GrinWalletControllerHelpers::displayAmountForTransactionEntry(entry, outputs);
         if (!displayAmount.isEmpty()) {
             entry.insert(QStringLiteral("amount"), displayAmount);
         }
         entries.append(entry);
     }
 
-    std::sort(entries.begin(), entries.end(), [](const QJsonObject &left, const QJsonObject &right) {
-        const qint64 leftKey = transactionSortKey(left);
-        const qint64 rightKey = transactionSortKey(right);
-        if (leftKey != rightKey) {
-            return leftKey > rightKey;
-        }
-        return left.value(QStringLiteral("workflow_id")).toString()
-            > right.value(QStringLiteral("workflow_id")).toString();
-    });
+    std::sort(entries.begin(), entries.end(), GrinWalletController::transactionEntryLessThan);
 
     history.reserve(entries.size());
     for (const QJsonObject &entry : entries) {
@@ -2272,26 +155,9 @@ QVariantList GrinWalletController::transactionHistory() const
 
 QVariantList GrinWalletController::walletOutputs() const
 {
-    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-    std::sort(outputs.begin(), outputs.end(), [](const WalletOutput &left, const WalletOutput &right) {
-        if (left.spent != right.spent) {
-            return !left.spent && right.spent;
-        }
-        if (left.locked != right.locked) {
-            return left.locked && !right.locked;
-        }
-        if (left.pending != right.pending) {
-            return left.pending && !right.pending;
-        }
-        if (left.onChain != right.onChain) {
-            return left.onChain && !right.onChain;
-        }
-        if (left.height != right.height) {
-            return left.height > right.height;
-        }
-        return left.commitment < right.commitment;
-    });
+    std::sort(outputs.begin(), outputs.end(), GrinWalletController::walletOutputLessThan);
 
     QVariantList list;
     list.reserve(outputs.size());
@@ -2335,91 +201,22 @@ QVariantList GrinWalletController::walletOutputs() const
 
 void GrinWalletController::initialize()
 {
-#ifdef Q_OS_WASM
-    g_shortcutController = this;
-#endif
-    qApp->installEventFilter(this);
+    m_shortcutBridge->install();
     loadFromStorage();
     connectNodeClient();
     startAutoRefresh();
     refreshStoragePersistenceState();
-#ifdef Q_OS_WASM
-    browserInstallWalletShortcutBridge();
-#endif
     refreshNodeStatus();
-}
-
-bool GrinWalletController::eventFilter(QObject *watched, QEvent *event)
-{
-    Q_UNUSED(watched)
-
-    if (!event || event->type() != QEvent::KeyPress) {
-        return QObject::eventFilter(watched, event);
-    }
-
-    QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-    if (!(keyEvent->modifiers() & Qt::ControlModifier) || (keyEvent->modifiers() & Qt::AltModifier)) {
-        return QObject::eventFilter(watched, event);
-    }
-
-    const int key = keyEvent->key();
-    if (key != Qt::Key_A && key != Qt::Key_C && key != Qt::Key_V) {
-        return QObject::eventFilter(watched, event);
-    }
-
-    if (processShortcutKey(key)) {
-        keyEvent->accept();
-        return true;
-    }
-    return QObject::eventFilter(watched, event);
-}
-
-bool GrinWalletController::processShortcutKey(int key)
-{
-    if (key != Qt::Key_A && key != Qt::Key_C && key != Qt::Key_V) {
-        return false;
-    }
-
-    QObject *focusObject = qApp->focusObject();
-    if (!focusObject) {
-        return false;
-    }
-
-    if (key == Qt::Key_A) {
-        if (invokeNoArgMethod(focusObject, "selectAll")) {
-            return true;
-        }
-        return false;
-    }
-
-    if (key == Qt::Key_V) {
-        const QString pastedText = requestPasteText();
-        if (!pastedText.isEmpty() && replaceFocusedObjectSelection(focusObject, pastedText)) {
-            return true;
-        }
-        return false;
-    }
-
-    if (invokeNoArgMethod(focusObject, "copy")) {
-        return true;
-    }
-
-    const QString copiedText = focusedObjectText(focusObject);
-    if (!copiedText.isEmpty() && copyTextToClipboard(copiedText)) {
-        return true;
-    }
-
-    return false;
 }
 
 QString GrinWalletController::generateMnemonic() const
 {
-    return mnemonicFromEntropy(randomBytes(kMnemonicEntropyBytes));
+    return GrinWalletSeedCrypto::generateMnemonic();
 }
 
 bool GrinWalletController::validateMnemonic(const QString &mnemonic) const
 {
-    return validateMnemonicValue(mnemonic);
+    return GrinWalletSeedCrypto::isValidMnemonic(mnemonic);
 }
 
 void GrinWalletController::createWallet(const QString &walletName, const QString &password)
@@ -2435,25 +232,25 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
         return;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject wallet;
-    const QJsonObject encryptedSeed = encryptMnemonic(mnemonic, password);
+    const QJsonObject encryptedSeed = GrinWalletSeedCrypto::encryptMnemonic(mnemonic, password);
     if (encryptedSeed.isEmpty()) {
         setLastError(QStringLiteral("Failed to encrypt wallet seed for local storage."));
         return;
     }
     wallet.insert(QStringLiteral("name"), walletName.trimmed());
-    wallet.insert(QStringLiteral("seed_fingerprint"), seedFingerprintForMnemonic(mnemonic));
+    wallet.insert(QStringLiteral("seed_fingerprint"), GrinWalletSeedCrypto::seedFingerprint(mnemonic));
     wallet.insert(QStringLiteral("encrypted_seed"), encryptedSeed);
     wallet.insert(QStringLiteral("created_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
     wallet.insert(QStringLiteral("seed_origin"), QStringLiteral("generated"));
     wallet.insert(QStringLiteral("network"), resolvedNetworkName());
     document.insert(QStringLiteral("wallet"), wallet);
-    setWalletForNetwork(&document, resolvedNetworkName(), wallet);
-    setWalletStateForNetwork(&document, resolvedNetworkName(), defaultWalletState());
-    setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
+    GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), wallet);
+    GrinWalletStorage::setWalletStateForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletState());
+    GrinWalletStorage::setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
 
-    if (!saveDocument(document)) {
+    if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to persist wallet in browser storage."));
         return;
     }
@@ -2481,35 +278,35 @@ void GrinWalletController::importWallet(const QString &walletName, const QString
 
 void GrinWalletController::restoreWallet(const QString &walletName, const QString &mnemonic, const QString &password)
 {
-    const QString normalizedMnemonic = normalizeMnemonic(mnemonic);
+    const QString normalizedMnemonic = GrinWalletSeedCrypto::normalizeMnemonic(mnemonic);
     if (walletName.trimmed().isEmpty() || password.isEmpty()) {
         setLastError(QStringLiteral("Wallet name and password are required."));
         return;
     }
-    if (!validateMnemonicValue(normalizedMnemonic)) {
+    if (!GrinWalletSeedCrypto::isValidMnemonic(normalizedMnemonic)) {
         setLastError(QStringLiteral("Mnemonic is not valid BIP39 input."));
         return;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject wallet;
-    const QJsonObject encryptedSeed = encryptMnemonic(normalizedMnemonic, password);
+    const QJsonObject encryptedSeed = GrinWalletSeedCrypto::encryptMnemonic(normalizedMnemonic, password);
     if (encryptedSeed.isEmpty()) {
         setLastError(QStringLiteral("Failed to encrypt wallet seed for local storage."));
         return;
     }
     wallet.insert(QStringLiteral("name"), walletName.trimmed());
-    wallet.insert(QStringLiteral("seed_fingerprint"), seedFingerprintForMnemonic(normalizedMnemonic));
+    wallet.insert(QStringLiteral("seed_fingerprint"), GrinWalletSeedCrypto::seedFingerprint(normalizedMnemonic));
     wallet.insert(QStringLiteral("encrypted_seed"), encryptedSeed);
     wallet.insert(QStringLiteral("created_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
     wallet.insert(QStringLiteral("seed_origin"), QStringLiteral("restored"));
     wallet.insert(QStringLiteral("network"), resolvedNetworkName());
     document.insert(QStringLiteral("wallet"), wallet);
-    setWalletForNetwork(&document, resolvedNetworkName(), wallet);
-    setWalletStateForNetwork(&document, resolvedNetworkName(), defaultWalletState());
-    setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
+    GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), wallet);
+    GrinWalletStorage::setWalletStateForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletState());
+    GrinWalletStorage::setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
 
-    if (!saveDocument(document)) {
+    if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to persist wallet in browser storage."));
         return;
     }
@@ -2532,11 +329,11 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
 
 void GrinWalletController::unlockWallet(const QString &password)
 {
-    QJsonObject document = loadDocument();
-    QJsonObject wallet = walletForNetwork(document, resolvedNetworkName());
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
     QString mnemonic;
     if (wallet.isEmpty()
-        || !decryptMnemonic(wallet.value(QStringLiteral("encrypted_seed")).toObject(), password, &mnemonic)) {
+        || !GrinWalletSeedCrypto::decryptMnemonic(wallet.value(QStringLiteral("encrypted_seed")).toObject(), password, &mnemonic)) {
         setLastError(QStringLiteral("Failed to unlock wallet. Password is invalid or local data is corrupted."));
         return;
     }
@@ -2554,12 +351,12 @@ void GrinWalletController::unlockWallet(const QString &password)
 
     const QJsonObject encryptedSeed = wallet.value(QStringLiteral("encrypted_seed")).toObject();
     if (encryptedSeed.value(QStringLiteral("version")).toInt(1) < kSeedCipherVersion) {
-        const QJsonObject upgradedSeed = encryptMnemonic(mnemonic, password);
+        const QJsonObject upgradedSeed = GrinWalletSeedCrypto::encryptMnemonic(mnemonic, password);
         if (!upgradedSeed.isEmpty()) {
             wallet.insert(QStringLiteral("encrypted_seed"), upgradedSeed);
             document.insert(QStringLiteral("wallet"), wallet);
-            setWalletForNetwork(&document, resolvedNetworkName(), wallet);
-            saveDocument(document);
+            GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), wallet);
+            GrinWalletStorage::saveDocument(document);
         }
     }
 
@@ -2606,11 +403,11 @@ bool GrinWalletController::revealSeedPhrase(const QString &password)
         return false;
     }
 
-    const QJsonObject document = loadDocument();
-    const QJsonObject wallet = walletForNetwork(document, resolvedNetworkName());
+    const QJsonObject document = GrinWalletStorage::loadDocument();
+    const QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
     QString mnemonic;
     if (wallet.isEmpty()
-        || !decryptMnemonic(wallet.value(QStringLiteral("encrypted_seed")).toObject(), password, &mnemonic)) {
+        || !GrinWalletSeedCrypto::decryptMnemonic(wallet.value(QStringLiteral("encrypted_seed")).toObject(), password, &mnemonic)) {
         setLastError(QStringLiteral("Failed to reveal seed phrase. Password is invalid or local data is corrupted."));
         return false;
     }
@@ -2625,14 +422,14 @@ bool GrinWalletController::revealSeedPhrase(const QString &password)
 
 void GrinWalletController::deleteWallet()
 {
-    QJsonObject document = loadDocument();
-    document.insert(QStringLiteral("wallet"), defaultWalletMetadata());
-    setWalletForNetwork(&document, resolvedNetworkName(), defaultWalletMetadata());
-    setWalletStateForNetwork(&document, resolvedNetworkName(), defaultWalletState());
-    setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
-    syncActiveNetworkView(&document, resolvedNetworkName());
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    document.insert(QStringLiteral("wallet"), GrinWalletStorage::defaultWalletMetadata());
+    GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletMetadata());
+    GrinWalletStorage::setWalletStateForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletState());
+    GrinWalletStorage::setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
+    GrinWalletStorage::syncActiveNetworkView(&document, resolvedNetworkName());
 
-    if (!saveDocument(document)) {
+    if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to delete the local wallet configuration."));
         return;
     }
@@ -2645,8 +442,8 @@ void GrinWalletController::deleteWallet()
 
 QString GrinWalletController::exportEncryptedWalletBackup() const
 {
-    const QJsonObject document = loadDocument();
-    const QJsonObject wallet = walletForNetwork(document, resolvedNetworkName());
+    const QJsonObject document = GrinWalletStorage::loadDocument();
+    const QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
     if (wallet.isEmpty()) {
         return QString();
     }
@@ -2675,7 +472,7 @@ bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson
     }
 
     QString validationError;
-    const QJsonObject imported = extractImportedBackupDocument(trimmed.toUtf8(), &validationError);
+    const QJsonObject imported = GrinWalletStorage::extractImportedBackupDocument(trimmed.toUtf8(), &validationError);
     if (imported.isEmpty()) {
         setLastError(validationError.isEmpty()
                          ? QStringLiteral("Encrypted wallet backup is invalid.")
@@ -2683,7 +480,7 @@ bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson
         return false;
     }
 
-    if (!saveDocument(imported)) {
+    if (!GrinWalletStorage::saveDocument(imported)) {
         setLastError(QStringLiteral("Failed to persist imported wallet backup."));
         return false;
     }
@@ -2698,23 +495,23 @@ bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson
 bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
 {
     const QString trimmed = nodeUrl.trimmed();
-    if (!isNodeUrlAccepted(trimmed)) {
+    if (!GrinWalletControllerHelpers::isNodeUrlAccepted(trimmed)) {
         setLastError(QStringLiteral("Node URL must be a valid http or https endpoint."));
         return false;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject node = document.value(QStringLiteral("node")).toObject();
     node.insert(QStringLiteral("network"),
-                inferNetworkName(node.value(QStringLiteral("network")).toString(), trimmed));
+                GrinWalletControllerHelpers::inferNetworkName(node.value(QStringLiteral("network")).toString(), trimmed));
     node.insert(QStringLiteral("url"), trimmed);
     document.insert(QStringLiteral("node"), node);
-    if (!saveDocument(document)) {
+    if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to persist node settings."));
         return false;
     }
 
-    m_selectedNetwork = node.value(QStringLiteral("network")).toString(defaultNetworkName());
+    m_selectedNetwork = node.value(QStringLiteral("network")).toString(GrinWalletControllerHelpers::defaultNetworkName());
     m_nodeUrl = trimmed;
     emit nodeConfigChanged();
     connectNodeClient();
@@ -2727,19 +524,19 @@ bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
 bool GrinWalletController::setSelectedNetwork(const QString &networkName)
 {
     const QString normalized = networkName.trimmed().toLower();
-    if (!isAcceptedNetworkName(normalized)) {
+    if (!GrinWalletControllerHelpers::isAcceptedNetworkName(normalized)) {
         setLastError(QStringLiteral("Wallet network must be either mainnet or testnet."));
         return false;
     }
 
-    QJsonObject document = loadDocument();
-    persistActiveNetworkView(&document, resolvedNetworkName());
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    GrinWalletStorage::persistActiveNetworkView(&document, resolvedNetworkName());
     QJsonObject node = document.value(QStringLiteral("node")).toObject();
     node.insert(QStringLiteral("network"), normalized);
-    node.insert(QStringLiteral("url"), defaultNodeUrlForNetwork(normalized));
+    node.insert(QStringLiteral("url"), GrinWalletControllerHelpers::defaultNodeUrlForNetwork(normalized));
     document.insert(QStringLiteral("node"), node);
-    syncActiveNetworkView(&document, normalized);
-    if (!saveDocument(document)) {
+    GrinWalletStorage::syncActiveNetworkView(&document, normalized);
+    if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to persist wallet network settings."));
         return false;
     }
@@ -2755,7 +552,7 @@ bool GrinWalletController::setSelectedNetwork(const QString &networkName)
 
 void GrinWalletController::resetNodeUrl()
 {
-    setNodeUrl(defaultNodeUrlForNetwork(resolvedNetworkName()));
+    setNodeUrl(GrinWalletControllerHelpers::defaultNodeUrlForNetwork(resolvedNetworkName()));
 }
 
 void GrinWalletController::refreshNodeStatus()
@@ -2804,7 +601,7 @@ void GrinWalletController::rescanWallet()
         return;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QJsonObject balances;
     balances.insert(QStringLiteral("total"), QStringLiteral("0.000000000"));
@@ -2821,7 +618,7 @@ void GrinWalletController::rescanWallet()
     walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("full-rescan"));
     walletState.insert(QStringLiteral("last_synced_at"), QString());
     document.insert(QStringLiteral("wallet_state"), walletState);
-    saveDocument(document);
+    GrinWalletStorage::saveDocument(document);
     refreshStateFromStorage();
 
     m_seedScanNextIndex = 1;
@@ -2838,59 +635,23 @@ void GrinWalletController::rescanWallet()
 
 QString GrinWalletController::requestPasteText() const
 {
-#ifdef Q_OS_WASM
-    const char *capturedValue = browserConsumeCapturedPasteText();
-    const QString capturedText = QString::fromUtf8(capturedValue ? capturedValue : "");
-    if (!capturedText.isEmpty()) {
-        return capturedText;
-    }
-    const char *value = browserReadClipboardText();
-    const QString clipboardText = QString::fromUtf8(value ? value : "");
-    return clipboardText;
-#else
-    const QClipboard *clipboard = QGuiApplication::clipboard();
-    return clipboard ? clipboard->text() : QString();
-#endif
+    return GrinWalletPlatformHelpers::requestPasteText();
 }
 
 bool GrinWalletController::copyTextToClipboard(const QString &text) const
 {
-    if (text.isEmpty()) {
-        return false;
-    }
-#ifdef Q_OS_WASM
-    return browserCopyToClipboard(text.toUtf8().constData()) == 1;
-#else
-    QClipboard *clipboard = QGuiApplication::clipboard();
-    if (!clipboard) {
-        return false;
-    }
-    clipboard->setText(text);
-    return true;
-#endif
+    return GrinWalletPlatformHelpers::copyTextToClipboard(text);
 }
 
 bool GrinWalletController::downloadTextFile(const QString &suggestedName, const QString &text) const
 {
-    if (text.isEmpty()) {
-        return false;
-    }
-#ifdef Q_OS_WASM
-    const QString fileName = suggestedName.trimmed().isEmpty()
-        ? QStringLiteral("grinffindor-wallet-backup.json")
-        : suggestedName.trimmed();
-    return browserDownloadTextFile(fileName.toUtf8().constData(), text.toUtf8().constData()) == 1;
-#else
-    Q_UNUSED(suggestedName);
-    Q_UNUSED(text);
-    return false;
-#endif
+    return GrinWalletPlatformHelpers::downloadTextFile(suggestedName, text);
 }
 
 void GrinWalletController::requestPersistentBrowserStorage()
 {
+    GrinWalletPlatformHelpers::requestPersistentBrowserStorage();
 #ifdef Q_OS_WASM
-    browserRequestPersistentStorage();
     setLastInfo(QStringLiteral("Browser persistent-storage request sent. Re-check the storage status after the browser responds."));
 #else
     setLastInfo(QStringLiteral("Persistent browser storage is only relevant for the WASM/browser wallet."));
@@ -2902,20 +663,12 @@ void GrinWalletController::updateBrowserShortcutContext(const QString &text,
                                                         const QString &selectedText,
                                                         bool focused) const
 {
-#ifdef Q_OS_WASM
-    const QByteArray textUtf8 = text.toUtf8();
-    const QByteArray selectedUtf8 = selectedText.toUtf8();
-    browserUpdateShortcutContext(textUtf8.constData(), selectedUtf8.constData(), focused ? 1 : 0);
-#else
-    Q_UNUSED(text)
-    Q_UNUSED(selectedText)
-    Q_UNUSED(focused)
-#endif
+    m_shortcutBridge->updateBrowserShortcutContext(text, selectedText, focused);
 }
 
 bool GrinWalletController::isValidNodeUrl(const QString &nodeUrl) const
 {
-    return isNodeUrlAccepted(nodeUrl);
+    return GrinWalletControllerHelpers::isNodeUrlAccepted(nodeUrl);
 }
 
 QString GrinWalletController::createSlatepackTemplate(const QString &sender) const
@@ -2933,1132 +686,48 @@ QString GrinWalletController::createSlatepackTemplate(const QString &sender) con
 
 void GrinWalletController::startSendWorkflow(const QString &amount, const QString &note)
 {
-    touchWalletSession();
-    const quint64 requestedAmount = amountToNanogrin(amount);
-    if (requestedAmount == 0) {
-        setLastError(QStringLiteral("Send amount must be greater than zero."));
-        return;
-    }
-
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-    if (!m_sessionMnemonic.trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_sessionMnemonic);
-        if (keychain.isValid()) {
-            for (int i = 0; i < outputs.size(); ++i) {
-                outputs[i] = normalizedTrackedOutput(outputs.at(i), keychain);
-            }
-        }
-    }
-    const qulonglong effectiveHeight = m_chainHeight > 0 ? m_chainHeight : m_scanHeight;
-    const WalletSelection::Result selection =
-        WalletSelection::selectSpendableOutputs(outputs, requestedAmount, effectiveHeight);
-    if (!selection.success) {
-        setLastError(selection.error);
-        return;
-    }
-
-    for (int i = 0; i < outputs.size(); ++i) {
-        for (int j = 0; j < selection.selectedOutputs.size(); ++j) {
-            if (outputs[i].commitment == selection.selectedOutputs.at(j).commitment) {
-                // Only lock the input UTXO. Preserve its workflowId so the transaction
-                // that created it (e.g. an invoice) retains its own identity.
-                outputs[i].locked = true;
-            }
-        }
-    }
-
-    SlateV4 slate;
-    alignSlateVersionWithNode(&slate);
-    const QString workflowId = slate.id;
-    // Do NOT set workflowId on input UTXOs here – they belong to the workflow that
-    // received them. The send workflow tracks its inputs via selected_input_commits.
-    walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    saveDocument(document);
-    refreshStateFromStorage();
-
-    const WalletCryptoBackend::ParticipantContext senderContext =
-        WalletCryptoBackend::createRandomParticipant(QStringLiteral("sender"));
-    slate.state = SlateV4::Standard1;
-    slate.amount = formatNanogrin(requestedAmount);
-    slate.fee = QStringLiteral("%1.%2")
-        .arg(QString::number(selection.fee / 1000000000ULL))
-        .arg(QString::number(selection.fee % 1000000000ULL), 9, QLatin1Char('0'));
-    slate.signatures.append(WalletCryptoBackend::createParticipantData(senderContext));
-    const QString localSlatepackAddress = currentSlatepackAddress();
-    const QString localPaymentProofAddress = currentPaymentProofAddress();
-    slate.hasPaymentProof = !localPaymentProofAddress.isEmpty();
-    if (slate.hasPaymentProof) {
-        slate.paymentProof.senderAddress = localPaymentProofAddress;
-    }
-    slate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("grin-browser-wallet"));
-    slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
-    slate.metadata.insert(QStringLiteral("note"), note.trimmed());
-    slate.metadata.insert(QStringLiteral("wallet"), m_walletName);
-    slate.metadata.insert(QStringLiteral("network"), resolvedNetworkName());
-    slate.metadata.insert(QStringLiteral("timestamp"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-
-    QJsonObject localContext;
-    localContext.insert(QStringLiteral("selected_inputs"), selection.selectedOutputs.size());
-    localContext.insert(QStringLiteral("selected_total"), QString::number(selection.totalSelected));
-    localContext.insert(QStringLiteral("change_amount"), QString::number(selection.change));
-    localContext.insert(QStringLiteral("amount_nano"), QString::number(requestedAmount));
-    localContext.insert(QStringLiteral("amount_display"), slate.amount);
-    localContext.insert(QStringLiteral("fee_nano"), QString::number(selection.fee));
-    localContext.insert(QStringLiteral("fee_amount_display"), slate.fee);
-    localContext.insert(standardContextKey(QStringLiteral("participant")),
-                        participantContextToJson(senderContext));
-    QJsonArray selectedCommitments;
-    QJsonObject selectedInputCoinbase;
-    for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
-        selectedCommitments.append(selection.selectedOutputs.at(i).commitment);
-        selectedInputCoinbase.insert(selection.selectedOutputs.at(i).commitment,
-                                     selection.selectedOutputs.at(i).coinbase);
-    }
-    localContext.insert(QStringLiteral("selected_input_commits"), selectedCommitments);
-    localContext.insert(QStringLiteral("selected_input_coinbase"), selectedInputCoinbase);
-
-    // Declare changeOutput outside the block so its blinding factor is available for offset computation.
-    WalletOutput changeOutput;
-    SlateV4::Commit changeCommit;
-    if (selection.change > 0) {
-        const QString changeAmount = QStringLiteral("%1.%2")
-            .arg(QString::number(selection.change / 1000000000ULL))
-            .arg(QString::number(selection.change % 1000000000ULL), 9, QLatin1Char('0'));
-        QString outputError;
-        if (buildOwnedOutput(QStringLiteral("change"), changeAmount, &changeOutput, &changeCommit, &outputError)) {
-            storeOwnedOutput(changeOutput);
-            localContext.insert(QStringLiteral("change_commit"), changeCommit.commitment);
-            localContext.insert(QStringLiteral("change_proof"), changeCommit.proof);
-            localContext.insert(QStringLiteral("change_amount_display"), changeAmount);
-            localContext.insert(QStringLiteral("change_child_index"), static_cast<int>(changeOutput.childIndex));
-            localContext.insert(QStringLiteral("change_key_path"), changeOutput.keyPath);
-        } else if (!outputError.isEmpty()) {
-            setLastInfo(QStringLiteral("Change output fallback used: %1").arg(outputError));
-        }
-    }
-    // Match current grin-wallet standard send semantics:
-    // sender contributes its offset share already in S1 via
-    //   offset = 0 - sender_sec_key - inputs + change
-    QStringList s1PositiveBlinds;
-    if (!changeOutput.blindingFactor.trimmed().isEmpty()) {
-        s1PositiveBlinds.append(changeOutput.blindingFactor.trimmed());
-    }
-    QStringList s1NegativeBlinds;
-    s1NegativeBlinds.append(senderContext.blindSecret.trimmed());
-    for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
-        const QString inputBlind = selection.selectedOutputs.at(i).blindingFactor.trimmed();
-        if (!inputBlind.isEmpty()) {
-            s1NegativeBlinds.append(inputBlind);
-        }
-    }
-    QString s1OffsetError;
-    const QString s1Offset = WalletCryptoBackend::combineBlindingFactors(
-        s1PositiveBlinds,
-        s1NegativeBlinds,
-        &s1OffsetError);
-    if (s1Offset.isEmpty()) {
-        setLastError(s1OffsetError.isEmpty()
-                         ? QStringLiteral("Failed to compute standard sender offset.")
-                         : s1OffsetError);
-        return;
-    }
-    slate.offset = s1Offset;
-
-    localContext.insert(QStringLiteral("standard_sender_offset"), slate.offset);
-
-    storeWorkflowContext(workflowId, localContext);
-
-    // Populate slate.commitments for S1 per reference:
-    // sender inputs as plain commits (no proof), change output with proof.
-    // This allows the receiver to verify the fee and build the full tx view.
-    {
-        QList<SlateV4::Commit> s1Commits;
-        const QJsonObject s1CoinbaseMap =
-            localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
-        for (int i = 0; i < selection.selectedOutputs.size(); ++i) {
-            const WalletOutput &inp = selection.selectedOutputs.at(i);
-            SlateV4::Commit c;
-            c.feature = s1CoinbaseMap.value(inp.commitment).toBool(inp.coinbase) ? 1 : 0;
-            c.commitment = inp.commitment;
-            // no proof — marks this as an input
-            s1Commits.append(c);
-        }
-        if (!changeCommit.commitment.isEmpty()) {
-            s1Commits.append(changeCommit);  // has proof — marks this as an output
-        }
-        slate.commitments = sortedCompactCommitments(s1Commits);
-    }
-
-    slate.metadata.insert(QStringLiteral("crypto_backend"), WalletCryptoBackend::describeBackend());
-    slate.metadata.insert(QStringLiteral("crypto_real"), WalletCryptoBackend::supportsRealGrinTransactions());
-
-    // Keep internal metadata locally, but emit a compact, reference-like external S1.
-    SlateV4 outboundSlate = slate;
-    outboundSlate.metadata = QJsonObject();
-    outboundSlate.metadata.insert(QStringLiteral("external_binary"), true);
-    outboundSlate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
-    outboundSlate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
-    if (!localSlatepackAddress.trimmed().isEmpty()) {
-        outboundSlate.metadata.insert(QStringLiteral("slatepack_sender"), localSlatepackAddress);
-    }
-    // Compact S1: no tx elements/proofs in the outbound packet.
-    outboundSlate.commitments.clear();
-    outboundSlate.hasPaymentProof = false;
-    outboundSlate.paymentProof = SlateV4::PaymentProof();
-
-    logWorkflowJson(QStringLiteral("S1-local"), workflowId, slate.stateCode(), slate.toJson());
-    logWorkflowJson(QStringLiteral("S1-outbound"), workflowId, outboundSlate.stateCode(), outboundSlate.toJson());
-
-    const QString decoded = QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented));
-    QString armoredSlatepack;
-    QString writerError;
-    if (!BinarySlateV4Writer::encodeSlatepack(
-            outboundSlate,
-            &armoredSlatepack,
-            &writerError,
-            localSlatepackAddress,
-            QStringList(),
-            currentSlatepackSecret())) {
-        armoredSlatepack = encodeSlatepackArmor(
-            QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented)),
-            localSlatepackAddress);
-    }
-    persistWorkflowTransaction(slate, false);
-    setWorkflow(slate.workflowId(), slate.modeCode(), slate.stateCode(), armoredSlatepack, decoded);
-    setLastInfo(QStringLiteral("SEND workflow started at S1. Share the generated Slatepack with the receiver."));
+    m_workflowService->startSendWorkflow(amount, note);
 }
 
 void GrinWalletController::startReceiveWorkflow(const QString &amount, const QString &note)
 {
-    touchWalletSession();
-    SlateV4 slate;
-    const QString workflowId = slate.id;
-    slate.ver.slateVersion = 4;
-    slate.ver.blockHeaderVersion = 3;
-    const quint64 requestedAmount = amountToNanogrin(amount);
-    if (requestedAmount == 0) {
-        setLastError(QStringLiteral("Enter a valid amount in GRIN, e.g. 1.000000000."));
-        return;
-    }
-    slate.state = SlateV4::Invoice1;
-    slate.amount = formatNanogrin(requestedAmount);
-    slate.offset = QStringLiteral("0000000000000000000000000000000000000000000000000000000000000000");
-    WalletOutput invoiceOutput;
-    SlateV4::Commit invoiceCommit;
-    QString outputError;
-    if (!ensureReceiverOutputContext(
-            workflowId,
-            slate.amount,
-            QStringLiteral("invoice"),
-            &invoiceOutput,
-            &invoiceCommit,
-            &outputError)) {
-        setLastError(outputError.isEmpty()
-            ? QStringLiteral("Failed to derive invoice output.")
-            : outputError);
-        return;
-    }
-
-    WalletCryptoBackend::ParticipantContext receiverContext =
-        WalletCryptoBackend::createParticipantFromBlindSecret(
-            invoiceOutput.blindingFactor,
-            m_seedFingerprint,
-            workflowId,
-            QStringLiteral("receiver"));
-    if (receiverContext.blindSecret.isEmpty()
-        || receiverContext.nonceSecret.isEmpty()
-        || receiverContext.blindPublic.isEmpty()
-        || receiverContext.noncePublic.isEmpty()) {
-        receiverContext =
-            WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("receiver"));
-    }
-    slate.signatures.append(WalletCryptoBackend::createParticipantData(receiverContext));
-
-    // Include receiver output commit in I1 per reference format.
-    // This lets the payer verify the amount and include the output in the binary slate.
-    slate.commitments.append(invoiceCommit);
-
-    const QString localSlatepackAddress = currentSlatepackAddress();
-    slate.hasPaymentProof = false;
-    slate.paymentProof = SlateV4::PaymentProof();
-    slate.metadata.insert(QStringLiteral("external_binary"), true);
-    slate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
-    slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
-    if (!localSlatepackAddress.trimmed().isEmpty()) {
-        slate.metadata.insert(QStringLiteral("slatepack_sender"), localSlatepackAddress);
-    }
-    if (!note.trimmed().isEmpty()) {
-        slate.metadata.insert(QStringLiteral("note"), note.trimmed());
-    }
-    // Keep full local invoice context internally, but emit compact external I1.
-    SlateV4 outboundSlate = slate;
-    outboundSlate.metadata = QJsonObject();
-    outboundSlate.metadata.insert(QStringLiteral("external_binary"), true);
-    outboundSlate.metadata.insert(QStringLiteral("workflow"), QStringLiteral("external-grin-slatepack"));
-    outboundSlate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
-    if (!localSlatepackAddress.trimmed().isEmpty()) {
-        outboundSlate.metadata.insert(QStringLiteral("slatepack_sender"), localSlatepackAddress);
-    }
-    // Compact I1: do not include tx elements/proofs in the outbound packet.
-    outboundSlate.commitments.clear();
-    outboundSlate.hasPaymentProof = false;
-    outboundSlate.paymentProof = SlateV4::PaymentProof();
-
-    const QString decoded = QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented));
-    QString armoredSlatepack;
-    QString writerError;
-    if (!BinarySlateV4Writer::encodeSlatepack(
-            outboundSlate,
-            &armoredSlatepack,
-            &writerError,
-            localSlatepackAddress,
-            QStringList(),
-            currentSlatepackSecret())) {
-        armoredSlatepack = encodeSlatepackArmor(
-            QString::fromUtf8(QJsonDocument(outboundSlate.toJson()).toJson(QJsonDocument::Indented)),
-            localSlatepackAddress);
-    }
-    persistWorkflowTransaction(slate, false);
-    setWorkflow(slate.workflowId(), slate.modeCode(), slate.stateCode(), armoredSlatepack, decoded);
-    setLastInfo(QStringLiteral("RECEIVE workflow started at I1. Share the invoice Slatepack with the sender."));
+    m_workflowService->startReceiveWorkflow(amount, note);
 }
 
 void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
 {
-    touchWalletSession();
-    QByteArray decryptionKey;
-    if (m_walletUnlocked && !m_sessionMnemonic.trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_sessionMnemonic);
-        if (keychain.isValid()) {
-            decryptionKey = keychain.slatepackSecretKey();
-        }
-    }
-
-    const QString decoded = decodeIncomingSlatepack(slatepack, decryptionKey);
-    if (decoded.isEmpty()) {
-        setLastError(QStringLiteral("Incoming Slatepack could not be decoded."));
-        return;
-    }
-
-    const QJsonDocument document = QJsonDocument::fromJson(decoded.toUtf8());
-    if (!document.isObject()) {
-        setLastError(QStringLiteral("Decoded Slatepack is not valid JSON."));
-        return;
-    }
-    if (document.object().value(QStringLiteral("encrypted_slatepack")).toBool()) {
-        const QString info = document.object().value(QStringLiteral("note")).toString(
-            QStringLiteral("Encrypted Slatepack could not be decrypted."));
-        setLastError(info);
-        setWorkflow(QString(), QString(), QString(), slatepack, QString::fromUtf8(document.toJson(QJsonDocument::Indented)));
-        return;
-    }
-    if (document.object().value(QStringLiteral("external_slatepack")).toBool()) {
-        setLastError(document.object().value(QStringLiteral("note")).toString(
-            QStringLiteral("Incoming Slatepack armor was recognized, but payload parsing failed.")));
-        setWorkflow(QString(), QString(), QString(), slatepack, QString::fromUtf8(document.toJson(QJsonDocument::Indented)));
-        return;
-    }
-
-    SlateV4 slate = SlateV4::fromJson(document.object());
-    alignSlateVersionWithNode(&slate);
-    const SlateV4 incomingSlate = slate;
-    logWorkflowJson(QStringLiteral("incoming-slate"), slate.workflowId(), slate.stateCode(), slate.toJson());
-    if (slate.workflowId().isEmpty() && !slate.id.isEmpty() && slate.state != SlateV4::Unknown) {
-        slate.metadata.insert(QStringLiteral("workflow_id"), slate.id);
-        slate.metadata.insert(QStringLiteral("workflow"),
-                              slate.metadata.value(QStringLiteral("external_binary")).toBool()
-                                  ? QStringLiteral("external-grin-slatepack")
-                                  : QStringLiteral("imported-slatepack"));
-    }
-    if (slate.network().trimmed().isEmpty()) {
-        slate.metadata.insert(QStringLiteral("network"), resolvedNetworkName());
-    }
-    if (slate.network().trimmed().toLower() != resolvedNetworkName()) {
-        setLastError(QStringLiteral("Incoming Slatepack targets %1, but the wallet is currently set to %2.")
-                         .arg(slate.network().trimmed(), resolvedNetworkName()));
-        return;
-    }
-
-    QString workflowId = slate.workflowId();
-    const QString mode = slate.modeCode();
-    const QString state = slate.stateCode();
-    auto resolveWorkflowIdBySlateId = [&slate]() -> QString {
-        if (slate.id.trimmed().isEmpty()) {
-            return QString();
-        }
-        const QJsonArray transactions = loadDocument()
-                                            .value(QStringLiteral("wallet_state"))
-                                            .toObject()
-                                            .value(QStringLiteral("transactions"))
-                                            .toArray();
-        for (int i = 0; i < transactions.size(); ++i) {
-            const QJsonObject tx = transactions.at(i).toObject();
-            if (tx.value(QStringLiteral("slate_id")).toString() == slate.id) {
-                const QString resolvedWorkflowId =
-                    tx.value(QStringLiteral("workflow_id")).toString().trimmed();
-                if (!resolvedWorkflowId.isEmpty()) {
-                    return resolvedWorkflowId;
-                }
-            }
-        }
-        return QString();
-    };
-    if (workflowId.isEmpty()) {
-        const QString resolvedWorkflowId = resolveWorkflowIdBySlateId();
-        if (!resolvedWorkflowId.isEmpty()) {
-            workflowId = resolvedWorkflowId;
-            slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
-        }
-    }
-    if (workflowId.isEmpty() || mode == QStringLiteral("unknown") || state == QStringLiteral("NA")) {
-        setLastError(QStringLiteral("Incoming Slatepack is missing workflow metadata."));
-        return;
-    }
-
-    if (slate.isFinalState()) {
-        setWorkflow(workflowId, mode, state, slatepack, QString::fromUtf8(QJsonDocument(slate.toJson()).toJson(QJsonDocument::Indented)));
-        setLastInfo(QStringLiteral("Workflow %1 is already complete at %2.").arg(workflowId, state));
-        return;
-    }
-
-    const QString localRoleTag =
-        (state == QStringLiteral("S1")) ? QStringLiteral("receiver")
-      : (state == QStringLiteral("S2")) ? QStringLiteral("sender")
-      : (state == QStringLiteral("I1")) ? QStringLiteral("sender")
-      : (state == QStringLiteral("I2")) ? QStringLiteral("receiver")
-      : QString();
-
-    if (localRoleTag.isEmpty()) {
-        setLastError(QStringLiteral("Unsupported workflow transition."));
-        return;
-    }
-
-    if (localRoleTag == QStringLiteral("sender")
-        && workflowContext(workflowId).isEmpty()
-        && !slate.id.trimmed().isEmpty()) {
-        const QString resolvedWorkflowId = resolveWorkflowIdBySlateId();
-        if (!resolvedWorkflowId.isEmpty() && resolvedWorkflowId != workflowId) {
-            workflowId = resolvedWorkflowId;
-            slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
-        }
-    }
-
-    const QString localSlatepackAddress = currentSlatepackAddress();
-    const QString localPaymentProofAddress = currentPaymentProofAddress();
-    if (!localPaymentProofAddress.isEmpty() && slate.hasPaymentProof) {
-        if (mode == QStringLiteral("send")) {
-            if (slate.paymentProof.senderAddress.trimmed().isEmpty()) {
-                slate.paymentProof.senderAddress =
-                    (localRoleTag == QStringLiteral("sender")) ? localPaymentProofAddress : slate.paymentProof.senderAddress;
-            }
-            if (slate.paymentProof.receiverAddress.trimmed().isEmpty()) {
-                slate.paymentProof.receiverAddress =
-                    (localRoleTag == QStringLiteral("receiver")) ? localPaymentProofAddress : slate.paymentProof.receiverAddress;
-            }
-        } else if (mode == QStringLiteral("invoice")) {
-            if (slate.paymentProof.senderAddress.trimmed().isEmpty()) {
-                slate.paymentProof.senderAddress =
-                    (localRoleTag == QStringLiteral("sender")) ? localPaymentProofAddress : slate.paymentProof.senderAddress;
-            }
-            if (slate.paymentProof.receiverAddress.trimmed().isEmpty()) {
-                slate.paymentProof.receiverAddress =
-                    (localRoleTag == QStringLiteral("receiver")) ? localPaymentProofAddress : slate.paymentProof.receiverAddress;
-            }
-        }
-    }
-
-    QString cryptoError;
-    if (localRoleTag == QStringLiteral("sender")) {
-        QString selectedFee;
-        if (!ensureWorkflowSelectionContext(workflowId, slate.amount, &selectedFee, &cryptoError)) {
-            setLastError(cryptoError.isEmpty()
-                ? QStringLiteral("Failed to select sender outputs for workflow funding.")
-                : cryptoError);
-            return;
-        }
-        if (!selectedFee.isEmpty()) {
-            slate.fee = selectedFee;
-        }
-        if (slate.metadata.value(QStringLiteral("external_binary")).toBool()
-            && mode == QStringLiteral("invoice")
-            && state == QStringLiteral("I1")) {
-            persistWorkflowTransaction(slate, false);
-        }
-    }
-
-    WalletCryptoBackend::ParticipantContext signatureOverrideContext;
-    WalletCryptoBackend::ParticipantContext *signatureOverride = 0;
-
-    if (mode == QStringLiteral("invoice")
-        && state == QStringLiteral("I1")
-        && localRoleTag == QStringLiteral("sender")) {
-        if (!prepareInvoiceSenderContext(workflowId, &slate, &signatureOverrideContext, &cryptoError)) {
-            setLastError(cryptoError.isEmpty()
-                ? QStringLiteral("Failed to prepare invoice sender context.")
-                : cryptoError);
-            return;
-        }
-        signatureOverride = &signatureOverrideContext;
-    }
-
-    if (mode == QStringLiteral("send")
-        && state == QStringLiteral("S2")
-        && localRoleTag == QStringLiteral("sender")) {
-        if (!prepareStandardSenderContext(workflowId, &slate, &signatureOverrideContext, &cryptoError)) {
-            setLastError(cryptoError.isEmpty()
-                ? QStringLiteral("Failed to prepare standard sender context.")
-                : cryptoError);
-            return;
-        }
-        signatureOverride = &signatureOverrideContext;
-    }
-
-    if (localRoleTag == QStringLiteral("receiver")
-        && (slate.commitments.isEmpty()
-            || state == QStringLiteral("S1")
-            || (mode == QStringLiteral("invoice") && state == QStringLiteral("I2")))) {
-        WalletOutput receiveOutput;
-        SlateV4::Commit receiveCommit;
-        const QString receiverSource =
-            (mode == QStringLiteral("invoice")) ? QStringLiteral("invoice") : QStringLiteral("receive");
-        if (!ensureReceiverOutputContext(
-                workflowId,
-                slate.amount,
-                receiverSource,
-                &receiveOutput,
-                &receiveCommit,
-                &cryptoError)) {
-            setLastError(cryptoError.isEmpty() ? QStringLiteral("Failed to derive receiver output.") : cryptoError);
-            return;
-        }
-
-        bool hasReceiverCommit = false;
-        for (int i = 0; i < slate.commitments.size(); ++i) {
-            if (slate.commitments.at(i).commitment == receiveCommit.commitment) {
-                hasReceiverCommit = true;
-                break;
-            }
-        }
-        if (!hasReceiverCommit) {
-            slate.commitments.append(receiveCommit);
-            slate.commitments = sortedCompactCommitments(slate.commitments);
-        }
-        slate.metadata.insert(QStringLiteral("receiver_blind"), receiveOutput.blindingFactor);
-        slate.metadata.insert(QStringLiteral("receiver_child_index"), static_cast<int>(receiveOutput.childIndex));
-        slate.metadata.insert(QStringLiteral("receiver_key_path"), receiveOutput.keyPath);
-
-        if (localRoleTag == QStringLiteral("receiver")
-            && !receiveOutput.blindingFactor.trimmed().isEmpty()) {
-            WalletCryptoBackend::ParticipantContext receiverContextFromBlind =
-                WalletCryptoBackend::createParticipantFromBlindSecret(
-                    receiveOutput.blindingFactor,
-                    m_seedFingerprint,
-                    workflowId,
-                    QStringLiteral("receiver"));
-            if (!receiverContextFromBlind.blindSecret.isEmpty()
-                && !receiverContextFromBlind.nonceSecret.isEmpty()
-                && !receiverContextFromBlind.blindPublic.isEmpty()
-                && !receiverContextFromBlind.noncePublic.isEmpty()) {
-                signatureOverrideContext = receiverContextFromBlind;
-                signatureOverride = &signatureOverrideContext;
-            }
-        }
-
-        if (mode == QStringLiteral("invoice") && state == QStringLiteral("I2")) {
-            WalletCryptoBackend::ParticipantContext receiverContext =
-                WalletCryptoBackend::createParticipantFromBlindSecret(
-                    receiveOutput.blindingFactor,
-                    m_seedFingerprint,
-                    workflowId,
-                    QStringLiteral("receiver"));
-            if (receiverContext.blindSecret.isEmpty()) {
-                receiverContext =
-                    WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("receiver"));
-            }
-            if (!receiveOutput.blindingFactor.isEmpty() && !receiverContext.blindSecret.isEmpty()) {
-                QString offsetError;
-                const QString adjustedOffset = WalletCryptoBackend::combineBlindingFactors(
-                    QStringList() << slate.offset << receiveOutput.blindingFactor,
-                    QStringList() << receiverContext.blindSecret,
-                    &offsetError);
-                if (!adjustedOffset.isEmpty()) {
-                    slate.offset = adjustedOffset;
-                }
-            }
-        }
-    }
-
-    if (!WalletCryptoBackend::applyRound2Signature(&slate, m_seedFingerprint, localRoleTag, signatureOverride, &cryptoError)) {
-        setLastError(cryptoError.isEmpty() ? QStringLiteral("Failed to apply round 2 signature.") : cryptoError);
-        return;
-    }
-    if (mode == QStringLiteral("invoice")
-        && state == QStringLiteral("I2")
-        && localRoleTag == QStringLiteral("receiver")
-        && slate.numParticipants < slate.signatures.size()) {
-        slate.numParticipants = slate.signatures.size();
-    }
-
-    if (mode == QStringLiteral("invoice")
-        && state == QStringLiteral("I1")
-        && localRoleTag == QStringLiteral("sender")) {
-        if (slate.metadata.value(QStringLiteral("external_binary")).toBool()) {
-            slate.metadata.remove(QStringLiteral("tx_skeleton"));
-            slate.metadata.remove(QStringLiteral("tx_build_error"));
-            slate.metadata.insert(QStringLiteral("tx_ready"), false);
-        } else {
-            const QJsonObject localContext = workflowContext(workflowId);
-            const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
-            if (!selectedCommitments.isEmpty()) {
-                const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
-                const QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
-                const QJsonObject selectedInputCoinbase =
-                    localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
-                QList<WalletOutput> selectedInputs;
-                for (int i = 0; i < selectedCommitments.size(); ++i) {
-                    const QString selectedCommitment = selectedCommitments.at(i).toString();
-                    WalletOutput selectedInput =
-                        findTrackedOutputByCommitment(trackedOutputs, selectedCommitment);
-                    if (selectedInput.commitment.isEmpty() && !selectedCommitment.trimmed().isEmpty()) {
-                        selectedInput.commitment = selectedCommitment;
-                        selectedInput.coinbase = selectedInputCoinbase.value(selectedCommitment).toBool(false);
-                    }
-                    if (!selectedInput.commitment.isEmpty()) {
-                        selectedInputs.append(selectedInput);
-                    }
-                }
-
-                WalletOutput receiverOutput;
-                // Find the receiver output: first commit WITH a proof that is not the change output.
-                for (int ci = 0; ci < slate.commitments.size(); ++ci) {
-                    const SlateV4::Commit &c = slate.commitments.at(ci);
-                    if (!c.proof.trimmed().isEmpty() && c.commitment != localContext.value(QStringLiteral("change_commit")).toString()) {
-                        receiverOutput.commitment = c.commitment;
-                        receiverOutput.proof = c.proof;
-                        receiverOutput.amount = slate.amount;
-                        break;
-                    }
-                }
-
-                WalletOutput changeOutput;
-                const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
-                if (!changeCommit.isEmpty()) {
-                    changeOutput = findTrackedOutputByCommitment(trackedOutputs, changeCommit);
-                    if (changeOutput.commitment.isEmpty()) {
-                        changeOutput.commitment = changeCommit;
-                        changeOutput.proof = localContext.value(QStringLiteral("change_proof")).toString();
-                        changeOutput.amount = localContext.value(QStringLiteral("change_amount_display")).toString();
-                    }
-                }
-
-                const WalletTxBuilder::BuildResult txBuild = WalletTxBuilder::buildTransactionSkeleton(
-                    slate,
-                    selectedInputs,
-                    receiverOutput.commitment.isEmpty() ? 0 : &receiverOutput,
-                    changeOutput.commitment.isEmpty() ? 0 : &changeOutput);
-                if (txBuild.success) {
-                    slate.metadata.insert(QStringLiteral("tx_skeleton"), txBuild.transaction.toJson());
-                    slate.metadata.insert(QStringLiteral("tx_ready"), false);
-                    slate.metadata.remove(QStringLiteral("tx_build_error"));
-                } else {
-                    slate.metadata.insert(QStringLiteral("tx_build_error"), txBuild.error);
-                }
-            }
-        }
-        compactInvoiceSlateForReturn(workflowId, &slate);
-    }
-
-    if (mode == QStringLiteral("send")
-        && state == QStringLiteral("S1")
-        && localRoleTag == QStringLiteral("receiver")) {
-        compactStandardSlateForReturn(workflowId, &slate);
-    }
-
-    if (localRoleTag == QStringLiteral("receiver")
-        && m_walletUnlocked
-        && !m_sessionMnemonic.trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_sessionMnemonic);
-        if (keychain.isValid()
-            && !WalletCryptoBackend::signPaymentProof(&slate, keychain, &cryptoError)
-            && slate.hasPaymentProof) {
-            setLastInfo(cryptoError);
-        }
-    }
-
-    slate.advanceState();
-    const QString nextState = slate.stateCode();
-    const bool externalBinary = slate.metadata.value(QStringLiteral("external_binary")).toBool();
-    const bool compactExternalInvoiceI2 =
-        externalBinary && nextState == QStringLiteral("I2") && mode == QStringLiteral("invoice");
-    if (!compactExternalInvoiceI2) {
-        slate.metadata.insert(QStringLiteral("processed_by"), m_walletName);
-        slate.metadata.insert(QStringLiteral("processed_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-    }
-
-    if ((nextState == QStringLiteral("S3") || nextState == QStringLiteral("I3"))
-        && !WalletCryptoBackend::finalizeSlate(&slate, &cryptoError)) {
-        setLastError(cryptoError.isEmpty() ? QStringLiteral("Failed to finalize slate signature.") : cryptoError);
-        return;
-    }
-
-    if (slate.hasPaymentProof && !slate.paymentProof.receiverSignature.isEmpty()) {
-        if (WalletCryptoBackend::verifyPaymentProof(slate, &cryptoError)) {
-            slate.metadata.insert(QStringLiteral("payment_proof_valid"), true);
-            slate.metadata.insert(QStringLiteral("payment_proof_status"), QStringLiteral("verified"));
-        } else {
-            slate.metadata.insert(QStringLiteral("payment_proof_valid"), false);
-            slate.metadata.insert(QStringLiteral("payment_proof_status"), QStringLiteral("invalid"));
-            slate.metadata.insert(QStringLiteral("payment_proof_error"), cryptoError);
-        }
-    }
-
-    if (nextState == QStringLiteral("S3") || nextState == QStringLiteral("I3")) {
-        const QJsonObject localContext = workflowContext(workflowId);
-        const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
-        if (!selectedCommitments.isEmpty()) {
-            const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
-            const QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
-            const QJsonObject selectedInputCoinbase =
-                localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
-            QList<WalletOutput> selectedInputs;
-            for (int i = 0; i < selectedCommitments.size(); ++i) {
-                const QString selectedCommitment = selectedCommitments.at(i).toString();
-                WalletOutput selectedInput =
-                    findTrackedOutputByCommitment(trackedOutputs, selectedCommitment);
-                if (selectedInput.commitment.isEmpty() && !selectedCommitment.trimmed().isEmpty()) {
-                    selectedInput.commitment = selectedCommitment;
-                    selectedInput.coinbase = selectedInputCoinbase.value(selectedCommitment).toBool(false);
-                }
-                if (!selectedInput.commitment.isEmpty()) {
-                    selectedInputs.append(selectedInput);
-                }
-            }
-
-            WalletOutput receiverOutput;
-            // Find the receiver output: first commit WITH a proof that is not the change output.
-            {
-                const QString knownChangeCommit = localContext.value(QStringLiteral("change_commit")).toString();
-                for (int ci = 0; ci < slate.commitments.size(); ++ci) {
-                    const SlateV4::Commit &c = slate.commitments.at(ci);
-                    if (!c.proof.trimmed().isEmpty() && c.commitment != knownChangeCommit) {
-                        receiverOutput.commitment = c.commitment;
-                        receiverOutput.proof = c.proof;
-                        receiverOutput.amount = slate.amount;
-                        break;
-                    }
-                }
-            }
-
-            WalletOutput changeOutput;
-            const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
-            if (!changeCommit.isEmpty()) {
-                changeOutput = findTrackedOutputByCommitment(trackedOutputs, changeCommit);
-                if (changeOutput.commitment.isEmpty()) {
-                    changeOutput.commitment = changeCommit;
-                    changeOutput.proof = localContext.value(QStringLiteral("change_proof")).toString();
-                    changeOutput.amount = localContext.value(QStringLiteral("change_amount_display")).toString();
-                }
-            }
-
-            WalletTxBuilder::BuildResult txBuild = WalletTxBuilder::buildTransactionSkeleton(
-                slate,
-                selectedInputs,
-                receiverOutput.commitment.isEmpty() ? 0 : &receiverOutput,
-                changeOutput.commitment.isEmpty() ? 0 : &changeOutput);
-
-            if (externalBinary && mode == QStringLiteral("send") && nextState == QStringLiteral("S3")) {
-                logStandardSenderBlindOffsetDiagnostics(workflowId,
-                                                       slate,
-                                                       localContext,
-                                                       selectedInputs,
-                                                       receiverOutput,
-                                                       changeOutput);
-            }
-            if (txBuild.success) {
-                slate.metadata.insert(QStringLiteral("tx_skeleton"), txBuild.transaction.toJson());
-                slate.metadata.insert(QStringLiteral("tx_ready"), true);
-                slate.metadata.remove(QStringLiteral("tx_build_error"));
-                finalizeWorkflowOutputs(slate, false);
-            } else {
-                slate.metadata.insert(QStringLiteral("tx_ready"), false);
-                slate.metadata.insert(QStringLiteral("tx_build_error"), txBuild.error);
-            }
-        } else if (externalBinary && nextState == QStringLiteral("I3")) {
-            WalletOutput receiverOutput;
-            SlateV4::Commit receiverCommit;
-            QString receiverError;
-            const QJsonObject localContext = workflowContext(workflowId);
-            const QString receiverAmount =
-                localContext.value(QStringLiteral("receiver_amount_display")).toString();
-            if (!receiverAmount.trimmed().isEmpty()) {
-                if (!ensureReceiverOutputContext(workflowId,
-                                                 receiverAmount,
-                                                 QStringLiteral("invoice"),
-                                                 &receiverOutput,
-                                                 &receiverCommit,
-                                                 &receiverError)) {
-                }
-            }
-            const WalletTxBuilder::BuildResult txBuild =
-                WalletTxBuilder::buildTransactionSkeletonFromCommitments(
-                    slate,
-                    receiverOutput.commitment.isEmpty() ? 0 : &receiverOutput);
-            if (txBuild.success) {
-                slate.metadata.insert(QStringLiteral("tx_skeleton"), txBuild.transaction.toJson());
-                slate.metadata.insert(QStringLiteral("tx_ready"), true);
-                slate.metadata.remove(QStringLiteral("tx_build_error"));
-            } else {
-                slate.metadata.insert(QStringLiteral("tx_build_error"), txBuild.error);
-            }
-        }
-    }
-
-    QString updatedSlatepack;
-    const QStringList outgoingRecipients;
-    const QString outgoingSender = localSlatepackAddress;
-    if (!outgoingSender.trimmed().isEmpty()) {
-        slate.metadata.insert(QStringLiteral("slatepack_sender"), outgoingSender);
-    }
-    const QString updatedDecoded = QString::fromUtf8(QJsonDocument(slate.toJson()).toJson(QJsonDocument::Indented));
-    logWorkflowJson(QStringLiteral("outgoing-slate"), workflowId, nextState, slate.toJson());
-    if (!BinarySlateV4Writer::encodeSlatepack(
-            slate,
-            &updatedSlatepack,
-            &cryptoError,
-            outgoingSender,
-            outgoingRecipients,
-            currentSlatepackSecret())) {
-        if (externalBinary) {
-            setLastError(cryptoError.isEmpty() ? QStringLiteral("Failed to encode binary Slatepack.") : cryptoError);
-            return;
-        }
-        updatedSlatepack = encodeSlatepackArmor(updatedDecoded, localSlatepackAddress);
-    }
-    if (incomingSlate.metadata.value(QStringLiteral("external_binary")).toBool()
-        && incomingSlate.modeCode() == QStringLiteral("invoice")
-        && incomingSlate.stateCode() == QStringLiteral("I1")
-        && nextState == QStringLiteral("I2")) {
-        runExternalInvoicePreflight(incomingSlate, slate, updatedSlatepack);
-    }
-    persistWorkflowTransaction(slate, false);
-    setWorkflow(workflowId, mode, nextState, updatedSlatepack, updatedDecoded);
-
-    const bool autoBroadcastExternalFinal =
-        externalBinary
-        && (nextState == QStringLiteral("I3") || nextState == QStringLiteral("S3"))
-        && slate.metadata.value(QStringLiteral("tx_ready")).toBool()
-        && slate.metadata.value(QStringLiteral("tx_skeleton")).isObject();
-    if (autoBroadcastExternalFinal) {
-        broadcastCurrentWorkflowTransaction();
-        if (!m_pendingBroadcastWorkflowId.isEmpty()) {
-            setLastInfo(QStringLiteral("Workflow %1 advanced to %2 and is being broadcast to the node.")
-                            .arg(workflowId, nextState));
-            return;
-        }
-    }
-
-    if (externalBinary
-        && (nextState == QStringLiteral("I3") || nextState == QStringLiteral("S3"))
-        && !slate.metadata.value(QStringLiteral("tx_ready")).toBool()) {
-        const QString txBuildError = slate.metadata.value(QStringLiteral("tx_build_error")).toString();
-        if (!txBuildError.trimmed().isEmpty()) {
-            setLastError(QStringLiteral("Final transaction build failed: %1").arg(txBuildError));
-            return;
-        }
-    }
-
-    if (nextState == QStringLiteral("S3") || nextState == QStringLiteral("I3")) {
-        setLastInfo(QStringLiteral("Workflow %1 advanced to %2 and reached the final exchange step.").arg(workflowId, nextState));
-    } else {
-        setLastInfo(QStringLiteral("Workflow %1 advanced from %2 to %3.").arg(workflowId, state, nextState));
-    }
+    m_workflowService->processWorkflowSlatepack(slatepack);
 }
 
 void GrinWalletController::clearWorkflow()
 {
-    setWorkflow(QString(), QString(), QString(), QString(), QString());
-    setLastInfo(QStringLiteral("Workflow state cleared."));
+    m_workflowService->clearWorkflow();
 }
 
 void GrinWalletController::cleanupLocalAndCancelledItems()
 {
-    touchWalletSession();
-    
-    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
-        setLastError(QStringLiteral("Unlock the wallet before cleaning up."));
-        return;
-    }
-
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-    
-    // Entferne lokale Outputs (noch nicht on-chain)
-    int localCount = 0;
-    for (int i = outputs.size() - 1; i >= 0; --i) {
-        if (!outputs.at(i).onChain) {
-            outputs.removeAt(i);
-            ++localCount;
-        }
-    }
-    
-    // Entferne abgebrochene Transaktionen
-    QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
-    int cancelledCount = 0;
-    for (int i = transactions.size() - 1; i >= 0; --i) {
-        const QJsonObject tx = transactions.at(i).toObject();
-        if (tx.value(QStringLiteral("status")).toString() == QStringLiteral("cancelled")) {
-            transactions.removeAt(i);
-            ++cancelledCount;
-        }
-    }
-
-    walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-    walletState.insert(QStringLiteral("transactions"), transactions);
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    saveDocument(document);
-    refreshStateFromStorage();
-
-    QString infoMsg = QStringLiteral("Cleanup completed: %1 local output(s) and %2 cancelled transaction(s) removed.")
-                          .arg(QString::number(localCount))
-                          .arg(QString::number(cancelledCount));
-    setLastInfo(infoMsg);
+    m_workflowService->cleanupLocalAndCancelledItems();
 }
 
 void GrinWalletController::broadcastCurrentWorkflowTransaction()
 {
-    touchWalletSession();
-    const QJsonDocument workflowDoc = QJsonDocument::fromJson(m_workflowDecoded.toUtf8());
-    if (!workflowDoc.isObject()) {
-        setLastError(QStringLiteral("Current workflow does not contain decodable transaction data."));
-        return;
-    }
-
-    const QJsonObject txSkeleton = workflowDoc.object().value(QStringLiteral("tx_skeleton")).toObject();
-    if (txSkeleton.isEmpty()) {
-        setLastError(QStringLiteral("No transaction skeleton is available for broadcast."));
-        return;
-    }
-
-    if (!m_nodeApi) {
-        connectNodeClient();
-    }
-    if (!m_nodeApi) {
-        setLastError(QStringLiteral("Node client is not configured."));
-        return;
-    }
-    if (!m_pendingBroadcastWorkflowId.isEmpty()) {
-        setLastError(QStringLiteral("Another transaction broadcast is already in progress."));
-        return;
-    }
-
-    const SlateV4 slate = SlateV4::fromJson(workflowDoc.object());
-    persistWorkflowTransaction(slate, false);
-    updateTransactionEntry(slate.workflowId(), [](QJsonObject &entry) {
-        entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_pending"));
-        entry.insert(QStringLiteral("broadcasted"), false);
-        entry.insert(QStringLiteral("last_broadcast_attempt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-        entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-        entry.insert(QStringLiteral("broadcast_attempts"), entry.value(QStringLiteral("broadcast_attempts")).toInt() + 1);
-        entry.remove(QStringLiteral("broadcast_error"));
-    });
-    m_pendingBroadcastWorkflowId = slate.workflowId();
-    beginBroadcastWithInputPreflight(slate.workflowId(), txSkeleton);
+    m_workflowService->broadcastCurrentWorkflowTransaction();
 }
 
 void GrinWalletController::broadcastTransaction(const QString &workflowId)
 {
-    touchWalletSession();
-    const QJsonArray transactions = loadDocument()
-                                        .value(QStringLiteral("wallet_state"))
-                                        .toObject()
-                                        .value(QStringLiteral("transactions"))
-                                        .toArray();
-    for (int i = 0; i < transactions.size(); ++i) {
-        const QJsonObject tx = transactions.at(i).toObject();
-        if (tx.value(QStringLiteral("workflow_id")).toString() != workflowId) {
-            continue;
-        }
-
-        const QJsonObject txSkeleton = tx.value(QStringLiteral("tx_skeleton")).toObject();
-        if (txSkeleton.isEmpty()) {
-            setLastError(QStringLiteral("No transaction skeleton is available for broadcast."));
-            return;
-        }
-        if (!m_nodeApi) {
-            connectNodeClient();
-        }
-        if (!m_nodeApi) {
-            setLastError(QStringLiteral("Node client is not configured."));
-            return;
-        }
-        if (!m_pendingBroadcastWorkflowId.isEmpty()) {
-            setLastError(QStringLiteral("Another transaction broadcast is already in progress."));
-            return;
-        }
-
-        SlateV4 slate;
-        slate.id = tx.value(QStringLiteral("slate_id")).toString();
-        slate.amount = tx.value(QStringLiteral("amount")).toString();
-        slate.fee = tx.value(QStringLiteral("fee")).toString();
-        slate.offset = tx.value(QStringLiteral("offset")).toString();
-        slate.metadata.insert(QStringLiteral("workflow_id"), workflowId);
-        slate.setStateFromCode(tx.value(QStringLiteral("state")).toString());
-        persistWorkflowTransaction(slate, false);
-        updateTransactionEntry(workflowId, [](QJsonObject &entry) {
-            entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_pending"));
-            entry.insert(QStringLiteral("broadcasted"), false);
-            entry.insert(QStringLiteral("last_broadcast_attempt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            entry.insert(QStringLiteral("broadcast_attempts"), entry.value(QStringLiteral("broadcast_attempts")).toInt() + 1);
-            entry.remove(QStringLiteral("broadcast_error"));
-        });
-        m_pendingBroadcastWorkflowId = workflowId;
-        beginBroadcastWithInputPreflight(workflowId, txSkeleton);
-        return;
-    }
-
-    setLastError(QStringLiteral("Transaction not found in wallet history."));
+    m_workflowService->broadcastTransaction(workflowId);
 }
 
 void GrinWalletController::beginBroadcastWithInputPreflight(const QString &workflowId,
                                                             const QJsonObject &txSkeleton)
 {
-    if (!m_nodeApi) {
-        setLastError(QStringLiteral("Node client is not configured."));
-        return;
-    }
-
-    logWorkflowJson(QStringLiteral("broadcast-tx-skeleton"), workflowId, QStringLiteral("broadcast"), txSkeleton);
-
-    const Transaction tx = Transaction::fromJson(txSkeleton);
-    const QVector<Input> inputs = tx.body().inputs();
-    if (inputs.isEmpty()) {
-        m_pendingBroadcastWorkflowId.clear();
-        updateTransactionEntry(workflowId, [](QJsonObject &entry) {
-            entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
-            entry.insert(QStringLiteral("broadcasted"), false);
-            entry.insert(QStringLiteral("broadcast_error"), QStringLiteral("Transaction has no inputs."));
-            entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-        });
-        setLastError(QStringLiteral("Transaction has no inputs."));
-        return;
-    }
-
-    QJsonArray commits;
-    for (int i = 0; i < inputs.size(); ++i) {
-        commits.append(inputs.at(i).commit().hex());
-    }
-
-    m_pendingBroadcastInputLookup = true;
-    m_pendingBroadcastTxSkeleton = txSkeleton;
-    m_pendingBroadcastInputCommits = commits;
-    m_nodeApi->getOutputCommitmentsAsync(commits);
+    m_nodeSyncService->beginBroadcastWithInputPreflight(workflowId, txSkeleton);
 }
 
 void GrinWalletController::cancelTransaction(const QString &workflowId)
 {
-    touchWalletSession();
-    if (workflowId.trimmed().isEmpty()) {
-        setLastError(QStringLiteral("Workflow id is required for cancel."));
-        return;
-    }
-
-    const QJsonArray existingTransactions = loadDocument()
-                                                .value(QStringLiteral("wallet_state"))
-                                                .toObject()
-                                                .value(QStringLiteral("transactions"))
-                                                .toArray();
-    for (int i = 0; i < existingTransactions.size(); ++i) {
-        const QJsonObject tx = existingTransactions.at(i).toObject();
-        if (tx.value(QStringLiteral("workflow_id")).toString() != workflowId) {
-            continue;
-        }
-
-        if (tx.value(QStringLiteral("confirmations")).toInt() > 0
-            || tx.value(QStringLiteral("status")).toString() == QStringLiteral("confirmed")) {
-            setLastError(QStringLiteral("Confirmed transactions can no longer be cancelled."));
-            return;
-        }
-        if (tx.value(QStringLiteral("broadcasted")).toBool()
-            || tx.value(QStringLiteral("status")).toString() == QStringLiteral("broadcasted")
-            || tx.value(QStringLiteral("status")).toString() == QStringLiteral("in_mempool")) {
-            setLastError(QStringLiteral("Broadcasted transactions can no longer be cancelled locally."));
-            return;
-        }
-        break;
-    }
-
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-    
-    // Ermittle die ursprünglichen Inputs aus dem Workflow-Kontext
-    const QJsonObject localContext = workflowContext(workflowId);
-    const QJsonArray selectedInputCommits = localContext.value(QStringLiteral("selected_input_commits")).toArray();
-    
-    // Konvertiere Selected Input Commits zu QStringList für schnelleren Lookup
-    QStringList selectedInputCommitments;
-    for (int j = 0; j < selectedInputCommits.size(); ++j) {
-        selectedInputCommitments.append(selectedInputCommits.at(j).toString());
-    }
-    
-    // Verarbeite alle Outputs mit diesem Workflow ID
-    for (int i = 0; i < outputs.size(); ++i) {
-        if (outputs[i].workflowId != workflowId) {
-            continue;
-        }
-
-        if (outputs[i].spent) {
-            continue;
-        }
-
-        // Überprüfe, ob dies ein Input (UTXO) ist, das ursprünglich von dieser Transaktion verwendet wurde
-        if (selectedInputCommitments.contains(outputs[i].commitment)) {
-            // Dies ist ein Input - gebe ihn frei.
-            // workflowId NICHT löschen: sie zeigt auf die ursprüngliche Receive/Invoice-Tx,
-            // die diesen UTXO erstellt hat, und wird für die Height-Inferenz benötigt.
-            outputs[i].locked = false;
-            outputs[i].pending = false;
-        } else {
-            // Dies ist ein neu erstellter Output (Change, Receive, Invoice, etc.)
-            // der nicht auf die Blockchain ging - entferne ihn
-            outputs.removeAt(i);
-            --i;
-        }
-    }
-
-    QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
-    for (int i = 0; i < transactions.size(); ++i) {
-        QJsonObject tx = transactions.at(i).toObject();
-        if (tx.value(QStringLiteral("workflow_id")).toString() == workflowId) {
-            tx.insert(QStringLiteral("status"), QStringLiteral("cancelled"));
-            tx.insert(QStringLiteral("cancelled_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            transactions.replace(i, tx);
-            break;
-        }
-    }
-
-    walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-    walletState.insert(QStringLiteral("transactions"), transactions);
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    QJsonObject contexts = document.value(QStringLiteral("workflow_contexts")).toObject();
-    contexts.remove(workflowId);
-    document.insert(QStringLiteral("workflow_contexts"), contexts);
-    saveDocument(document);
-    refreshStateFromStorage();
-
-    if (m_workflowId == workflowId) {
-        clearWorkflow();
-    }
-    setLastError(QString());
-    setLastInfo(QStringLiteral("Transaction %1 cancelled and UTXOs released.").arg(workflowId));
+    m_workflowService->cancelTransaction(workflowId);
 }
 
 QString GrinWalletController::encodeSlatepack(const QString &slateJson, const QString &sender) const
@@ -4082,7 +751,7 @@ QString GrinWalletController::encodeSlatepack(const QString &slateJson, const QS
         }
     }
 
-    return encodeSlatepackArmor(trimmed, sender.trimmed());
+    return GrinWalletWorkflowHelpers::encodeSlatepackArmor(trimmed, sender.trimmed());
 }
 
 QString GrinWalletController::decodeSlatepack(const QString &slatepack) const
@@ -4094,7 +763,7 @@ QString GrinWalletController::decodeSlatepack(const QString &slatepack) const
             decryptionKey = keychain.slatepackSecretKey();
         }
     }
-    return decodeIncomingSlatepack(slatepack, decryptionKey);
+    return GrinWalletWorkflowHelpers::decodeIncomingSlatepack(slatepack, decryptionKey);
 }
 
 QString GrinWalletController::currentSlatepackAddress() const
@@ -4127,26 +796,6 @@ QByteArray GrinWalletController::currentSlatepackSecret() const
     return keychain.isValid() ? keychain.slatepackSecretKey() : QByteArray();
 }
 
-QStringList GrinWalletController::outgoingSlatepackRecipients(const SlateV4 &slate) const
-{
-    QStringList recipients;
-    const QString localAddress = currentSlatepackAddress();
-    const QString sender = slate.metadata.value(QStringLiteral("slatepack_sender")).toString().trimmed();
-    if (!sender.isEmpty() && sender != localAddress) {
-        recipients.append(sender);
-    }
-
-    const QJsonArray explicitRecipients = slate.metadata.value(QStringLiteral("slatepack_recipients")).toArray();
-    for (int i = 0; i < explicitRecipients.size(); ++i) {
-        const QString recipient = explicitRecipients.at(i).toString().trimmed();
-        if (!recipient.isEmpty() && recipient != localAddress && !recipients.contains(recipient)) {
-            recipients.append(recipient);
-        }
-    }
-
-    return recipients;
-}
-
 void GrinWalletController::alignSlateVersionWithNode(SlateV4 *slate) const
 {
     if (!slate) {
@@ -4171,29 +820,18 @@ void GrinWalletController::alignSlateVersionWithNode(SlateV4 *slate) const
 
 void GrinWalletController::loadFromStorage()
 {
-    const QJsonObject document = loadDocument();
-    const QString activeNetwork =
-        inferNetworkName(document.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
-                         document.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
-    const QJsonObject wallet = walletForNetwork(document, activeNetwork);
+    const QJsonObject document = GrinWalletStorage::loadDocument();
+    const GrinWalletStorage::LoadedState state = GrinWalletStorage::loadState(document);
 
-    m_walletExists = !wallet.isEmpty();
+    m_walletExists = state.walletExists;
     m_walletUnlocked = false;
-    m_walletName = wallet.value(QStringLiteral("name")).toString();
+    m_walletName = state.walletName;
     m_sessionMnemonic.clear();
-    m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
+    m_seedFingerprint = state.seedFingerprint;
     m_mnemonicPreview.clear();
-    const QJsonObject node = document.value(QStringLiteral("node")).toObject();
-    const QString storedNodeUrl = node.value(QStringLiteral("url")).toString();
-    m_selectedNetwork = activeNetwork;
-    m_nodeUrl = isNodeUrlAccepted(storedNodeUrl)
-        ? storedNodeUrl
-        : defaultNodeUrlForNetwork(m_selectedNetwork);
-    m_autoLockOnAppDeactivate = document
-        .value(QLatin1String(kAppSettingsKey))
-        .toObject()
-        .value(QLatin1String(kAutoLockOnDeactivateKey))
-        .toBool(false);
+    m_selectedNetwork = state.selectedNetwork;
+    m_nodeUrl = state.nodeUrl;
+    m_autoLockOnAppDeactivate = state.autoLockOnDeactivate;
 
     emit walletChanged();
     emit nodeConfigChanged();
@@ -4206,11 +844,11 @@ void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
         return;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject appSettings = document.value(QLatin1String(kAppSettingsKey)).toObject();
     appSettings.insert(QLatin1String(kAutoLockOnDeactivateKey), enabled);
     document.insert(QLatin1String(kAppSettingsKey), appSettings);
-    if (!saveDocument(document)) {
+    if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to persist app settings."));
         return;
     }
@@ -4225,7 +863,7 @@ void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
 
 QString GrinWalletController::resolvedNetworkName() const
 {
-    return isAcceptedNetworkName(m_selectedNetwork) ? m_selectedNetwork : defaultNetworkName();
+    return GrinWalletControllerHelpers::isAcceptedNetworkName(m_selectedNetwork) ? m_selectedNetwork : GrinWalletControllerHelpers::defaultNetworkName();
 }
 
 void GrinWalletController::setLastError(const QString &error)
@@ -4250,570 +888,170 @@ void GrinWalletController::setWorkflow(const QString &id, const QString &mode, c
     emit workflowChanged();
 }
 
+QString GrinWalletController::resolveWorkflowIdBySlateId(const SlateV4 &slate) const
+{
+    if (slate.id.trimmed().isEmpty()) {
+        return QString();
+    }
+
+    const QJsonArray transactions = GrinWalletStorage::loadDocument()
+                                        .value(QStringLiteral("wallet_state"))
+                                        .toObject()
+                                        .value(QStringLiteral("transactions"))
+                                        .toArray();
+    for (int i = 0; i < transactions.size(); ++i) {
+        const QJsonObject tx = transactions.at(i).toObject();
+        if (tx.value(QStringLiteral("slate_id")).toString() == slate.id) {
+            const QString resolvedWorkflowId =
+                tx.value(QStringLiteral("workflow_id")).toString().trimmed();
+            if (!resolvedWorkflowId.isEmpty()) {
+                return resolvedWorkflowId;
+            }
+        }
+    }
+
+    return QString();
+}
+
+quint64 GrinWalletController::resolveWorkflowAmountNano(const QString &workflowId,
+                                                        const QJsonObject &localContext,
+                                                        const QString &amount) const
+{
+    quint64 resolvedAmount = GrinWalletWorkflowHelpers::amountToNanogrin(amount);
+    if (resolvedAmount == 0) {
+        resolvedAmount = localContext.value(QStringLiteral("amount_nano")).toVariant().toULongLong();
+    }
+    if (resolvedAmount != 0) {
+        return resolvedAmount;
+    }
+
+    const QJsonArray transactions = GrinWalletStorage::loadDocument()
+                                        .value(QStringLiteral("wallet_state"))
+                                        .toObject()
+                                        .value(QStringLiteral("transactions"))
+                                        .toArray();
+    for (int i = 0; i < transactions.size(); ++i) {
+        const QJsonObject tx = transactions.at(i).toObject();
+        if (tx.value(QStringLiteral("workflow_id")).toString() == workflowId) {
+            return GrinWalletWorkflowHelpers::amountToNanogrin(tx.value(QStringLiteral("amount")).toString());
+        }
+    }
+
+    return 0;
+}
+
+QJsonObject GrinWalletController::legacyInvoiceParticipantFromContext(const QJsonObject &localContext)
+{
+    QJsonObject json;
+    const QString secKey = localContext.value(QStringLiteral("invoice_sender_blind_secret")).toString();
+    const QString secNonce = localContext.value(QStringLiteral("invoice_sender_nonce_secret")).toString();
+    const QString pubKey = localContext.value(QStringLiteral("invoice_sender_blind_public")).toString();
+    const QString pubNonce = localContext.value(QStringLiteral("invoice_sender_nonce_public")).toString();
+    if (secKey.isEmpty() || secNonce.isEmpty() || pubKey.isEmpty() || pubNonce.isEmpty()) {
+        return QJsonObject();
+    }
+
+    json.insert(QStringLiteral("sec_key"), secKey);
+    json.insert(QStringLiteral("sec_nonce"), secNonce);
+    json.insert(QStringLiteral("pub_key"), pubKey);
+    json.insert(QStringLiteral("pub_nonce"), pubNonce);
+    return json;
+}
+
+bool GrinWalletController::transactionEntryLessThan(const QJsonObject &left, const QJsonObject &right)
+{
+    return GrinWalletHistoryHelpers::transactionEntryLessThan(left, right);
+}
+
+bool GrinWalletController::walletOutputLessThan(const WalletOutput &left, const WalletOutput &right)
+{
+    if (left.spent != right.spent) {
+        return !left.spent && right.spent;
+    }
+    if (left.locked != right.locked) {
+        return left.locked && !right.locked;
+    }
+    if (left.pending != right.pending) {
+        return left.pending && !right.pending;
+    }
+    if (left.onChain != right.onChain) {
+        return left.onChain && !right.onChain;
+    }
+    if (left.height != right.height) {
+        return left.height > right.height;
+    }
+    return left.commitment < right.commitment;
+}
+
+void GrinWalletController::markTransactionBroadcastPending(const QString &workflowId)
+{
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (GrinWalletTransactionStore::markBroadcastPending(&document, workflowId)) {
+        GrinWalletStorage::saveDocument(document);
+        refreshStateFromStorage();
+    }
+}
+
+void GrinWalletController::markTransactionBroadcastFailed(const QString &workflowId, const QString &message)
+{
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (GrinWalletTransactionStore::markBroadcastFailed(&document, workflowId, message)) {
+        GrinWalletStorage::saveDocument(document);
+        refreshStateFromStorage();
+    }
+}
+
+void GrinWalletController::markTransactionKernelConfirmed(const QString &workflowId, qulonglong confirmedHeight)
+{
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (GrinWalletTransactionStore::markKernelConfirmed(&document, workflowId, m_chainHeight, confirmedHeight)) {
+        GrinWalletStorage::saveDocument(document);
+        refreshStateFromStorage();
+    }
+}
+
+void GrinWalletController::markTransactionKernelBroadcasted(const QString &workflowId)
+{
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (GrinWalletTransactionStore::markKernelBroadcasted(&document, workflowId)) {
+        GrinWalletStorage::saveDocument(document);
+        refreshStateFromStorage();
+    }
+}
+
+void GrinWalletController::markTransactionBroadcastRejected(const QString &workflowId, const QString &message)
+{
+    markTransactionBroadcastFailed(workflowId, message);
+}
+
+void GrinWalletController::markTransactionBroadcastSucceeded(const QString &workflowId)
+{
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (GrinWalletTransactionStore::markBroadcastSucceeded(&document, workflowId)) {
+        GrinWalletStorage::saveDocument(document);
+        refreshStateFromStorage();
+    }
+}
+
 void GrinWalletController::connectNodeClient()
 {
-    if (m_nodeApi) {
-        m_nodeApi->deleteLater();
-        m_nodeApi = 0;
-    }
-    if (m_nodeUrl.trimmed().isEmpty()) {
-        return;
-    }
-
-    m_nodeApi = new NodeForeignApi(m_nodeUrl, QString());
-    m_nodeApi->setParent(this);
-
-    connect(m_nodeApi, &NodeForeignApi::getTipFinished, this, [this](const Result<Tip> &result) {
-        if (result.hasError()) {
-            m_syncStatus = QStringLiteral("Node query failed");
-            emit statusChanged();
-            setLastError(result.errorMessage());
-            return;
-        }
-
-        const Tip tip = result.value();
-        m_chainHeight = tip.height();
-        m_syncStatus = QStringLiteral("Connected to external node");
-        refreshTransactionConfirmations();
-        emit statusChanged();
-        setLastError(QString());
-        setLastInfo(QStringLiteral("Node tip updated to height %1.").arg(QString::number(m_chainHeight)));
-
-        if (m_walletUnlocked
-            && !m_sessionMnemonic.trimmed().isEmpty()
-            && !m_walletScanInFlight
-            && !m_seedScanActive) {
-            if (m_scanHeight == 0) {
-                rescanWallet();
-            } else {
-                requestWalletScan();
-            }
-        }
-
-        refreshBroadcastStatuses();
-        recoverPendingBroadcasts();
-    });
-
-    connect(m_nodeApi, &NodeForeignApi::getVersionFinished, this, [this](const Result<NodeVersion> &result) {
-        if (result.hasError()) {
-            return;
-        }
-
-        const quint64 blockHeaderVersion = result.value().blockHeaderVersion();
-        if (blockHeaderVersion > 0 && blockHeaderVersion < 256) {
-            m_nodeBlockHeaderVersion = static_cast<int>(blockHeaderVersion);
-        }
-    });
-
-    connect(m_nodeApi, &NodeForeignApi::getOutputsFinished, this, [this](const Result<QList<OutputPrintable> > &result) {
-        if (result.hasError()) {
-            m_syncStatus = QStringLiteral("Wallet scan failed");
-            emit statusChanged();
-            setLastError(result.errorMessage());
-            m_walletScanInFlight = false;
-            return;
-        }
-
-        QJsonObject document = loadDocument();
-        QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-        QList<WalletOutput> tracked = WalletScanner::outputsFromState(walletState);
-        const QList<OutputPrintable> chainOutputs = result.value();
-
-        QSet<QString> trackedCommitments;
-        for (int i = 0; i < tracked.size(); ++i) {
-            trackedCommitments.insert(tracked.at(i).commitment);
-        }
-
-        int matchedCommitments = 0;
-        for (int i = 0; i < chainOutputs.size(); ++i) {
-            const QString commitHex = chainOutputs.at(i).commit().hex();
-            if (trackedCommitments.contains(commitHex)) {
-                ++matchedCommitments;
-            }
-        }
-
-        // If node returns no usable data for tracked commitments, fall back to seed scan from leaf 1.
-        // This self-heals stale commitment sets without requiring manual full rescan.
-        if (!tracked.isEmpty() && (chainOutputs.isEmpty() || matchedCommitments == 0)) {
-            walletState.insert(QStringLiteral("restore_leaf_index"), 0);
-            document.insert(QStringLiteral("wallet_state"), walletState);
-            saveDocument(document);
-            m_walletScanInFlight = false;
-            setLastInfo(QStringLiteral("Node returned no tracked outputs. Falling back to seed scan from leaf 1."));
-            startSeedScan();
-            return;
-        }
-
-        tracked = WalletScanner::reconcileTrackedOutputs(tracked, chainOutputs);
-
-        walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(tracked));
-        walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(tracked, m_chainHeight));
-        walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_chainHeight));
-        walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("tracked-outputs"));
-        walletState.insert(QStringLiteral("last_synced_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-        document.insert(QStringLiteral("wallet_state"), walletState);
-
-        if (!saveDocument(document)) {
-            setLastError(QStringLiteral("Failed to persist wallet scan results."));
-            return;
-        }
-
-        refreshStateFromStorage();
-        m_syncStatus = QStringLiteral("Wallet outputs synced");
-        emit statusChanged();
-        setLastError(QString());
-        setLastInfo(QStringLiteral("Wallet scan updated %1 tracked outputs from node data.")
-                        .arg(QString::number(tracked.size())));
-        m_walletScanInFlight = false;
-    });
-
-    connect(m_nodeApi, &NodeForeignApi::getOutputCommitmentsFinished, this, [this](const Result<QList<OutputPrintable> > &result) {
-        if (!m_pendingBroadcastInputLookup) {
-            return;
-        }
-
-        m_pendingBroadcastInputLookup = false;
-        const QString workflowId = m_pendingBroadcastWorkflowId;
-        if (workflowId.isEmpty()) {
-            m_pendingBroadcastTxSkeleton = QJsonObject();
-            m_pendingBroadcastInputCommits = QJsonArray();
-            return;
-        }
-
-        if (result.hasError()) {
-            const QString message = QStringLiteral("Pre-broadcast input lookup failed: %1")
-                                        .arg(result.errorMessage());
-            m_pendingBroadcastWorkflowId.clear();
-            m_pendingBroadcastTxSkeleton = QJsonObject();
-            m_pendingBroadcastInputCommits = QJsonArray();
-            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
-                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
-                entry.insert(QStringLiteral("broadcasted"), false);
-                entry.insert(QStringLiteral("broadcast_error"), message);
-                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            });
-            setLastError(message);
-            return;
-        }
-
-        QSet<QString> foundCommitments;
-        QHash<QString, OutputPrintable::OutputType> outputTypes;
-        const QList<OutputPrintable> foundOutputs = result.value();
-        for (int i = 0; i < foundOutputs.size(); ++i) {
-            const QString commitHex = foundOutputs.at(i).commit().hex();
-            foundCommitments.insert(commitHex);
-            outputTypes.insert(commitHex, foundOutputs.at(i).outputType());
-        }
-
-        QString missingCommit;
-        for (int i = 0; i < m_pendingBroadcastInputCommits.size(); ++i) {
-            const QString commit = m_pendingBroadcastInputCommits.at(i).toString();
-            if (!foundCommitments.contains(commit)) {
-                missingCommit = commit;
-                break;
-            }
-        }
-
-        if (!missingCommit.isEmpty()) {
-            const QString message = QStringLiteral("Node preflight rejected input commit %1. Wallet state may be stale or the output is already spent.")
-                                        .arg(missingCommit);
-            m_pendingBroadcastWorkflowId.clear();
-            m_pendingBroadcastTxSkeleton = QJsonObject();
-            m_pendingBroadcastInputCommits = QJsonArray();
-            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
-                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
-                entry.insert(QStringLiteral("broadcasted"), false);
-                entry.insert(QStringLiteral("broadcast_error"), message);
-                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            });
-            setLastError(message);
-            return;
-        }
-
-        Transaction tx = Transaction::fromJson(m_pendingBroadcastTxSkeleton);
-        TransactionBody body = tx.body();
-        QVector<Input> inputs = body.inputs();
-        bool adjustedInputFeatures = false;
-        for (int i = 0; i < inputs.size(); ++i) {
-            Input input = inputs.at(i);
-            const QString commitHex = input.commit().hex();
-            const OutputFeatures::Feature expectedFeature =
-                outputTypes.value(commitHex) == OutputPrintable::OutputType::OutputTypeCoinbase
-                    ? OutputFeatures::Coinbase
-                    : OutputFeatures::Plain;
-            if (input.features() != expectedFeature) {
-                input.setFeatures(expectedFeature);
-                inputs[i] = input;
-                adjustedInputFeatures = true;
-            }
-        }
-        if (adjustedInputFeatures) {
-            body.setInputs(inputs);
-            tx.setBody(body);
-        }
-
-        QString validationError;
-        if (!WalletCryptoBackend::validateTransactionBody(tx, &validationError)) {
-            const QString message = QStringLiteral("Local pre-broadcast body validation failed: %1")
-                                        .arg(validationError);
-            m_pendingBroadcastWorkflowId.clear();
-            m_pendingBroadcastTxSkeleton = QJsonObject();
-            m_pendingBroadcastInputCommits = QJsonArray();
-            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
-                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
-                entry.insert(QStringLiteral("broadcasted"), false);
-                entry.insert(QStringLiteral("broadcast_error"), message);
-                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            });
-            setLastError(message);
-            return;
-        }
-
-        if (!WalletCryptoBackend::validateTransactionKernelSums(tx, &validationError)) {
-            const QString message = QStringLiteral("Local pre-broadcast kernel sum/offset validation failed: %1")
-                                        .arg(validationError);
-            m_pendingBroadcastWorkflowId.clear();
-            m_pendingBroadcastTxSkeleton = QJsonObject();
-            m_pendingBroadcastInputCommits = QJsonArray();
-            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
-                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
-                entry.insert(QStringLiteral("broadcasted"), false);
-                entry.insert(QStringLiteral("broadcast_error"), message);
-                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            });
-            setLastError(message);
-            return;
-        }
-
-        if (!WalletCryptoBackend::validateTransactionKernelSignatures(tx, &validationError)) {
-            const QString message = QStringLiteral("Local pre-broadcast kernel signature validation failed: %1")
-                                        .arg(validationError);
-            m_pendingBroadcastWorkflowId.clear();
-            m_pendingBroadcastTxSkeleton = QJsonObject();
-            m_pendingBroadcastInputCommits = QJsonArray();
-            updateTransactionEntry(workflowId, [&message](QJsonObject &entry) {
-                entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
-                entry.insert(QStringLiteral("broadcasted"), false);
-                entry.insert(QStringLiteral("broadcast_error"), message);
-                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            });
-            setLastError(message);
-            return;
-        }
-
-        logWorkflowJson(QStringLiteral("broadcast-tx-final"), workflowId, QStringLiteral("broadcast"), tx.toJson());
-        m_pendingBroadcastTxSkeleton = QJsonObject();
-        m_pendingBroadcastInputCommits = QJsonArray();
-        m_nodeApi->pushTransactionAsync(tx, true);
-    });
-
-    connect(m_nodeApi, &NodeForeignApi::getUnspentOutputsFinished, this, [this](const Result<OutputListing> &result) {
-        if (result.hasError()) {
-            m_syncStatus = QStringLiteral("Seed scan failed");
-            emit statusChanged();
-            setLastError(result.errorMessage());
-            m_seedScanActive = false;
-            m_walletScanInFlight = false;
-            return;
-        }
-
-        if (!m_seedScanActive || !m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
-            return;
-        }
-
-        WalletKeychain keychain(m_sessionMnemonic);
-        if (!keychain.isValid()) {
-            setLastError(QStringLiteral("Wallet keychain could not be derived for seed scan."));
-            m_seedScanActive = false;
-            m_walletScanInFlight = false;
-            return;
-        }
-
-        const QList<WalletOutput> discovered =
-            WalletScanner::discoverOwnedOutputs(result.value().outputs(), keychain);
-        for (int i = 0; i < discovered.size(); ++i) {
-            bool exists = false;
-            for (int j = 0; j < m_seedScanDiscovered.size(); ++j) {
-                if (m_seedScanDiscovered.at(j).commitment == discovered.at(i).commitment) {
-                    exists = true;
-                    break;
-                }
-            }
-            if (!exists) {
-                m_seedScanDiscovered.append(discovered.at(i));
-            }
-        }
-
-        const OutputListing listing = result.value();
-        if (listing.lastRetrievedIndex() > 0 && listing.highestIndex() > 0
-            && listing.lastRetrievedIndex() < listing.highestIndex()) {
-            m_seedScanNextIndex = listing.lastRetrievedIndex() + 1;
-            QJsonObject document = loadDocument();
-            QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-            walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(listing.lastRetrievedIndex()));
-            document.insert(QStringLiteral("wallet_state"), walletState);
-            saveDocument(document);
-            m_syncStatus = QStringLiteral("Seed scan page %1 / %2")
-                               .arg(QString::number(listing.lastRetrievedIndex()))
-                               .arg(QString::number(listing.highestIndex()));
-            emit statusChanged();
-            m_nodeApi->getUnspentOutputsAsync(static_cast<int>(m_seedScanNextIndex), -1, 1000, true);
-            return;
-        }
-        if (listing.lastRetrievedIndex() == 0 && discovered.size() >= 1000) {
-            m_seedScanNextIndex += 1000;
-            QJsonObject document = loadDocument();
-            QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-            walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(m_seedScanNextIndex - 1));
-            document.insert(QStringLiteral("wallet_state"), walletState);
-            saveDocument(document);
-            m_syncStatus = QStringLiteral("Seed scan page starting at %1")
-                               .arg(QString::number(m_seedScanNextIndex));
-            emit statusChanged();
-            m_nodeApi->getUnspentOutputsAsync(static_cast<int>(m_seedScanNextIndex), -1, 1000, true);
-            return;
-        }
-
-        QJsonObject document = loadDocument();
-        QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-        QList<WalletOutput> tracked = WalletScanner::outputsFromState(walletState);
-        for (int i = 0; i < m_seedScanDiscovered.size(); ++i) {
-            bool exists = false;
-            for (int j = 0; j < tracked.size(); ++j) {
-                if (tracked.at(j).commitment == m_seedScanDiscovered.at(i).commitment) {
-                    WalletOutput merged = tracked.at(j);
-                    const WalletOutput discovered = m_seedScanDiscovered.at(i);
-                    merged.proof = discovered.proof;
-                    merged.amount = discovered.amount;
-                    merged.keyPath = discovered.keyPath;
-                    merged.blindingFactor = discovered.blindingFactor;
-                    merged.childIndex = discovered.childIndex;
-                    merged.height = discovered.height;
-                    merged.coinbase = discovered.coinbase;
-                    merged.onChain = discovered.onChain;
-                    merged.spent = discovered.spent;
-                    if (discovered.onChain && !discovered.spent) {
-                        merged.pending = false;
-                        merged.locked = false;
-                    }
-                    tracked[j] = merged;
-                    exists = true;
-                    break;
-                }
-            }
-            if (!exists) {
-                tracked.append(m_seedScanDiscovered.at(i));
-            }
-        }
-
-        quint32 nextChildIndex = nextChildIndexFromState(walletState);
-        for (int i = 0; i < tracked.size(); ++i) {
-            if (tracked.at(i).childIndex + 1 > nextChildIndex) {
-                nextChildIndex = tracked.at(i).childIndex + 1;
-            }
-        }
-
-        walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(tracked));
-        walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(tracked, m_chainHeight));
-        walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_chainHeight));
-        walletState.insert(QStringLiteral("restore_leaf_index"),
-                           QString::number(listing.lastRetrievedIndex() > 0
-                                               ? listing.lastRetrievedIndex()
-                                               : (m_seedScanNextIndex > 0 ? m_seedScanNextIndex - 1 : 1)));
-        walletState.insert(QStringLiteral("next_child_index"), static_cast<int>(nextChildIndex));
-        const QString previousSyncMode = walletState.value(QStringLiteral("last_sync_mode")).toString();
-        const bool rebuildingTransactions = previousSyncMode == QStringLiteral("full-rescan");
-        if (rebuildingTransactions) {
-            const QJsonArray rebuiltTransactions =
-                rebuildTransactionHistoryFromOutputs(
-                    tracked,
-                    walletState.value(QStringLiteral("transaction_rescan_backup")).toArray());
-            walletState.insert(QStringLiteral("transactions"), rebuiltTransactions);
-            document.insert(QStringLiteral("workflow_contexts"),
-                            filterWorkflowContextsForTransactions(
-                                document.value(QStringLiteral("workflow_contexts")).toObject(),
-                                rebuiltTransactions));
-        }
-        walletState.remove(QStringLiteral("transaction_rescan_backup"));
-        walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("seed-rewind"));
-        walletState.insert(QStringLiteral("last_synced_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-        document.insert(QStringLiteral("wallet_state"), walletState);
-
-        if (!saveDocument(document)) {
-            setLastError(QStringLiteral("Failed to persist seed scan results."));
-            return;
-        }
-
-        refreshStateFromStorage();
-        m_syncStatus = QStringLiteral("Seed scan complete");
-        emit statusChanged();
-        setLastError(QString());
-        setLastInfo(QString());
-        m_seedScanActive = false;
-        m_walletScanInFlight = false;
-    });
-
-    connect(m_nodeApi, &NodeForeignApi::getUnconfirmedTransactionsFinished, this, [this](const Result<QList<PoolEntry> > &result) {
-        m_broadcastStatusRefreshInFlight = false;
-        if (result.hasError()) {
-            return;
-        }
-
-        QSet<QString> mempoolExcesses;
-        const QList<PoolEntry> entries = result.value();
-        for (int i = 0; i < entries.size(); ++i) {
-            const QVector<TxKernel> kernels = entries.at(i).tx().body().kernels();
-            for (int j = 0; j < kernels.size(); ++j) {
-                if (!kernels.at(j).excess().isEmpty()) {
-                    mempoolExcesses.insert(kernels.at(j).excess());
-                }
-            }
-        }
-
-        QJsonObject document = loadDocument();
-        QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-        QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
-        m_kernelStatusQueue.clear();
-
-        for (int i = 0; i < transactions.size(); ++i) {
-            QJsonObject entry = transactions.at(i).toObject();
-            const QString status = entry.value(QStringLiteral("status")).toString();
-            if (!entry.value(QStringLiteral("broadcasted")).toBool()
-                && status != QStringLiteral("broadcast_pending")) {
-                continue;
-            }
-            if (status == QStringLiteral("confirmed") || status == QStringLiteral("cancelled")) {
-                continue;
-            }
-
-            const QString excess = kernelExcessFromEntry(entry);
-            if (excess.isEmpty()) {
-                continue;
-            }
-
-            entry.insert(QStringLiteral("kernel_excess"), excess);
-            entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            entry.insert(QStringLiteral("broadcasted"),
-                         entry.value(QStringLiteral("broadcasted")).toBool()
-                             || mempoolExcesses.contains(excess));
-            entry.insert(QStringLiteral("status"),
-                         mempoolExcesses.contains(excess)
-                             ? QStringLiteral("in_mempool")
-                             : (status == QStringLiteral("broadcast_pending")
-                                   ? QStringLiteral("broadcast_pending")
-                                   : QStringLiteral("broadcasted")));
-            entry.insert(QStringLiteral("confirmations"), 0);
-            transactions.replace(i, entry);
-            m_kernelStatusQueue.append(qMakePair(entry.value(QStringLiteral("workflow_id")).toString(), excess));
-        }
-
-        walletState.insert(QStringLiteral("transactions"), transactions);
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        saveDocument(document);
-        refreshStateFromStorage();
-        startNextKernelStatusCheck();
-    });
-
-    connect(m_nodeApi, &NodeForeignApi::getKernelFinished, this, [this](const Result<LocatedTxKernel> &result) {
-        m_kernelStatusCheckInFlight = false;
-        if (!m_currentKernelWorkflowId.isEmpty()) {
-            if (!result.hasError()) {
-                updateTransactionEntry(m_currentKernelWorkflowId, [this, &result](QJsonObject &entry) {
-                    entry.insert(QStringLiteral("status"), QStringLiteral("confirmed"));
-                    entry.insert(QStringLiteral("broadcasted"), true);
-                    entry.insert(QStringLiteral("confirmed_height"), static_cast<qint64>(result.value().height()));
-                    entry.insert(QStringLiteral("confirmations"),
-                                 static_cast<qint64>(m_chainHeight >= result.value().height()
-                                     ? (m_chainHeight - result.value().height() + 1)
-                                     : 0));
-                    entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-                });
-                finalizeBroadcastedWorkflow(m_currentKernelWorkflowId);
-            } else if (result.errorMessage() == QStringLiteral("NotFound")) {
-                updateTransactionEntry(m_currentKernelWorkflowId, [](QJsonObject &entry) {
-                    const QString status = entry.value(QStringLiteral("status")).toString();
-                    entry.insert(QStringLiteral("status"),
-                                 status == QStringLiteral("in_mempool")
-                                     ? QStringLiteral("in_mempool")
-                                     : QStringLiteral("broadcasted"));
-                    entry.insert(QStringLiteral("broadcasted"), true);
-                    entry.insert(QStringLiteral("confirmations"), 0);
-                    entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-                });
-                setLastError(QString());
-            }
-        }
-
-        m_currentKernelWorkflowId.clear();
-        m_currentKernelExcess.clear();
-        startNextKernelStatusCheck();
-    });
-
-    connect(m_nodeApi, &NodeForeignApi::pushTransactionFinished, this, [this](const Result<bool> &result) {
-        const QString workflowId = m_pendingBroadcastWorkflowId;
-        m_pendingBroadcastWorkflowId.clear();
-
-        if (result.hasError() || !result.value()) {
-            if (!workflowId.isEmpty()) {
-                updateTransactionEntry(workflowId, [&result](QJsonObject &entry) {
-                    entry.insert(QStringLiteral("status"), QStringLiteral("broadcast_failed"));
-                    entry.insert(QStringLiteral("broadcasted"), false);
-                    entry.insert(QStringLiteral("broadcast_error"),
-                                 result.hasError()
-                                     ? result.errorMessage()
-                                     : QStringLiteral("Node rejected transaction broadcast."));
-                    entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-                });
-            }
-            setLastError(result.hasError()
-                             ? result.errorMessage()
-                             : QStringLiteral("Node rejected transaction broadcast."));
-            return;
-        }
-
-        if (!workflowId.isEmpty()) {
-            updateTransactionEntry(workflowId, [](QJsonObject &entry) {
-                entry.insert(QStringLiteral("status"), QStringLiteral("broadcasted"));
-                entry.insert(QStringLiteral("broadcasted"), true);
-                entry.insert(QStringLiteral("broadcast_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-                entry.insert(QStringLiteral("last_node_check"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-                entry.remove(QStringLiteral("broadcast_error"));
-            });
-            finalizeBroadcastedWorkflow(workflowId);
-        }
-
-        setLastError(QString());
-        setLastInfo(QStringLiteral("Transaction broadcast submitted to node."));
-        refreshBroadcastStatuses();
-    });
+    m_nodeSyncService->connectNodeClient();
 }
 
 void GrinWalletController::refreshStateFromStorage()
 {
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    const QJsonObject storedBalances = walletState.value(QStringLiteral("balances")).toObject();
-    m_scanHeight = static_cast<qulonglong>(walletState.value(QStringLiteral("scan_height")).toInt());
-
-    // Always recompute balances from outputs so UI does not depend on stale persisted values.
-    const qulonglong effectiveHeight = m_chainHeight > 0 ? m_chainHeight : m_scanHeight;
-    const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-
-    const QJsonObject recalculatedBalances = WalletScanner::balancesFromOutputs(outputs, effectiveHeight);
-    const QJsonObject balances = recalculatedBalances.isEmpty() ? storedBalances : recalculatedBalances;
-
-    if (balances != storedBalances) {
-        walletState.insert(QStringLiteral("balances"), balances);
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        saveDocument(document);
+    GrinWalletStorage::RefreshedState state = GrinWalletStorage::refreshState(GrinWalletStorage::loadDocument(), m_chainHeight);
+    if (state.balancesChanged) {
+        GrinWalletStorage::saveDocument(state.document);
     }
 
-    m_totalBalance = amountStringFromJson(balances, QStringLiteral("total"));
-    m_spendableBalance = amountStringFromJson(balances, QStringLiteral("spendable"));
-    m_lockedBalance = amountStringFromJson(balances, QStringLiteral("locked"));
-    m_immatureBalance = amountStringFromJson(balances, QStringLiteral("immature"));
-    m_awaitingConfirmationBalance = amountStringFromJson(balances, QStringLiteral("awaiting_confirmation"));
-    m_awaitingFinalizationBalance = amountStringFromJson(balances, QStringLiteral("awaiting_finalization"));
+    m_scanHeight = state.scanHeight;
+    m_totalBalance = state.totalBalance;
+    m_spendableBalance = state.spendableBalance;
+    m_lockedBalance = state.lockedBalance;
+    m_immatureBalance = state.immatureBalance;
+    m_awaitingConfirmationBalance = state.awaitingConfirmationBalance;
+    m_awaitingFinalizationBalance = state.awaitingFinalizationBalance;
     emit statusChanged();
 }
 
@@ -4833,27 +1071,55 @@ void GrinWalletController::startAutoRefresh()
         m_sessionLockTimer = new QTimer(this);
         m_sessionLockTimer->setInterval(kSessionAutoLockIntervalMs);
         m_sessionLockTimer->setSingleShot(true);
-        connect(m_sessionLockTimer, &QTimer::timeout, this, [this]() {
-            if (!m_walletUnlocked) {
-                return;
-            }
-            lockWallet();
-            setLastInfo(QStringLiteral("Wallet locked after inactivity."));
-        });
+        connect(m_sessionLockTimer, &QTimer::timeout, this, &GrinWalletController::onSessionLockTimeout);
     }
 
-    connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
-        if (!m_walletUnlocked) {
-            return;
-        }
-        if (!m_autoLockOnAppDeactivate) {
-            return;
-        }
-        if (state == Qt::ApplicationHidden || state == Qt::ApplicationInactive) {
-            lockWallet();
-            setLastInfo(QStringLiteral("Wallet locked because the browser tab or app became inactive."));
-        }
-    });
+    connect(qApp, &QGuiApplication::applicationStateChanged, this, &GrinWalletController::onApplicationStateChanged);
+}
+
+void GrinWalletController::onSessionLockTimeout()
+{
+    if (!m_walletUnlocked) {
+        return;
+    }
+
+    lockWallet();
+    setLastInfo(QStringLiteral("Wallet locked after inactivity."));
+}
+
+void GrinWalletController::onApplicationStateChanged(Qt::ApplicationState state)
+{
+    if (!m_walletUnlocked) {
+        return;
+    }
+    if (!m_autoLockOnAppDeactivate) {
+        return;
+    }
+    if (state == Qt::ApplicationHidden || state == Qt::ApplicationInactive) {
+        lockWallet();
+        setLastInfo(QStringLiteral("Wallet locked because the browser tab or app became inactive."));
+    }
+}
+
+QJsonObject GrinWalletController::loadDocumentForService() const
+{
+    return GrinWalletStorage::loadDocument();
+}
+
+bool GrinWalletController::saveDocumentForService(const QJsonObject &document) const
+{
+    return GrinWalletStorage::saveDocument(document);
+}
+
+quint32 GrinWalletController::nextChildIndexFromStateForService(const QJsonObject &walletState) const
+{
+    return static_cast<quint32>(walletState.value(QStringLiteral("next_child_index")).toInt());
+}
+
+QJsonObject GrinWalletController::filterWorkflowContextsForTransactionsForService(const QJsonObject &contexts,
+                                                                                  const QJsonArray &transactions) const
+{
+    return GrinWalletControllerHelpers::filterWorkflowContextsForTransactions(contexts, transactions);
 }
 
 void GrinWalletController::storeOwnedOutput(const QString &source, const QString &amount, const SlateV4::Commit &commit)
@@ -4862,7 +1128,7 @@ void GrinWalletController::storeOwnedOutput(const QString &source, const QString
         return;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     for (int i = 0; i < outputs.size(); ++i) {
@@ -4888,7 +1154,7 @@ void GrinWalletController::storeOwnedOutput(const WalletOutput &output)
         return;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     for (int i = 0; i < outputs.size(); ++i) {
@@ -4896,11 +1162,11 @@ void GrinWalletController::storeOwnedOutput(const WalletOutput &output)
             outputs[i] = output;
             walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
             walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-            if (output.childIndex + 1 > nextChildIndexFromState(walletState)) {
+            if (output.childIndex + 1 > static_cast<quint32>(walletState.value(QStringLiteral("next_child_index")).toInt())) {
                 walletState.insert(QStringLiteral("next_child_index"), static_cast<int>(output.childIndex + 1));
             }
             document.insert(QStringLiteral("wallet_state"), walletState);
-            saveDocument(document);
+            GrinWalletStorage::saveDocument(document);
             refreshStateFromStorage();
             return;
         }
@@ -4909,11 +1175,11 @@ void GrinWalletController::storeOwnedOutput(const WalletOutput &output)
     outputs.append(output);
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-    if (output.childIndex + 1 > nextChildIndexFromState(walletState)) {
+    if (output.childIndex + 1 > static_cast<quint32>(walletState.value(QStringLiteral("next_child_index")).toInt())) {
         walletState.insert(QStringLiteral("next_child_index"), static_cast<int>(output.childIndex + 1));
     }
     document.insert(QStringLiteral("wallet_state"), walletState);
-    saveDocument(document);
+    GrinWalletStorage::saveDocument(document);
     refreshStateFromStorage();
 }
 
@@ -4936,8 +1202,8 @@ bool GrinWalletController::buildOwnedOutput(const QString &source,
         return false;
     }
 
-    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
-    const quint32 childIndex = nextChildIndexFromState(walletState);
+    const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    const quint32 childIndex = static_cast<quint32>(walletState.value(QStringLiteral("next_child_index")).toInt());
     const WalletKeychain keychain(m_sessionMnemonic);
     if (!keychain.isValid()) {
         if (errorOut) {
@@ -4986,29 +1252,8 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     }
 
     QJsonObject localContext = workflowContext(workflowId);
-    auto resolveWorkflowAmountNano = [&workflowId, &localContext, &amount]() -> quint64 {
-        quint64 resolvedAmount = amountToNanogrin(amount);
-        if (resolvedAmount == 0) {
-            resolvedAmount = localContext.value(QStringLiteral("amount_nano")).toVariant().toULongLong();
-        }
-        if (resolvedAmount == 0) {
-            const QJsonArray transactions = loadDocument()
-                                                .value(QStringLiteral("wallet_state"))
-                                                .toObject()
-                                                .value(QStringLiteral("transactions"))
-                                                .toArray();
-            for (int i = 0; i < transactions.size(); ++i) {
-                const QJsonObject tx = transactions.at(i).toObject();
-                if (tx.value(QStringLiteral("workflow_id")).toString() == workflowId) {
-                    resolvedAmount = amountToNanogrin(tx.value(QStringLiteral("amount")).toString());
-                    break;
-                }
-            }
-        }
-        return resolvedAmount;
-    };
     if (!localContext.value(QStringLiteral("selected_input_commits")).toArray().isEmpty()) {
-        const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
+        const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
         const QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
         bool hasTransactionEntry = false;
         for (int i = 0; i < transactions.size(); ++i) {
@@ -5020,14 +1265,12 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
         const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
         bool hasMatchingSelection = false;
-        bool hasMatchingLocks = false;
         for (int i = 0; i < selectedCommitments.size(); ++i) {
             const WalletOutput output =
-                findTrackedOutputByCommitment(outputs, selectedCommitments.at(i).toString());
+                GrinWalletControllerHelpers::findTrackedOutputByCommitment(outputs, selectedCommitments.at(i).toString());
             if (!output.commitment.isEmpty()) {
                 hasMatchingSelection = true;
                 if (output.locked) {
-                    hasMatchingLocks = true;
                     break;
                 }
             }
@@ -5070,10 +1313,10 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         quint64 selectedTotal = 0;
         for (int i = 0; i < selectedCommitments.size(); ++i) {
             const QString commitment = selectedCommitments.at(i).toString();
-            const WalletOutput output = findTrackedOutputByCommitment(outputs, commitment);
+            const WalletOutput output = GrinWalletControllerHelpers::findTrackedOutputByCommitment(outputs, commitment);
             if (!output.commitment.isEmpty()) {
                 selectedInputCoinbase.insert(output.commitment, output.coinbase);
-                selectedTotal += amountToNanogrin(output.amount);
+                selectedTotal += GrinWalletWorkflowHelpers::amountToNanogrin(output.amount);
             } else {
                 const QJsonValue persistedValue =
                     localContext.value(QStringLiteral("selected_input_coinbase")).toObject().value(commitment);
@@ -5087,24 +1330,10 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
             localContext.insert(QStringLiteral("selected_input_coinbase"), selectedInputCoinbase);
             storeWorkflowContext(workflowId, localContext);
         }
-        if (!localContext.value(invoiceContextKey(QStringLiteral("participant"))).isObject()) {
-            const QJsonObject legacyParticipant = [&localContext]() {
-                QJsonObject json;
-                const QString secKey = localContext.value(QStringLiteral("invoice_sender_blind_secret")).toString();
-                const QString secNonce = localContext.value(QStringLiteral("invoice_sender_nonce_secret")).toString();
-                const QString pubKey = localContext.value(QStringLiteral("invoice_sender_blind_public")).toString();
-                const QString pubNonce = localContext.value(QStringLiteral("invoice_sender_nonce_public")).toString();
-                if (secKey.isEmpty() || secNonce.isEmpty() || pubKey.isEmpty() || pubNonce.isEmpty()) {
-                    return QJsonObject();
-                }
-                json.insert(QStringLiteral("sec_key"), secKey);
-                json.insert(QStringLiteral("sec_nonce"), secNonce);
-                json.insert(QStringLiteral("pub_key"), pubKey);
-                json.insert(QStringLiteral("pub_nonce"), pubNonce);
-                return json;
-            }();
+        if (!localContext.value(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant"))).isObject()) {
+            const QJsonObject legacyParticipant = legacyInvoiceParticipantFromContext(localContext);
             if (!legacyParticipant.isEmpty()) {
-                localContext.insert(invoiceContextKey(QStringLiteral("participant")), legacyParticipant);
+                localContext.insert(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant")), legacyParticipant);
                 localContext.remove(QStringLiteral("invoice_sender_blind_secret"));
                 localContext.remove(QStringLiteral("invoice_sender_nonce_secret"));
                 localContext.remove(QStringLiteral("invoice_sender_blind_public"));
@@ -5114,11 +1343,11 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         }
         quint64 amountNano = localContext.value(QStringLiteral("amount_nano")).toVariant().toULongLong();
         if (amountNano == 0) {
-            amountNano = resolveWorkflowAmountNano();
+            amountNano = resolveWorkflowAmountNano(workflowId, localContext, amount);
             if (amountNano > 0) {
                 localContext.insert(QStringLiteral("amount_nano"), QString::number(amountNano));
                 if (localContext.value(QStringLiteral("amount_display")).toString().trimmed().isEmpty()) {
-                    localContext.insert(QStringLiteral("amount_display"), formatNanogrin(amountNano));
+                    localContext.insert(QStringLiteral("amount_display"), GrinWalletWorkflowHelpers::formatNanogrin(amountNano));
                 }
                 storeWorkflowContext(workflowId, localContext);
             }
@@ -5142,14 +1371,14 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         const quint64 persistedFee = localContext.value(QStringLiteral("fee_nano")).toVariant().toULongLong();
         const QString existingChangeAmountDisplay = localContext.value(QStringLiteral("change_amount_display")).toString();
         const QString recalculatedChangeDisplay =
-            recalculatedChange > 0 ? formatNanogrin(recalculatedChange) : QString();
+            recalculatedChange > 0 ? GrinWalletWorkflowHelpers::formatNanogrin(recalculatedChange) : QString();
         if (persistedFee != recalculatedFee
             || localContext.value(QStringLiteral("selected_total")).toString() != QString::number(selectedTotal)
             || localContext.value(QStringLiteral("change_amount")).toString() != QString::number(recalculatedChange)
             || existingChangeAmountDisplay != recalculatedChangeDisplay) {
             localContext.insert(QStringLiteral("selected_total"), QString::number(selectedTotal));
             localContext.insert(QStringLiteral("fee_nano"), QString::number(recalculatedFee));
-            localContext.insert(QStringLiteral("fee_amount_display"), formatNanogrin(recalculatedFee));
+            localContext.insert(QStringLiteral("fee_amount_display"), GrinWalletWorkflowHelpers::formatNanogrin(recalculatedFee));
             localContext.insert(QStringLiteral("change_amount"), QString::number(recalculatedChange));
             if (recalculatedChange > 0) {
                 WalletOutput changeOutput;
@@ -5184,14 +1413,14 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         }
         if (feeOut) {
             *feeOut = recalculatedFee > 0
-                ? formatNanogrin(recalculatedFee)
+                ? GrinWalletWorkflowHelpers::formatNanogrin(recalculatedFee)
                 : localContext.value(QStringLiteral("fee_amount_display")).toString();
         }
         return true;
         }
     }
 
-    quint64 requestedAmount = resolveWorkflowAmountNano();
+    quint64 requestedAmount = resolveWorkflowAmountNano(workflowId, localContext, amount);
     if (requestedAmount == 0) {
         if (errorOut) {
             *errorOut = QStringLiteral("Workflow amount must be greater than zero.");
@@ -5199,7 +1428,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         return false;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     const WalletSelection::Result selection =
@@ -5232,7 +1461,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
     document.insert(QStringLiteral("wallet_state"), walletState);
-    if (!saveDocument(document)) {
+    if (!GrinWalletStorage::saveDocument(document)) {
         if (errorOut) {
             *errorOut = QStringLiteral("Failed to persist sender selection context.");
         }
@@ -5247,15 +1476,15 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     localContext.insert(QStringLiteral("amount_nano"), QString::number(requestedAmount));
     localContext.insert(QStringLiteral("amount_display"), amount.trimmed());
     localContext.insert(QStringLiteral("fee_nano"), QString::number(selection.fee));
-    localContext.insert(QStringLiteral("fee_amount_display"), formatNanogrin(selection.fee));
-    if (!localContext.value(invoiceContextKey(QStringLiteral("participant"))).isObject()) {
-        localContext.insert(invoiceContextKey(QStringLiteral("participant")),
-                            participantContextToJson(
+    localContext.insert(QStringLiteral("fee_amount_display"), GrinWalletWorkflowHelpers::formatNanogrin(selection.fee));
+    if (!localContext.value(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant"))).isObject()) {
+        localContext.insert(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant")),
+                            GrinWalletWorkflowHelpers::participantContextToJson(
                                 WalletCryptoBackend::createRandomParticipant(QStringLiteral("sender"))));
     }
 
     if (selection.change > 0 && localContext.value(QStringLiteral("change_commit")).toString().isEmpty()) {
-        const QString changeAmount = formatNanogrin(selection.change);
+        const QString changeAmount = GrinWalletWorkflowHelpers::formatNanogrin(selection.change);
         WalletOutput changeOutput;
         SlateV4::Commit changeCommit;
         QString outputError;
@@ -5278,7 +1507,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     storeWorkflowContext(workflowId, localContext);
     refreshStateFromStorage();
     if (feeOut) {
-        *feeOut = formatNanogrin(selection.fee);
+        *feeOut = GrinWalletWorkflowHelpers::formatNanogrin(selection.fee);
     }
     return true;
 }
@@ -5298,28 +1527,28 @@ bool GrinWalletController::prepareInvoiceSenderContext(
 
     QJsonObject localContext = workflowContext(workflowId);
     WalletCryptoBackend::ParticipantContext senderAggsig =
-        participantContextFromJson(localContext.value(invoiceContextKey(QStringLiteral("participant"))).toObject(),
+        GrinWalletWorkflowHelpers::participantContextFromJson(localContext.value(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant"))).toObject(),
                                    QStringLiteral("sender"));
     if (senderAggsig.blindSecret.isEmpty()
         || senderAggsig.nonceSecret.isEmpty()
         || senderAggsig.blindPublic.isEmpty()
         || senderAggsig.noncePublic.isEmpty()) {
         senderAggsig = WalletCryptoBackend::createRandomParticipant(QStringLiteral("sender"));
-        localContext.insert(invoiceContextKey(QStringLiteral("participant")),
-                            participantContextToJson(senderAggsig));
+        localContext.insert(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant")),
+                            GrinWalletWorkflowHelpers::participantContextToJson(senderAggsig));
         storeWorkflowContext(workflowId, localContext);
     }
 
     const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
     const QJsonObject selectedInputCoinbase =
         localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
-    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
     if (!m_sessionMnemonic.trimmed().isEmpty()) {
         const WalletKeychain keychain(m_sessionMnemonic);
         if (keychain.isValid()) {
             for (int i = 0; i < trackedOutputs.size(); ++i) {
-                trackedOutputs[i] = normalizedTrackedOutput(trackedOutputs.at(i), keychain);
+                trackedOutputs[i] = GrinWalletControllerHelpers::normalizedTrackedOutput(trackedOutputs.at(i), keychain);
             }
         }
     }
@@ -5331,7 +1560,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     }
     const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
     if (!changeCommit.isEmpty()) {
-        const WalletOutput changeOutput = findTrackedOutputByCommitment(trackedOutputs, changeCommit);
+        const WalletOutput changeOutput = GrinWalletControllerHelpers::findTrackedOutputByCommitment(trackedOutputs, changeCommit);
         if (!changeOutput.blindingFactor.isEmpty()) {
             positiveBlinds.append(changeOutput.blindingFactor);
         }
@@ -5340,7 +1569,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     QStringList negativeBlinds;
     negativeBlinds.append(senderAggsig.blindSecret);
     for (int i = 0; i < selectedCommitments.size(); ++i) {
-        const WalletOutput input = findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
+        const WalletOutput input = GrinWalletControllerHelpers::findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
         if (!input.blindingFactor.isEmpty()) {
             negativeBlinds.append(input.blindingFactor);
         }
@@ -5365,7 +1594,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
 
     QList<SlateV4::Commit> rebuiltCommitments = slate->commitments;
     for (int i = 0; i < selectedCommitments.size(); ++i) {
-        const WalletOutput input = findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
+        const WalletOutput input = GrinWalletControllerHelpers::findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
         if (input.commitment.isEmpty()) {
             continue;
         }
@@ -5391,7 +1620,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
 
     const QString changeCommitment = localContext.value(QStringLiteral("change_commit")).toString();
     if (!changeCommitment.isEmpty()) {
-        const WalletOutput changeOutput = findTrackedOutputByCommitment(trackedOutputs, changeCommitment);
+        const WalletOutput changeOutput = GrinWalletControllerHelpers::findTrackedOutputByCommitment(trackedOutputs, changeCommitment);
         if (!changeOutput.commitment.isEmpty()) {
             bool exists = false;
             for (int i = 0; i < rebuiltCommitments.size(); ++i) {
@@ -5410,7 +1639,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
         }
     }
 
-    slate->commitments = sortedCompactCommitments(rebuiltCommitments);
+    slate->commitments = GrinWalletWorkflowHelpers::sortedCompactCommitments(rebuiltCommitments);
     return true;
 }
 
@@ -5429,28 +1658,28 @@ bool GrinWalletController::prepareStandardSenderContext(
 
     QJsonObject localContext = workflowContext(workflowId);
     WalletCryptoBackend::ParticipantContext senderAggsig =
-        participantContextFromJson(localContext.value(standardContextKey(QStringLiteral("participant"))).toObject(),
+        GrinWalletWorkflowHelpers::participantContextFromJson(localContext.value(GrinWalletWorkflowHelpers::standardContextKey(QStringLiteral("participant"))).toObject(),
                                    QStringLiteral("sender"));
     if (senderAggsig.blindSecret.isEmpty()
         || senderAggsig.nonceSecret.isEmpty()
         || senderAggsig.blindPublic.isEmpty()
         || senderAggsig.noncePublic.isEmpty()) {
         senderAggsig = WalletCryptoBackend::createRandomParticipant(QStringLiteral("sender"));
-        localContext.insert(standardContextKey(QStringLiteral("participant")),
-                            participantContextToJson(senderAggsig));
+        localContext.insert(GrinWalletWorkflowHelpers::standardContextKey(QStringLiteral("participant")),
+                            GrinWalletWorkflowHelpers::participantContextToJson(senderAggsig));
         storeWorkflowContext(workflowId, localContext);
     }
 
     const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
     const QJsonObject selectedInputCoinbase =
         localContext.value(QStringLiteral("selected_input_coinbase")).toObject();
-    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
     if (!m_sessionMnemonic.trimmed().isEmpty()) {
         const WalletKeychain keychain(m_sessionMnemonic);
         if (keychain.isValid()) {
             for (int i = 0; i < trackedOutputs.size(); ++i) {
-                trackedOutputs[i] = normalizedTrackedOutput(trackedOutputs.at(i), keychain);
+                trackedOutputs[i] = GrinWalletControllerHelpers::normalizedTrackedOutput(trackedOutputs.at(i), keychain);
             }
         }
     }
@@ -5458,7 +1687,7 @@ bool GrinWalletController::prepareStandardSenderContext(
     const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
     const WalletOutput changeOutput = changeCommit.isEmpty()
         ? WalletOutput()
-        : findTrackedOutputByCommitment(trackedOutputs, changeCommit);
+        : GrinWalletControllerHelpers::findTrackedOutputByCommitment(trackedOutputs, changeCommit);
 
     QString canonicalOffset = localContext.value(QStringLiteral("standard_sender_offset")).toString().trimmed();
     if (canonicalOffset.isEmpty()) {
@@ -5498,7 +1727,7 @@ bool GrinWalletController::prepareStandardSenderContext(
 
     QList<SlateV4::Commit> rebuiltCommitments = slate->commitments;
     for (int i = 0; i < selectedCommitments.size(); ++i) {
-        const WalletOutput input = findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
+        const WalletOutput input = GrinWalletControllerHelpers::findTrackedOutputByCommitment(trackedOutputs, selectedCommitments.at(i).toString());
         if (input.commitment.isEmpty()) {
             continue;
         }
@@ -5536,7 +1765,7 @@ bool GrinWalletController::prepareStandardSenderContext(
         }
     }
 
-    slate->commitments = sortedCompactCommitments(rebuiltCommitments);
+    slate->commitments = GrinWalletWorkflowHelpers::sortedCompactCommitments(rebuiltCommitments);
     return true;
 }
 
@@ -5546,8 +1775,8 @@ void GrinWalletController::compactInvoiceSlateForReturn(const QString &workflowI
         return;
     }
 
-    WalletCryptoBackend::ParticipantContext senderContext = participantContextFromJson(
-        workflowContext(workflowId).value(invoiceContextKey(QStringLiteral("participant"))).toObject(),
+    WalletCryptoBackend::ParticipantContext senderContext = GrinWalletWorkflowHelpers::participantContextFromJson(
+        workflowContext(workflowId).value(GrinWalletWorkflowHelpers::invoiceContextKey(QStringLiteral("participant"))).toObject(),
         QStringLiteral("sender"));
     if (senderContext.blindPublic.isEmpty() || senderContext.noncePublic.isEmpty()) {
         senderContext = WalletCryptoBackend::createParticipant(m_seedFingerprint, workflowId, QStringLiteral("sender"));
@@ -5573,15 +1802,6 @@ void GrinWalletController::compactInvoiceSlateForReturn(const QString &workflowI
     slate->metadata.remove(QStringLiteral("processed_at"));
     slate->metadata.remove(QStringLiteral("tx_ready"));
     slate->metadata.remove(QStringLiteral("network"));
-}
-
-void GrinWalletController::runExternalInvoicePreflight(const SlateV4 &incomingSlate,
-                                                       const SlateV4 &emittedSlate,
-                                                       const QString &armoredSlatepack) const
-{
-    Q_UNUSED(incomingSlate)
-    Q_UNUSED(emittedSlate)
-    Q_UNUSED(armoredSlatepack)
 }
 
 void GrinWalletController::compactStandardSlateForReturn(const QString &workflowId, SlateV4 *slate)
@@ -5635,7 +1855,6 @@ void GrinWalletController::compactStandardSlateForReturn(const QString &workflow
 
     slate->amount.clear();
     slate->fee.clear();
-    logWorkflowJson(QStringLiteral("S2-compacted"), workflowId, slate->stateCode(), slate->toJson());
 }
 
 bool GrinWalletController::ensureReceiverOutputContext(const QString &workflowId,
@@ -5656,8 +1875,8 @@ bool GrinWalletController::ensureReceiverOutputContext(const QString &workflowId
     const QString existingCommitment = localContext.value(QStringLiteral("receiver_commit")).toString();
     if (!existingCommitment.isEmpty()) {
         const QList<WalletOutput> outputs = WalletScanner::outputsFromState(
-            loadDocument().value(QStringLiteral("wallet_state")).toObject());
-        WalletOutput existingOutput = findTrackedOutputByCommitment(outputs, existingCommitment);
+            GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject());
+        WalletOutput existingOutput = GrinWalletControllerHelpers::findTrackedOutputByCommitment(outputs, existingCommitment);
         if (existingOutput.commitment.isEmpty()) {
             existingOutput.commitment = existingCommitment;
             existingOutput.proof = localContext.value(QStringLiteral("receiver_proof")).toString();
@@ -5713,135 +1932,10 @@ void GrinWalletController::persistWorkflowTransaction(const SlateV4 &slate, bool
         return;
     }
 
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
-    QJsonObject existingEntry;
-    for (int i = 0; i < transactions.size(); ++i) {
-        const QJsonObject candidate = transactions.at(i).toObject();
-        if (candidate.value(QStringLiteral("workflow_id")).toString() == slate.workflowId()) {
-            existingEntry = candidate;
-            break;
-        }
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (GrinWalletWorkflow::persistTransaction(&document, slate, broadcasted)) {
+        GrinWalletStorage::saveDocument(document);
     }
-
-    QJsonObject entry;
-    entry.insert(QStringLiteral("workflow_id"), slate.workflowId());
-    entry.insert(QStringLiteral("mode"), slate.modeCode());
-    entry.insert(QStringLiteral("state"), slate.stateCode());
-    entry.insert(QStringLiteral("amount"),
-                 !slate.amount.trimmed().isEmpty()
-                     ? slate.amount
-                     : existingEntry.value(QStringLiteral("amount")).toString());
-    entry.insert(QStringLiteral("fee"), slate.fee);
-    entry.insert(QStringLiteral("slate_id"), slate.id);
-    entry.insert(QStringLiteral("offset"), slate.offset);
-    entry.insert(QStringLiteral("broadcasted"),
-                 broadcasted || existingEntry.value(QStringLiteral("broadcasted")).toBool());
-    entry.insert(QStringLiteral("timestamp"),
-                 existingEntry.value(QStringLiteral("timestamp")).toString().isEmpty()
-                    ? QDateTime::currentDateTimeUtc().toString(Qt::ISODate)
-                    : existingEntry.value(QStringLiteral("timestamp")).toString());
-    entry.insert(QStringLiteral("tx_ready"), slate.metadata.value(QStringLiteral("tx_ready")).toBool());
-    entry.insert(QStringLiteral("confirmations"), existingEntry.value(QStringLiteral("confirmations")).toInt());
-    entry.insert(QStringLiteral("kernel_excess"),
-                 !slate.metadata.value(QStringLiteral("pubkey_total")).toString().isEmpty()
-                     ? slate.metadata.value(QStringLiteral("pubkey_total")).toString()
-                     : existingEntry.value(QStringLiteral("kernel_excess")).toString());
-    entry.insert(QStringLiteral("kernel_signature"),
-                 !slate.metadata.value(QStringLiteral("final_sig")).toString().isEmpty()
-                     ? slate.metadata.value(QStringLiteral("final_sig")).toString()
-                     : existingEntry.value(QStringLiteral("kernel_signature")).toString());
-    entry.insert(QStringLiteral("status"),
-                 broadcasted ? QStringLiteral("broadcasted")
-                             : (slate.metadata.value(QStringLiteral("tx_ready")).toBool()
-                                    ? QStringLiteral("ready")
-                                    : existingEntry.value(QStringLiteral("status")).toString().isEmpty()
-                                        ? QStringLiteral("in_progress")
-                                        : existingEntry.value(QStringLiteral("status")).toString()));
-    if (existingEntry.contains(QStringLiteral("broadcast_at"))) {
-        entry.insert(QStringLiteral("broadcast_at"), existingEntry.value(QStringLiteral("broadcast_at")).toString());
-    }
-    if (existingEntry.contains(QStringLiteral("broadcast_error"))) {
-        entry.insert(QStringLiteral("broadcast_error"), existingEntry.value(QStringLiteral("broadcast_error")).toString());
-    }
-    if (existingEntry.contains(QStringLiteral("confirmed_height"))) {
-        entry.insert(QStringLiteral("confirmed_height"), existingEntry.value(QStringLiteral("confirmed_height")).toVariant().toLongLong());
-    }
-    if (existingEntry.contains(QStringLiteral("last_node_check"))) {
-        entry.insert(QStringLiteral("last_node_check"), existingEntry.value(QStringLiteral("last_node_check")).toString());
-    }
-    if (existingEntry.contains(QStringLiteral("output_commitments"))) {
-        entry.insert(QStringLiteral("output_commitments"), existingEntry.value(QStringLiteral("output_commitments")).toArray());
-    }
-    if (existingEntry.contains(QStringLiteral("rescan_rebuilt"))) {
-        entry.insert(QStringLiteral("rescan_rebuilt"), existingEntry.value(QStringLiteral("rescan_rebuilt")).toBool());
-    }
-    if (slate.hasPaymentProof) {
-        entry.insert(QStringLiteral("payment_proof"), slate.paymentProof.toJson());
-        const QString metadataStatus = slate.metadata.value(QStringLiteral("payment_proof_status")).toString();
-        entry.insert(QStringLiteral("payment_proof_status"),
-                     !metadataStatus.isEmpty()
-                         ? metadataStatus
-                         : (slate.paymentProof.receiverSignature.isEmpty()
-                                ? QStringLiteral("pending")
-                                : QStringLiteral("receiver_signed")));
-        if (slate.metadata.contains(QStringLiteral("payment_proof_valid"))) {
-            entry.insert(QStringLiteral("payment_proof_valid"),
-                         slate.metadata.value(QStringLiteral("payment_proof_valid")).toBool());
-        }
-        if (!slate.metadata.value(QStringLiteral("payment_proof_error")).toString().isEmpty()) {
-            entry.insert(QStringLiteral("payment_proof_error"),
-                         slate.metadata.value(QStringLiteral("payment_proof_error")).toString());
-        } else if (existingEntry.contains(QStringLiteral("payment_proof_error"))) {
-            entry.insert(QStringLiteral("payment_proof_error"),
-                         existingEntry.value(QStringLiteral("payment_proof_error")).toString());
-        }
-    } else if (existingEntry.contains(QStringLiteral("payment_proof"))) {
-        entry.insert(QStringLiteral("payment_proof"), existingEntry.value(QStringLiteral("payment_proof")).toObject());
-        if (existingEntry.contains(QStringLiteral("payment_proof_status"))) {
-            entry.insert(QStringLiteral("payment_proof_status"),
-                         existingEntry.value(QStringLiteral("payment_proof_status")).toString());
-        }
-        if (existingEntry.contains(QStringLiteral("payment_proof_valid"))) {
-            entry.insert(QStringLiteral("payment_proof_valid"),
-                         existingEntry.value(QStringLiteral("payment_proof_valid")).toBool());
-        }
-        if (existingEntry.contains(QStringLiteral("payment_proof_error"))) {
-            entry.insert(QStringLiteral("payment_proof_error"),
-                         existingEntry.value(QStringLiteral("payment_proof_error")).toString());
-        }
-    }
-    if (slate.metadata.value(QStringLiteral("tx_skeleton")).isObject()) {
-        const QJsonObject txSkeleton = slate.metadata.value(QStringLiteral("tx_skeleton")).toObject();
-        entry.insert(QStringLiteral("tx_skeleton"), txSkeleton);
-        const QJsonArray kernels = txSkeleton.value(QStringLiteral("body")).toObject().value(QStringLiteral("kernels")).toArray();
-        if (!kernels.isEmpty()) {
-            const QJsonObject kernel = kernels.first().toObject();
-            if (!kernel.value(QStringLiteral("excess")).toString().isEmpty()) {
-                entry.insert(QStringLiteral("kernel_excess"), kernel.value(QStringLiteral("excess")).toString());
-            }
-            if (!kernel.value(QStringLiteral("excess_sig")).toString().isEmpty()) {
-                entry.insert(QStringLiteral("kernel_signature"), kernel.value(QStringLiteral("excess_sig")).toString());
-            }
-        }
-    }
-
-    bool replaced = false;
-    for (int i = 0; i < transactions.size(); ++i) {
-        if (transactions.at(i).toObject().value(QStringLiteral("workflow_id")).toString() == slate.workflowId()) {
-            transactions.replace(i, entry);
-            replaced = true;
-            break;
-        }
-    }
-    if (!replaced) {
-        transactions.append(entry);
-    }
-
-    walletState.insert(QStringLiteral("transactions"), transactions);
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    saveDocument(document);
 }
 
 void GrinWalletController::updateTransactionEntry(const QString &workflowId, const std::function<void (QJsonObject &)> &updater)
@@ -5850,7 +1944,7 @@ void GrinWalletController::updateTransactionEntry(const QString &workflowId, con
         return;
     }
 
-    QJsonObject document = loadDocument();
+    QJsonObject document = GrinWalletStorage::loadDocument();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
     bool updated = false;
@@ -5872,7 +1966,7 @@ void GrinWalletController::updateTransactionEntry(const QString &workflowId, con
 
     walletState.insert(QStringLiteral("transactions"), transactions);
     document.insert(QStringLiteral("wallet_state"), walletState);
-    saveDocument(document);
+    GrinWalletStorage::saveDocument(document);
     refreshStateFromStorage();
 }
 
@@ -5894,53 +1988,15 @@ QString GrinWalletController::kernelExcessFromEntry(const QJsonObject &entry) co
 
 void GrinWalletController::refreshTransactionConfirmations()
 {
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
-    bool changed = false;
-
-    for (int i = 0; i < transactions.size(); ++i) {
-        QJsonObject entry = transactions.at(i).toObject();
-        const qint64 confirmedHeight = entry.value(QStringLiteral("confirmed_height")).toVariant().toLongLong();
-        const QString status = entry.value(QStringLiteral("status")).toString();
-
-        int confirmations = 0;
-        if (confirmedHeight > 0 && m_chainHeight >= static_cast<qulonglong>(confirmedHeight)) {
-            confirmations = static_cast<int>(m_chainHeight - static_cast<qulonglong>(confirmedHeight) + 1);
-        }
-
-        if (entry.value(QStringLiteral("confirmations")).toInt() != confirmations) {
-            entry.insert(QStringLiteral("confirmations"), confirmations);
-            changed = true;
-        }
-
-        if (confirmedHeight > 0 && confirmations > 0 && status != QStringLiteral("confirmed")) {
-            entry.insert(QStringLiteral("status"), QStringLiteral("confirmed"));
-            changed = true;
-        }
-
-        transactions.replace(i, entry);
-    }
-
-    if (changed) {
-        walletState.insert(QStringLiteral("transactions"), transactions);
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        saveDocument(document);
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (GrinWalletStorage::refreshTransactionConfirmations(&document, m_chainHeight)) {
+        GrinWalletStorage::saveDocument(document);
     }
 }
 
 void GrinWalletController::refreshStoragePersistenceState()
 {
-#ifdef Q_OS_WASM
-    if (char *state = browserStoragePersistenceState()) {
-        m_storagePersistenceState = QString::fromUtf8(state);
-        free(state);
-    } else {
-        m_storagePersistenceState = QStringLiteral("best-effort");
-    }
-#else
-    m_storagePersistenceState = QStringLiteral("native");
-#endif
+    m_storagePersistenceState = GrinWalletPlatformHelpers::storagePersistenceState();
     emit statusChanged();
 }
 
@@ -5960,20 +2016,7 @@ void GrinWalletController::touchWalletSession()
 
 void GrinWalletController::recoverPendingBroadcasts()
 {
-    const QJsonArray transactions = loadDocument()
-                                        .value(QStringLiteral("wallet_state"))
-                                        .toObject()
-                                        .value(QStringLiteral("transactions"))
-                                        .toArray();
-    for (int i = 0; i < transactions.size(); ++i) {
-        const QString status = transactions.at(i).toObject().value(QStringLiteral("status")).toString();
-        if (status == QStringLiteral("broadcast_pending")
-            || status == QStringLiteral("broadcasted")
-            || status == QStringLiteral("in_mempool")) {
-            refreshBroadcastStatuses();
-            return;
-        }
-    }
+    m_nodeSyncService->recoverPendingBroadcasts();
 }
 
 QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QList<WalletOutput> &outputs,
@@ -5988,11 +2031,11 @@ QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QLis
             knownTransactionsByWorkflow.insert(workflowId, entry);
         }
 
-        const QStringList commitments = transactionOutputCommitments(entry);
+        const QStringList commitments = GrinWalletHistoryHelpers::transactionOutputCommitments(entry);
         for (int j = 0; j < commitments.size(); ++j) {
             workflowByCommitment.insert(commitments.at(j),
                                         workflowId.isEmpty()
-                                            ? syntheticWorkflowIdForCommitment(commitments.at(j))
+                                            ? GrinWalletHistoryHelpers::syntheticWorkflowIdForCommitment(commitments.at(j))
                                             : workflowId);
         }
     }
@@ -6010,7 +2053,7 @@ QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QLis
             workflowId = workflowByCommitment.value(output.commitment);
         }
         if (workflowId.isEmpty()) {
-            workflowId = syntheticWorkflowIdForCommitment(output.commitment);
+            workflowId = GrinWalletHistoryHelpers::syntheticWorkflowIdForCommitment(output.commitment);
         }
 
         if (!groupedOutputs.contains(workflowId)) {
@@ -6055,15 +2098,15 @@ QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QLis
             anyPending = anyPending || output.pending;
             anyLocked = anyLocked || output.locked;
             if (displayAmount == 0 && output.source != QStringLiteral("change")) {
-                displayAmount = amountToNanogrin(output.amount);
+                displayAmount = GrinWalletWorkflowHelpers::amountToNanogrin(output.amount);
             }
         }
 
         if (displayAmount == 0) {
-            displayAmount = amountToNanogrin(grouped.first().amount);
+            displayAmount = GrinWalletWorkflowHelpers::amountToNanogrin(grouped.first().amount);
         }
 
-        const QString mode = modeFromOutputs(grouped, entry.value(QStringLiteral("mode")).toString());
+        const QString mode = GrinWalletHistoryHelpers::modeFromOutputs(grouped, entry.value(QStringLiteral("mode")).toString());
         const QString existingStatus = entry.value(QStringLiteral("status")).toString();
         const bool existingBroadcasted = entry.value(QStringLiteral("broadcasted")).toBool();
         QString status = existingStatus;
@@ -6085,7 +2128,7 @@ QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QLis
                          ? QStringLiteral("chain")
                          : entry.value(QStringLiteral("state")).toString());
         if (entry.value(QStringLiteral("amount")).toString().trimmed().isEmpty()) {
-            entry.insert(QStringLiteral("amount"), formatNanogrin(displayAmount));
+            entry.insert(QStringLiteral("amount"), GrinWalletWorkflowHelpers::formatNanogrin(displayAmount));
         }
         if (entry.value(QStringLiteral("fee")).toString().trimmed().isEmpty()) {
             entry.insert(QStringLiteral("fee"), QStringLiteral("0.000000000"));
@@ -6127,53 +2170,12 @@ QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QLis
 
 void GrinWalletController::refreshBroadcastStatuses()
 {
-    if (!m_nodeApi || m_broadcastStatusRefreshInFlight || m_kernelStatusCheckInFlight) {
-        return;
-    }
-
-    const QJsonArray transactions = loadDocument()
-                                        .value(QStringLiteral("wallet_state"))
-                                        .toObject()
-                                        .value(QStringLiteral("transactions"))
-                                        .toArray();
-    bool needsRefresh = false;
-    for (int i = 0; i < transactions.size(); ++i) {
-        const QJsonObject entry = transactions.at(i).toObject();
-        const QString status = entry.value(QStringLiteral("status")).toString();
-        if (!entry.value(QStringLiteral("broadcasted")).toBool()
-            && status != QStringLiteral("broadcast_pending")) {
-            continue;
-        }
-        if (status != QStringLiteral("confirmed") && status != QStringLiteral("cancelled")) {
-            needsRefresh = true;
-            break;
-        }
-    }
-
-    if (!needsRefresh) {
-        return;
-    }
-
-    m_broadcastStatusRefreshInFlight = true;
-    m_nodeApi->getUnconfirmedTransactionsAsync();
+    m_nodeSyncService->refreshBroadcastStatuses();
 }
 
 void GrinWalletController::startNextKernelStatusCheck()
 {
-    if (!m_nodeApi || m_kernelStatusCheckInFlight || m_kernelStatusQueue.isEmpty()) {
-        return;
-    }
-
-    const QPair<QString, QString> next = m_kernelStatusQueue.takeFirst();
-    m_currentKernelWorkflowId = next.first;
-    m_currentKernelExcess = next.second;
-    if (m_currentKernelExcess.isEmpty()) {
-        startNextKernelStatusCheck();
-        return;
-    }
-
-    m_kernelStatusCheckInFlight = true;
-    m_nodeApi->getKernelAsync(m_currentKernelExcess, 0, static_cast<int>(m_chainHeight > 0 ? m_chainHeight + 2 : 0));
+    m_nodeSyncService->startNextKernelStatusCheck();
 }
 
 void GrinWalletController::finalizeWorkflowOutputs(const SlateV4 &slate, bool broadcasted)
@@ -6182,44 +2184,12 @@ void GrinWalletController::finalizeWorkflowOutputs(const SlateV4 &slate, bool br
         return;
     }
 
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+    QJsonObject document = GrinWalletStorage::loadDocument();
     const QJsonObject localContext = workflowContext(slate.workflowId());
-    const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
-    const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
-
-    for (int i = 0; i < outputs.size(); ++i) {
-        for (int j = 0; j < selectedCommitments.size(); ++j) {
-            if (outputs[i].commitment == selectedCommitments.at(j).toString()) {
-                outputs[i].workflowId = slate.workflowId();
-                outputs[i].pending = !broadcasted;
-                outputs[i].locked = !broadcasted;
-                outputs[i].spent = broadcasted;
-                outputs[i].onChain = false;
-            }
-        }
-
-        if (!changeCommit.isEmpty() && outputs[i].commitment == changeCommit) {
-            outputs[i].workflowId = slate.workflowId();
-            outputs[i].pending = true;
-            outputs[i].locked = !broadcasted;
-        }
-
-        for (int j = 0; j < slate.commitments.size(); ++j) {
-            if (outputs[i].commitment == slate.commitments.at(j).commitment) {
-                outputs[i].workflowId = slate.workflowId();
-                outputs[i].pending = true;
-                outputs[i].locked = !broadcasted;
-            }
-        }
+    if (GrinWalletWorkflow::finalizeOutputs(&document, slate, broadcasted, m_chainHeight, localContext)) {
+        GrinWalletStorage::saveDocument(document);
+        refreshStateFromStorage();
     }
-
-    walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    saveDocument(document);
-    refreshStateFromStorage();
 }
 
 void GrinWalletController::finalizeBroadcastedWorkflow(const QString &workflowId)
@@ -6228,43 +2198,12 @@ void GrinWalletController::finalizeBroadcastedWorkflow(const QString &workflowId
         return;
     }
 
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+    QJsonObject document = GrinWalletStorage::loadDocument();
     const QJsonObject localContext = workflowContext(workflowId);
-    const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
-
-    for (int i = 0; i < outputs.size(); ++i) {
-        bool matchesSelectedInput = false;
-        for (int j = 0; j < selectedCommitments.size(); ++j) {
-            if (outputs[i].commitment == selectedCommitments.at(j).toString()) {
-                matchesSelectedInput = true;
-                break;
-            }
-        }
-
-        if (matchesSelectedInput) {
-            // Preserve original workflowId on input UTXOs so the receive/invoice
-            // transaction that created them keeps its own identity and confirmed height.
-            // Do NOT overwrite workflowId here.
-            outputs[i].pending = false;
-            outputs[i].locked = false;
-            outputs[i].spent = true;
-            outputs[i].onChain = false;
-            continue;
-        }
-
-        if (outputs[i].workflowId == workflowId) {
-            outputs[i].pending = true;
-            outputs[i].locked = false;
-        }
+    if (GrinWalletWorkflow::finalizeBroadcastedWorkflow(&document, workflowId, m_chainHeight, localContext)) {
+        GrinWalletStorage::saveDocument(document);
+        refreshStateFromStorage();
     }
-
-    walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    saveDocument(document);
-    refreshStateFromStorage();
 }
 
 void GrinWalletController::storeWorkflowContext(const QString &workflowId, const QJsonObject &context)
@@ -6273,102 +2212,41 @@ void GrinWalletController::storeWorkflowContext(const QString &workflowId, const
         return;
     }
 
-    QJsonObject document = loadDocument();
-    QJsonObject contexts = document.value(QStringLiteral("workflow_contexts")).toObject();
-    contexts.insert(workflowId, context);
-    document.insert(QStringLiteral("workflow_contexts"), contexts);
-    saveDocument(document);
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (GrinWalletStorage::storeWorkflowContext(&document, workflowId, context)) {
+        GrinWalletStorage::saveDocument(document);
+    }
 }
 
 QJsonObject GrinWalletController::workflowContext(const QString &workflowId) const
 {
-    if (workflowId.isEmpty()) {
-        return QJsonObject();
-    }
-
-    const QJsonObject document = loadDocument();
-    return document.value(QStringLiteral("workflow_contexts")).toObject().value(workflowId).toObject();
+    return GrinWalletStorage::workflowContext(GrinWalletStorage::loadDocument(), workflowId);
 }
 
 void GrinWalletController::startSeedScan()
 {
-    m_seedScanActive = true;
-    const QJsonObject walletState = loadDocument().value(QStringLiteral("wallet_state")).toObject();
-    m_seedScanNextIndex = qMax<qulonglong>(
-        1,
-        walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toULongLong() + 1);
-    m_seedScanDiscovered.clear();
-    m_syncStatus = QStringLiteral("Seed scan started at leaf %1").arg(QString::number(m_seedScanNextIndex));
-    emit statusChanged();
-    m_nodeApi->getUnspentOutputsAsync(static_cast<int>(m_seedScanNextIndex), -1, 1000, true);
+    m_nodeSyncService->startSeedScan();
 }
 
 void GrinWalletController::finishSeedScan(const QString &message)
 {
-    m_seedScanActive = false;
-    if (!message.isEmpty()) {
-        setLastInfo(message);
-    }
+    m_nodeSyncService->finishSeedScan(message);
 }
 
 void GrinWalletController::requestWalletScan()
 {
-    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
-        setLastError(QStringLiteral("Unlock the wallet before scanning outputs."));
-        return;
-    }
-
-    if (m_walletScanInFlight || m_seedScanActive) {
-        setLastInfo(QStringLiteral("Wallet scan is already running."));
-        return;
-    }
-
-    if (!m_nodeApi) {
-        connectNodeClient();
-    }
-    if (!m_nodeApi) {
-        setLastError(QStringLiteral("Node client is not configured."));
-        return;
-    }
-
-    QJsonObject document = loadDocument();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-    if (outputs.isEmpty()) {
-        walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_chainHeight));
-        walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
-        walletState.insert(QStringLiteral("restore_leaf_index"), 0);
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        saveDocument(document);
-        refreshStateFromStorage();
-        setLastInfo(QStringLiteral("Wallet has no tracked outputs yet. Starting seed scan."));
-        m_syncStatus = QStringLiteral("Scanning wallet outputs...");
-        emit statusChanged();
-        m_walletScanInFlight = true;
-        startSeedScan();
-        return;
-    }
-
-    int unspentOnChainCount = 0;
-    for (int i = 0; i < outputs.size(); ++i) {
-        if (!outputs.at(i).spent && outputs.at(i).onChain) {
-            ++unspentOnChainCount;
-        }
-    }
-
-    // Node 5.4.0 can crash on get_outputs with large commitment lists.
-    // Use seed scan as the primary sync mechanism and auto-heal stale index when all tracked outputs are off-chain.
-    if (unspentOnChainCount == 0) {
-        walletState.insert(QStringLiteral("restore_leaf_index"), 0);
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        saveDocument(document);
-        setLastInfo(QStringLiteral("All tracked outputs are currently off-chain. Restarting seed scan from leaf 1."));
-    } else {
-        setLastInfo(QStringLiteral("Refreshing tracked outputs via seed scan."));
-    }
-
-    m_syncStatus = QStringLiteral("Scanning wallet outputs...");
-    emit statusChanged();
-    m_walletScanInFlight = true;
-    startSeedScan();
+    m_nodeSyncService->requestWalletScan();
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -6,6 +6,18 @@ QT_WASM_INITIAL_MEMORY = 128MB
 
 SOURCES += src/main.cpp \
            src/nodefooterstatus.cpp \
+           src/grinwalletstorage.cpp \
+           src/grinwalletplatformhelpers.cpp \
+           src/grinwalletcontrollerhelpers.cpp \
+           src/grinwallethistoryhelpers.cpp \
+           src/grinwalletseedcrypto.cpp \
+           src/grinwalletshortcutbridge.cpp \
+           src/grinwallettransactionstore.cpp \
+           src/grinwalletworkflow.cpp \
+           src/grinwalletworkflowhelpers.cpp \
+           src/grinwalletnodesync.cpp \
+           src/grinwalletnodesyncservice.cpp \
+           src/grinwalletworkflowservice.cpp \
            src/grinwalletcontroller.cpp \
            src/wallet/slatev4.cpp \
            src/wallet/walletoutput.cpp \
@@ -21,6 +33,18 @@ SOURCES += src/main.cpp \
            3rdparty/secp256k1-zkp/src/secp256k1.c
 
 HEADERS += src/nodefooterstatus.h \
+           src/grinwalletstorage.h \
+           src/grinwalletplatformhelpers.h \
+           src/grinwalletcontrollerhelpers.h \
+           src/grinwallethistoryhelpers.h \
+           src/grinwalletseedcrypto.h \
+           src/grinwalletshortcutbridge.h \
+           src/grinwallettransactionstore.h \
+           src/grinwalletworkflow.h \
+           src/grinwalletworkflowhelpers.h \
+           src/grinwalletnodesync.h \
+           src/grinwalletnodesyncservice.h \
+           src/grinwalletworkflowservice.h \
            src/grinwalletcontroller.h \
            src/wallet/slatev4.h \
            src/wallet/walletoutput.h \

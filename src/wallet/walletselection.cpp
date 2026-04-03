@@ -93,6 +93,11 @@ bool isBetterCandidate(const WalletSelection::Result &candidate,
     return candidate.fee < best.fee;
 }
 
+bool amountAscending(const WalletOutput &left, const WalletOutput &right)
+{
+    return amountToNanogrin(left.amount) < amountToNanogrin(right.amount);
+}
+
 WalletSelection::Result buildCandidate(const QList<WalletOutput> &selectedOutputs,
                                        quint64 amount)
 {
@@ -182,9 +187,7 @@ WalletSelection::Result WalletSelection::selectSpendableOutputs(const QList<Wall
         }
     }
 
-    std::sort(candidates.begin(), candidates.end(), [](const WalletOutput &left, const WalletOutput &right) {
-        return amountToNanogrin(left.amount) < amountToNanogrin(right.amount);
-    });
+    std::sort(candidates.begin(), candidates.end(), amountAscending);
 
     for (int i = 0; i < candidates.size(); ++i) {
         const QList<WalletOutput> singleCandidate(1, candidates.at(i));

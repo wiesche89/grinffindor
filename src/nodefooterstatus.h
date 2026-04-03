@@ -32,7 +32,12 @@ signals:
     void dataChanged();
 
 private:
-    void connectApi(NodeForeignApi *api, bool &availableTarget, QString &tipTarget, QString &versionTarget);
+    void connectApi(NodeForeignApi *api);
+    void updateApiAvailability(NodeForeignApi *api, bool available);
+    void updateApiTip(NodeForeignApi *api, const QString &tipText);
+    void updateApiVersion(NodeForeignApi *api, const QString &versionText);
+    void handleTipFinished(const Result<Tip> &result);
+    void handleVersionFinished(const Result<NodeVersion> &result);
     static QString formatTip(const Tip &tip);
     static QString formatVersion(const NodeVersion &version);
 

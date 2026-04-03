@@ -74,6 +74,16 @@ QString outputSortKeyForCanonicalization(const Output &output)
     return WalletCryptoBackend::outputOrderHash(output);
 }
 
+bool inputCanonicalLessThan(const Input &left, const Input &right)
+{
+    return WalletCryptoBackend::inputOrderHash(left) < WalletCryptoBackend::inputOrderHash(right);
+}
+
+bool outputCanonicalLessThan(const Output &left, const Output &right)
+{
+    return outputSortKeyForCanonicalization(left) < outputSortKeyForCanonicalization(right);
+}
+
 void canonicalizeBody(TransactionBody *body)
 {
     if (!body) {
@@ -102,14 +112,8 @@ void canonicalizeBody(TransactionBody *body)
         uniqueOutputs.append(output);
     }
 
-    std::sort(uniqueInputs.begin(), uniqueInputs.end(), [](const Input &left, const Input &right) {
-        return WalletCryptoBackend::inputOrderHash(left) < WalletCryptoBackend::inputOrderHash(right);
-    });
-    std::sort(uniqueOutputs.begin(), uniqueOutputs.end(), [](const Output &left, const Output &right) {
-        QString leftHash = outputSortKeyForCanonicalization(left);
-        QString rightHash = outputSortKeyForCanonicalization(right);
-        return leftHash < rightHash;
-    });
+    std::sort(uniqueInputs.begin(), uniqueInputs.end(), inputCanonicalLessThan);
+    std::sort(uniqueOutputs.begin(), uniqueOutputs.end(), outputCanonicalLessThan);
 
     body->setInputs(uniqueInputs);
     body->setOutputs(uniqueOutputs);

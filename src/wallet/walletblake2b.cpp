@@ -37,12 +37,12 @@ static const unsigned char kSigma[12][16] = {
     {14,10, 4, 8, 9,15,13, 6, 1,12, 0, 2,11, 7, 5, 3 }
 };
 
-inline quint64 rotr64(const quint64 x, const unsigned int c)
+quint64 rotr64(const quint64 x, const unsigned int c)
 {
     return (x >> c) | (x << (64U - c));
 }
 
-inline quint64 load64(const unsigned char *src)
+quint64 load64(const unsigned char *src)
 {
     quint64 value = 0;
     for (int i = 0; i < 8; ++i) {
@@ -51,14 +51,14 @@ inline quint64 load64(const unsigned char *src)
     return value;
 }
 
-inline void store64(unsigned char *dst, quint64 value)
+void store64(unsigned char *dst, quint64 value)
 {
     for (int i = 0; i < 8; ++i) {
         dst[i] = static_cast<unsigned char>((value >> (8 * i)) & 0xff);
     }
 }
 
-inline void g(quint64 &a, quint64 &b, quint64 &c, quint64 &d, quint64 x, quint64 y)
+void g(quint64 &a, quint64 &b, quint64 &c, quint64 &d, quint64 x, quint64 y)
 {
     a = a + b + x;
     d = rotr64(d ^ a, 32);

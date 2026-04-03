@@ -11,13 +11,25 @@
 #include "wallet/slatev4.h"
 #include "wallet/walletcryptobackend.h"
 #include "wallet/walletoutput.h"
+#include "locatedtxkernel.h"
+#include "nodeversion.h"
+#include "outputlisting.h"
+#include "outputprintable.h"
+#include "poolentry.h"
+#include "result.h"
+#include "tip.h"
 
 class NodeForeignApi;
 class QTimer;
+class GrinWalletNodeSyncService;
+class GrinWalletWorkflowService;
+class GrinWalletShortcutBridge;
 
 class GrinWalletController : public QObject
 {
     Q_OBJECT
+    friend class GrinWalletNodeSyncService;
+    friend class GrinWalletWorkflowService;
     Q_PROPERTY(bool walletExists READ walletExists NOTIFY walletChanged)
     Q_PROPERTY(bool walletUnlocked READ walletUnlocked NOTIFY walletChanged)
     Q_PROPERTY(QString walletName READ walletName NOTIFY walletChanged)
@@ -117,11 +129,6 @@ public:
     Q_INVOKABLE void setAutoLockOnAppDeactivate(bool enabled);
     Q_INVOKABLE QString encodeSlatepack(const QString &slateJson, const QString &sender = QString()) const;
     Q_INVOKABLE QString decodeSlatepack(const QString &slatepack) const;
-    bool processShortcutKey(int key);
-
-protected:
-    bool eventFilter(QObject *watched, QEvent *event) override;
-
 signals:
     void walletChanged();
     void nodeConfigChanged();
@@ -186,16 +193,35 @@ private:
     QString currentSlatepackAddress() const;
     QString currentPaymentProofAddress() const;
     QByteArray currentSlatepackSecret() const;
-    QStringList outgoingSlatepackRecipients(const SlateV4 &slate) const;
     QString resolvedNetworkName() const;
     void alignSlateVersionWithNode(SlateV4 *slate) const;
-    void runExternalInvoicePreflight(const SlateV4 &incomingSlate,
-                                     const SlateV4 &emittedSlate,
-                                     const QString &armoredSlatepack) const;
     void beginBroadcastWithInputPreflight(const QString &workflowId,
                                           const QJsonObject &txSkeleton);
+    QString resolveWorkflowIdBySlateId(const SlateV4 &slate) const;
+    quint64 resolveWorkflowAmountNano(const QString &workflowId,
+                                      const QJsonObject &localContext,
+                                      const QString &amount) const;
+    static QJsonObject legacyInvoiceParticipantFromContext(const QJsonObject &localContext);
+    static bool transactionEntryLessThan(const QJsonObject &left, const QJsonObject &right);
+    static bool walletOutputLessThan(const WalletOutput &left, const WalletOutput &right);
+    void markTransactionBroadcastPending(const QString &workflowId);
+    void markTransactionBroadcastFailed(const QString &workflowId, const QString &message);
+    void markTransactionKernelConfirmed(const QString &workflowId, qulonglong confirmedHeight);
+    void markTransactionKernelBroadcasted(const QString &workflowId);
+    void markTransactionBroadcastRejected(const QString &workflowId, const QString &message);
+    void markTransactionBroadcastSucceeded(const QString &workflowId);
+    void onSessionLockTimeout();
+    void onApplicationStateChanged(Qt::ApplicationState state);
+    QJsonObject loadDocumentForService() const;
+    bool saveDocumentForService(const QJsonObject &document) const;
+    quint32 nextChildIndexFromStateForService(const QJsonObject &walletState) const;
+    QJsonObject filterWorkflowContextsForTransactionsForService(const QJsonObject &contexts,
+                                                               const QJsonArray &transactions) const;
 
     NodeForeignApi *m_nodeApi;
+    GrinWalletNodeSyncService *m_nodeSyncService;
+    GrinWalletWorkflowService *m_workflowService;
+    GrinWalletShortcutBridge *m_shortcutBridge;
     QTimer *m_autoRefreshTimer;
     QTimer *m_sessionLockTimer;
     bool m_walletExists;
