@@ -1,0 +1,673 @@
+#include "grinwalletstorage.h"
+
+#include <QCryptographicHash>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonParseError>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QUrl>
+
+#ifdef Q_OS_WASM
+#include <emscripten.h>
+#endif
+
+#include "walletscanner.h"
+
+#ifdef Q_OS_WASM
+EM_JS(void, browserLocalStorageSet, (const char *key, const char *value), {
+    if (typeof localStorage === 'undefined' || !key || !value) {
+        return;
+    }
+    localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
+});
+
+EM_JS(char *, browserLocalStorageGet, (const char *key), {
+    if (typeof localStorage === 'undefined' || !key) {
+        return 0;
+    }
+    const value = localStorage.getItem(UTF8ToString(key));
+    if (value === null || value === undefined) {
+        return 0;
+    }
+    return stringToNewUTF8(value);
+});
+#endif
+
+namespace {
+
+const char *kAppSettingsKey = "app_settings";
+const char *kAutoLockOnDeactivateKey = "auto_lock_on_app_deactivate";
+const char *kWalletStorePath = "/grin-wallet/browser-wallet.json";
+#ifdef Q_OS_WASM
+const char *kWalletLocalStorageKey = "grinffindor.browserWallet";
+#endif
+const char *kMainnetNodeUrl = "https://mainnet.grinffindor.org/v2/foreign";
+const char *kTestnetNodeUrl = "https://testnet.grinffindor.org/v2/foreign";
+
+QString defaultNetworkName()
+{
+    return QStringLiteral("mainnet");
+}
+
+bool isAcceptedNetworkName(const QString &networkName)
+{
+    const QString normalized = networkName.trimmed().toLower();
+    return normalized == QStringLiteral("mainnet") || normalized == QStringLiteral("testnet");
+}
+
+QString defaultNodeUrlForNetwork(const QString &networkName)
+{
+    return networkName.trimmed().toLower() == QStringLiteral("testnet")
+        ? QString::fromUtf8(kTestnetNodeUrl)
+        : QString::fromUtf8(kMainnetNodeUrl);
+}
+
+QString inferNetworkName(const QString &networkName, const QString &nodeUrl)
+{
+    const QString normalizedNetwork = networkName.trimmed().toLower();
+    if (isAcceptedNetworkName(normalizedNetwork)) {
+        return normalizedNetwork;
+    }
+
+    const QString normalizedUrl = nodeUrl.trimmed().toLower();
+    if (normalizedUrl.contains(QStringLiteral("testnet."))) {
+        return QStringLiteral("testnet");
+    }
+
+    return defaultNetworkName();
+}
+
+QString amountStringFromJson(const QJsonObject &balances, const QString &key)
+{
+    return balances.value(key).toString(QStringLiteral("0.000000000"));
+}
+
+bool isNodeUrlAccepted(const QString &nodeUrl)
+{
+    const QUrl parsed = QUrl::fromUserInput(nodeUrl.trimmed());
+    return parsed.isValid()
+        && !parsed.scheme().trimmed().isEmpty()
+        && !parsed.host().trimmed().isEmpty()
+        && (parsed.scheme() == QStringLiteral("http") || parsed.scheme() == QStringLiteral("https"));
+}
+
+QString storageRootPath()
+{
+#ifdef Q_OS_WASM
+    return QStringLiteral("/persistent");
+#else
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    return appData.isEmpty() ? QStringLiteral(".wallet-data") : appData;
+#endif
+}
+
+QString storageFilePath()
+{
+    return storageRootPath() + QString::fromUtf8(kWalletStorePath);
+}
+
+void ensureStorageReady()
+{
+    const QFileInfo info(storageFilePath());
+    QDir().mkpath(info.absolutePath());
+#ifdef Q_OS_WASM
+    EM_ASM({
+        if (typeof FS !== "undefined" && typeof IDBFS !== "undefined") {
+            try {
+                FS.mkdir('/persistent');
+            } catch (e) {}
+            if (!Module.grinWalletIdbMounted) {
+                FS.mount(IDBFS, {}, '/persistent');
+                Module.grinWalletIdbMounted = true;
+                FS.syncfs(true, function(err) {});
+            }
+        }
+    });
+#endif
+}
+
+void flushStorage()
+{
+#ifdef Q_OS_WASM
+    EM_ASM({
+        if (typeof FS !== "undefined" && Module.grinWalletIdbMounted) {
+            FS.syncfs(false, function(err) {});
+        }
+    });
+#endif
+}
+
+bool validateEncryptedSeedObject(const QJsonObject &encryptedSeed, QString *errorOut)
+{
+    const int version = encryptedSeed.value(QStringLiteral("version")).toInt();
+    const QStringList requiredFields = {
+        QStringLiteral("salt"),
+        QStringLiteral("nonce"),
+        QStringLiteral("cipher"),
+        QStringLiteral("mac")
+    };
+
+    if (version < 1) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Backup seed payload is missing a valid encryption version.");
+        }
+        return false;
+    }
+
+    for (int i = 0; i < requiredFields.size(); ++i) {
+        if (encryptedSeed.value(requiredFields.at(i)).toString().trimmed().isEmpty()) {
+            if (errorOut) {
+                *errorOut = QStringLiteral("Backup seed payload is incomplete.");
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool normalizeImportedDocument(const QJsonObject &candidate, QJsonObject *documentOut, QString *errorOut)
+{
+    if (!documentOut) {
+        return false;
+    }
+
+    QJsonObject document = GrinWalletStorage::defaultDocument();
+    QJsonObject wallet = candidate.value(QStringLiteral("wallet")).toObject();
+    if (wallet.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Backup does not contain a wallet section.");
+        }
+        return false;
+    }
+
+    const QJsonObject encryptedSeed = wallet.value(QStringLiteral("encrypted_seed")).toObject();
+    if (!validateEncryptedSeedObject(encryptedSeed, errorOut)) {
+        return false;
+    }
+
+    const QString walletName = wallet.value(QStringLiteral("name")).toString().trimmed();
+    if (walletName.isEmpty()) {
+        if (errorOut) {
+            *errorOut = QStringLiteral("Backup wallet name is missing.");
+        }
+        return false;
+    }
+
+    QJsonObject node = candidate.value(QStringLiteral("node")).toObject();
+    const QString importedNodeUrl = node.value(QStringLiteral("url")).toString().trimmed();
+    QJsonObject normalizedNode = document.value(QStringLiteral("node")).toObject();
+    const QString importedNetwork =
+        inferNetworkName(node.value(QStringLiteral("network")).toString(), importedNodeUrl);
+    normalizedNode.insert(QStringLiteral("network"), importedNetwork);
+    normalizedNode.insert(QStringLiteral("url"),
+                          isNodeUrlAccepted(importedNodeUrl)
+                              ? importedNodeUrl
+                              : defaultNodeUrlForNetwork(importedNetwork));
+    document.insert(QStringLiteral("node"), normalizedNode);
+
+    QJsonObject normalizedWallet = wallet;
+    normalizedWallet.insert(QStringLiteral("name"), walletName);
+    GrinWalletStorage::setWalletForNetwork(&document, importedNetwork, normalizedWallet);
+    document.insert(QStringLiteral("wallet"), normalizedWallet);
+
+    QJsonObject walletState = candidate.value(QStringLiteral("wallet_state")).toObject();
+    QJsonObject normalizedState = document.value(QStringLiteral("wallet_state")).toObject();
+    if (!walletState.isEmpty()) {
+        normalizedState.insert(QStringLiteral("balances"),
+                               walletState.value(QStringLiteral("balances")).isObject()
+                                   ? walletState.value(QStringLiteral("balances")).toObject()
+                                   : normalizedState.value(QStringLiteral("balances")).toObject());
+        normalizedState.insert(QStringLiteral("scan_height"),
+                               walletState.value(QStringLiteral("scan_height")).toVariant().toLongLong());
+        normalizedState.insert(QStringLiteral("restore_leaf_index"),
+                               qMax<qint64>(0, walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toLongLong()));
+        normalizedState.insert(QStringLiteral("next_child_index"),
+                               qMax<qint64>(0, walletState.value(QStringLiteral("next_child_index")).toVariant().toLongLong()));
+        normalizedState.insert(QStringLiteral("outputs"),
+                               walletState.value(QStringLiteral("outputs")).isArray()
+                                   ? walletState.value(QStringLiteral("outputs")).toArray()
+                                   : QJsonArray());
+        normalizedState.insert(QStringLiteral("transactions"),
+                               walletState.value(QStringLiteral("transactions")).isArray()
+                                   ? walletState.value(QStringLiteral("transactions")).toArray()
+                                   : QJsonArray());
+        if (walletState.value(QStringLiteral("transaction_rescan_backup")).isArray()) {
+            normalizedState.insert(QStringLiteral("transaction_rescan_backup"),
+                                   walletState.value(QStringLiteral("transaction_rescan_backup")).toArray());
+        }
+        if (walletState.contains(QStringLiteral("last_sync_mode"))) {
+            normalizedState.insert(QStringLiteral("last_sync_mode"),
+                                   walletState.value(QStringLiteral("last_sync_mode")).toString());
+        }
+        if (walletState.contains(QStringLiteral("last_synced_at"))) {
+            normalizedState.insert(QStringLiteral("last_synced_at"),
+                                   walletState.value(QStringLiteral("last_synced_at")).toString());
+        }
+    }
+    document.insert(QStringLiteral("wallet_state"), normalizedState);
+    GrinWalletStorage::setWalletStateForNetwork(&document, importedNetwork, normalizedState);
+
+    const QJsonObject normalizedContexts =
+        candidate.value(QStringLiteral("workflow_contexts")).isObject()
+            ? candidate.value(QStringLiteral("workflow_contexts")).toObject()
+            : QJsonObject();
+    document.insert(QStringLiteral("workflow_contexts"), normalizedContexts);
+    GrinWalletStorage::setWorkflowContextsForNetwork(&document, importedNetwork, normalizedContexts);
+
+    *documentOut = document;
+    return true;
+}
+
+} // namespace
+
+QJsonObject GrinWalletStorage::defaultWalletState()
+{
+    QJsonObject balances;
+    balances.insert(QStringLiteral("total"), QStringLiteral("0.000000000"));
+    balances.insert(QStringLiteral("spendable"), QStringLiteral("0.000000000"));
+    balances.insert(QStringLiteral("locked"), QStringLiteral("0.000000000"));
+    balances.insert(QStringLiteral("immature"), QStringLiteral("0.000000000"));
+    balances.insert(QStringLiteral("awaiting_confirmation"), QStringLiteral("0.000000000"));
+    balances.insert(QStringLiteral("awaiting_finalization"), QStringLiteral("0.000000000"));
+
+    QJsonObject walletState;
+    walletState.insert(QStringLiteral("balances"), balances);
+    walletState.insert(QStringLiteral("scan_height"), 0);
+    walletState.insert(QStringLiteral("restore_leaf_index"), 0);
+    walletState.insert(QStringLiteral("next_child_index"), 1);
+    walletState.insert(QStringLiteral("outputs"), QJsonArray());
+    walletState.insert(QStringLiteral("transactions"), QJsonArray());
+    return walletState;
+}
+
+QJsonObject GrinWalletStorage::defaultWalletMetadata()
+{
+    return QJsonObject();
+}
+
+QJsonObject GrinWalletStorage::defaultDocument()
+{
+    const QJsonObject walletState = defaultWalletState();
+    QJsonObject root;
+    root.insert(QStringLiteral("wallet"), defaultWalletMetadata());
+    QJsonObject nodeConfig;
+    nodeConfig.insert(QStringLiteral("network"), defaultNetworkName());
+    nodeConfig.insert(QStringLiteral("url"), defaultNodeUrlForNetwork(defaultNetworkName()));
+    root.insert(QStringLiteral("node"), nodeConfig);
+    root.insert(QStringLiteral("wallet_state"), walletState);
+    root.insert(QStringLiteral("workflow_contexts"), QJsonObject());
+
+    QJsonObject walletStates;
+    walletStates.insert(defaultNetworkName(), walletState);
+    walletStates.insert(QStringLiteral("testnet"), defaultWalletState());
+    root.insert(QStringLiteral("wallet_states"), walletStates);
+
+    QJsonObject walletsByNetwork;
+    walletsByNetwork.insert(defaultNetworkName(), defaultWalletMetadata());
+    walletsByNetwork.insert(QStringLiteral("testnet"), defaultWalletMetadata());
+    root.insert(QStringLiteral("wallets_by_network"), walletsByNetwork);
+
+    QJsonObject workflowContextsByNetwork;
+    workflowContextsByNetwork.insert(defaultNetworkName(), QJsonObject());
+    workflowContextsByNetwork.insert(QStringLiteral("testnet"), QJsonObject());
+    root.insert(QStringLiteral("workflow_contexts_by_network"), workflowContextsByNetwork);
+    return root;
+}
+
+QJsonObject GrinWalletStorage::walletForNetwork(const QJsonObject &document, const QString &networkName)
+{
+    const QJsonObject walletsByNetwork = document.value(QStringLiteral("wallets_by_network")).toObject();
+    return walletsByNetwork.value(networkName).toObject();
+}
+
+QJsonObject GrinWalletStorage::walletStateForNetwork(const QJsonObject &document, const QString &networkName)
+{
+    const QJsonObject walletStates = document.value(QStringLiteral("wallet_states")).toObject();
+    const QJsonObject state = walletStates.value(networkName).toObject();
+    return state.isEmpty() ? defaultWalletState() : state;
+}
+
+QJsonObject GrinWalletStorage::workflowContextsForNetwork(const QJsonObject &document, const QString &networkName)
+{
+    const QJsonObject contextsByNetwork = document.value(QStringLiteral("workflow_contexts_by_network")).toObject();
+    return contextsByNetwork.value(networkName).toObject();
+}
+
+void GrinWalletStorage::setWalletForNetwork(QJsonObject *document,
+                                            const QString &networkName,
+                                            const QJsonObject &wallet)
+{
+    if (!document) {
+        return;
+    }
+
+    QJsonObject walletsByNetwork = document->value(QStringLiteral("wallets_by_network")).toObject();
+    walletsByNetwork.insert(networkName, wallet);
+    document->insert(QStringLiteral("wallets_by_network"), walletsByNetwork);
+}
+
+void GrinWalletStorage::setWalletStateForNetwork(QJsonObject *document,
+                                                 const QString &networkName,
+                                                 const QJsonObject &walletState)
+{
+    if (!document) {
+        return;
+    }
+
+    QJsonObject walletStates = document->value(QStringLiteral("wallet_states")).toObject();
+    walletStates.insert(networkName, walletState);
+    document->insert(QStringLiteral("wallet_states"), walletStates);
+}
+
+void GrinWalletStorage::setWorkflowContextsForNetwork(QJsonObject *document,
+                                                      const QString &networkName,
+                                                      const QJsonObject &contexts)
+{
+    if (!document) {
+        return;
+    }
+
+    QJsonObject contextsByNetwork = document->value(QStringLiteral("workflow_contexts_by_network")).toObject();
+    contextsByNetwork.insert(networkName, contexts);
+    document->insert(QStringLiteral("workflow_contexts_by_network"), contextsByNetwork);
+}
+
+void GrinWalletStorage::syncActiveNetworkView(QJsonObject *document, const QString &networkName)
+{
+    if (!document) {
+        return;
+    }
+
+    document->insert(QStringLiteral("wallet"), walletForNetwork(*document, networkName));
+    document->insert(QStringLiteral("wallet_state"), walletStateForNetwork(*document, networkName));
+    document->insert(QStringLiteral("workflow_contexts"), workflowContextsForNetwork(*document, networkName));
+}
+
+void GrinWalletStorage::persistActiveNetworkView(QJsonObject *document, const QString &networkName)
+{
+    if (!document) {
+        return;
+    }
+
+    setWalletForNetwork(document, networkName, document->value(QStringLiteral("wallet")).toObject());
+    setWalletStateForNetwork(document, networkName, document->value(QStringLiteral("wallet_state")).toObject());
+    setWorkflowContextsForNetwork(document,
+                                  networkName,
+                                  document->value(QStringLiteral("workflow_contexts")).toObject());
+}
+
+QJsonObject GrinWalletStorage::ensureDocumentSchema(const QJsonObject &rawDocument)
+{
+    QJsonObject document = rawDocument.isEmpty() ? defaultDocument() : rawDocument;
+    const QString networkName =
+        inferNetworkName(document.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
+                         document.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
+
+    QJsonObject walletStates = document.value(QStringLiteral("wallet_states")).toObject();
+    if (walletStates.isEmpty()) {
+        walletStates.insert(networkName,
+                            document.value(QStringLiteral("wallet_state")).toObject().isEmpty()
+                                ? defaultWalletState()
+                                : document.value(QStringLiteral("wallet_state")).toObject());
+    }
+    if (walletStates.value(QStringLiteral("mainnet")).toObject().isEmpty()) {
+        walletStates.insert(QStringLiteral("mainnet"), defaultWalletState());
+    }
+    if (walletStates.value(QStringLiteral("testnet")).toObject().isEmpty()) {
+        walletStates.insert(QStringLiteral("testnet"), defaultWalletState());
+    }
+    document.insert(QStringLiteral("wallet_states"), walletStates);
+
+    QJsonObject walletsByNetwork = document.value(QStringLiteral("wallets_by_network")).toObject();
+    if (walletsByNetwork.isEmpty()) {
+        walletsByNetwork.insert(networkName, document.value(QStringLiteral("wallet")).toObject());
+    }
+    if (walletsByNetwork.value(QStringLiteral("mainnet")).toObject().isEmpty()
+        && networkName != QStringLiteral("mainnet")) {
+        walletsByNetwork.insert(QStringLiteral("mainnet"), defaultWalletMetadata());
+    }
+    if (walletsByNetwork.value(QStringLiteral("testnet")).toObject().isEmpty()
+        && networkName != QStringLiteral("testnet")) {
+        walletsByNetwork.insert(QStringLiteral("testnet"), defaultWalletMetadata());
+    }
+    if (!walletsByNetwork.contains(QStringLiteral("mainnet"))) {
+        walletsByNetwork.insert(QStringLiteral("mainnet"), defaultWalletMetadata());
+    }
+    if (!walletsByNetwork.contains(QStringLiteral("testnet"))) {
+        walletsByNetwork.insert(QStringLiteral("testnet"), defaultWalletMetadata());
+    }
+    document.insert(QStringLiteral("wallets_by_network"), walletsByNetwork);
+
+    QJsonObject contextsByNetwork = document.value(QStringLiteral("workflow_contexts_by_network")).toObject();
+    if (contextsByNetwork.isEmpty()) {
+        contextsByNetwork.insert(networkName, document.value(QStringLiteral("workflow_contexts")).toObject());
+    }
+    if (contextsByNetwork.value(QStringLiteral("mainnet")).toObject().isEmpty()) {
+        contextsByNetwork.insert(QStringLiteral("mainnet"), QJsonObject());
+    }
+    if (contextsByNetwork.value(QStringLiteral("testnet")).toObject().isEmpty()) {
+        contextsByNetwork.insert(QStringLiteral("testnet"), QJsonObject());
+    }
+    document.insert(QStringLiteral("workflow_contexts_by_network"), contextsByNetwork);
+
+    QJsonObject node = document.value(QStringLiteral("node")).toObject();
+    node.insert(QStringLiteral("network"), networkName);
+    if (!isNodeUrlAccepted(node.value(QStringLiteral("url")).toString())) {
+        node.insert(QStringLiteral("url"), defaultNodeUrlForNetwork(networkName));
+    }
+    document.insert(QStringLiteral("node"), node);
+    return document;
+}
+
+QJsonObject GrinWalletStorage::normalizeDocumentSchema(const QJsonObject &rawDocument)
+{
+    QJsonObject document = ensureDocumentSchema(rawDocument);
+    const QString networkName =
+        inferNetworkName(document.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
+                         document.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
+    syncActiveNetworkView(&document, networkName);
+    return document;
+}
+
+QJsonObject GrinWalletStorage::extractImportedBackupDocument(const QByteArray &json, QString *errorOut)
+{
+    QJsonParseError parseError;
+    const QJsonDocument parsed = QJsonDocument::fromJson(json, &parseError);
+    if (!parsed.isObject()) {
+        if (errorOut) {
+            *errorOut = parseError.error == QJsonParseError::NoError
+                ? QStringLiteral("Backup text is not a JSON object.")
+                : QStringLiteral("Backup JSON could not be parsed: %1").arg(parseError.errorString());
+        }
+        return QJsonObject();
+    }
+
+    const QJsonObject root = parsed.object();
+    QJsonObject candidate = root;
+    if (root.value(QStringLiteral("backup_kind")).toString()
+        == QStringLiteral("grinffindor.encrypted_wallet_backup")) {
+        candidate = root.value(QStringLiteral("document")).toObject();
+    }
+
+    QJsonObject normalized;
+    if (!normalizeImportedDocument(candidate, &normalized, errorOut)) {
+        return QJsonObject();
+    }
+    return normalized;
+}
+
+QJsonObject GrinWalletStorage::loadDocument()
+{
+    ensureStorageReady();
+#ifdef Q_OS_WASM
+    if (char *storedJson = browserLocalStorageGet(kWalletLocalStorageKey)) {
+        const QByteArray localJson(storedJson);
+        free(storedJson);
+        const QJsonDocument localDoc = QJsonDocument::fromJson(localJson);
+        if (localDoc.isObject()) {
+            return normalizeDocumentSchema(localDoc.object());
+        }
+    }
+#endif
+    QFile file(storageFilePath());
+    if (!file.exists()) {
+        return defaultDocument();
+    }
+    if (!file.open(QIODevice::ReadOnly)) {
+        return defaultDocument();
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    return doc.isObject() ? normalizeDocumentSchema(doc.object()) : defaultDocument();
+}
+
+bool GrinWalletStorage::saveDocument(const QJsonObject &document)
+{
+    ensureStorageReady();
+    QJsonObject normalized = ensureDocumentSchema(document);
+    const QString networkName =
+        inferNetworkName(normalized.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
+                         normalized.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
+    persistActiveNetworkView(&normalized, networkName);
+    const QByteArray json = QJsonDocument(normalized).toJson(QJsonDocument::Indented);
+#ifdef Q_OS_WASM
+    browserLocalStorageSet(kWalletLocalStorageKey, json.constData());
+#endif
+    QSaveFile file(storageFilePath());
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        return false;
+    }
+    file.write(json);
+    if (!file.commit()) {
+        return false;
+    }
+    flushStorage();
+    return true;
+}
+
+GrinWalletStorage::LoadedState GrinWalletStorage::loadState(const QJsonObject &document)
+{
+    LoadedState state;
+    const QString activeNetwork =
+        inferNetworkName(document.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
+                         document.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
+    const QJsonObject wallet = walletForNetwork(document, activeNetwork);
+    const QJsonObject node = document.value(QStringLiteral("node")).toObject();
+    const QString storedNodeUrl = node.value(QStringLiteral("url")).toString();
+
+    state.walletExists = !wallet.isEmpty();
+    state.walletName = wallet.value(QStringLiteral("name")).toString();
+    state.seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
+    state.selectedNetwork = activeNetwork;
+    state.nodeUrl = isNodeUrlAccepted(storedNodeUrl)
+        ? storedNodeUrl
+        : defaultNodeUrlForNetwork(state.selectedNetwork);
+    state.autoLockOnDeactivate = document
+        .value(QLatin1String(kAppSettingsKey))
+        .toObject()
+        .value(QLatin1String(kAutoLockOnDeactivateKey))
+        .toBool(false);
+
+    return state;
+}
+
+GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject document, qulonglong chainHeight)
+{
+    RefreshedState state;
+    state.document = document;
+
+    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    const QJsonObject storedBalances = walletState.value(QStringLiteral("balances")).toObject();
+    state.scanHeight = static_cast<qulonglong>(walletState.value(QStringLiteral("scan_height")).toInt());
+
+    const qulonglong effectiveHeight = chainHeight > 0 ? chainHeight : state.scanHeight;
+    const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+
+    const QJsonObject recalculatedBalances = WalletScanner::balancesFromOutputs(outputs, effectiveHeight);
+    const QJsonObject balances = recalculatedBalances.isEmpty() ? storedBalances : recalculatedBalances;
+
+    if (balances != storedBalances) {
+        walletState.insert(QStringLiteral("balances"), balances);
+        state.document.insert(QStringLiteral("wallet_state"), walletState);
+        state.balancesChanged = true;
+    }
+
+    state.totalBalance = amountStringFromJson(balances, QStringLiteral("total"));
+    state.spendableBalance = amountStringFromJson(balances, QStringLiteral("spendable"));
+    state.lockedBalance = amountStringFromJson(balances, QStringLiteral("locked"));
+    state.immatureBalance = amountStringFromJson(balances, QStringLiteral("immature"));
+    state.awaitingConfirmationBalance = amountStringFromJson(balances, QStringLiteral("awaiting_confirmation"));
+    state.awaitingFinalizationBalance = amountStringFromJson(balances, QStringLiteral("awaiting_finalization"));
+
+    return state;
+}
+
+bool GrinWalletStorage::refreshTransactionConfirmations(QJsonObject *document, qulonglong chainHeight)
+{
+    if (!document) {
+        return false;
+    }
+
+    QJsonObject walletState = document->value(QStringLiteral("wallet_state")).toObject();
+    QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
+    bool changed = false;
+
+    for (int i = 0; i < transactions.size(); ++i) {
+        QJsonObject entry = transactions.at(i).toObject();
+        const qint64 confirmedHeight = entry.value(QStringLiteral("confirmed_height")).toVariant().toLongLong();
+        const QString status = entry.value(QStringLiteral("status")).toString();
+
+        int confirmations = 0;
+        if (confirmedHeight > 0 && chainHeight >= static_cast<qulonglong>(confirmedHeight)) {
+            confirmations = static_cast<int>(chainHeight - static_cast<qulonglong>(confirmedHeight) + 1);
+        }
+
+        if (entry.value(QStringLiteral("confirmations")).toInt() != confirmations) {
+            entry.insert(QStringLiteral("confirmations"), confirmations);
+            changed = true;
+        }
+
+        if (confirmedHeight > 0 && confirmations > 0 && status != QStringLiteral("confirmed")) {
+            entry.insert(QStringLiteral("status"), QStringLiteral("confirmed"));
+            changed = true;
+        }
+
+        transactions.replace(i, entry);
+    }
+
+    if (changed) {
+        walletState.insert(QStringLiteral("transactions"), transactions);
+        document->insert(QStringLiteral("wallet_state"), walletState);
+    }
+
+    return changed;
+}
+
+bool GrinWalletStorage::storeWorkflowContext(QJsonObject *document,
+                                             const QString &workflowId,
+                                             const QJsonObject &context)
+{
+    if (!document || workflowId.isEmpty()) {
+        return false;
+    }
+
+    QJsonObject contexts = document->value(QStringLiteral("workflow_contexts")).toObject();
+    contexts.insert(workflowId, context);
+    document->insert(QStringLiteral("workflow_contexts"), contexts);
+    return true;
+}
+
+QJsonObject GrinWalletStorage::workflowContext(const QJsonObject &document, const QString &workflowId)
+{
+    if (workflowId.isEmpty()) {
+        return QJsonObject();
+    }
+
+    return document.value(QStringLiteral("workflow_contexts")).toObject().value(workflowId).toObject();
+}
