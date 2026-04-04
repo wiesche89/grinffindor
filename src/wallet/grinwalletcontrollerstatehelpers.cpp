@@ -128,22 +128,25 @@ bool GrinWalletController::transactionEntryLessThan(const QJsonObject &left, con
  */
 bool GrinWalletController::walletOutputLessThan(const WalletOutput &left, const WalletOutput &right)
 {
-    if (left.spent != right.spent) {
-        return !left.spent && right.spent;
+    if (left.height != right.height) {
+        return left.height > right.height;
     }
-    if (left.locked != right.locked) {
-        return left.locked && !right.locked;
+    if (left.childIndex != right.childIndex) {
+        return left.childIndex > right.childIndex;
     }
     if (left.pending != right.pending) {
         return left.pending && !right.pending;
     }
+    if (left.locked != right.locked) {
+        return left.locked && !right.locked;
+    }
+    if (left.spent != right.spent) {
+        return !left.spent && right.spent;
+    }
     if (left.onChain != right.onChain) {
         return left.onChain && !right.onChain;
     }
-    if (left.height != right.height) {
-        return left.height > right.height;
-    }
-    return left.commitment < right.commitment;
+    return left.commitment > right.commitment;
 }
 
 /**

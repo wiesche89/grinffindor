@@ -2,32 +2,21 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Rectangle {
+BrowserWalletSectionCard {
     id: recoveryCard
     property var walletRoot
 
     width: parent ? parent.width : 0
-    radius: 24
-    color: walletRoot.nodeStatusMode() === "offline" ? "#34191d"
-         : (walletRoot.pendingRecoveryCount() > 0 ? "#352816" : "#132635")
-    border.color: walletRoot.recoveryBannerColor()
+    fillColor: walletRoot.nodeStatusMode() === "offline" ? "#34191d"
+             : (walletRoot.pendingRecoveryCount() > 0 ? "#352816" : "#132635")
+    strokeColor: walletRoot.recoveryBannerColor()
+    title: walletRoot.tf("browser_wallet_recovery_title", "Operational Recovery")
     visible: walletRoot.recoveryBannerVisible()
-    implicitHeight: recoveryColumn.implicitHeight + 30
 
     ColumnLayout {
         id: recoveryColumn
-        anchors.fill: parent
-        anchors.margins: 16
+        width: parent.width
         spacing: 10
-
-        Label {
-            Layout.fillWidth: true
-            text: walletRoot.tf("browser_wallet_recovery_title", "Operational Recovery")
-            color: "#ffffff"
-            font.pixelSize: 24
-            font.weight: Font.Bold
-            wrapMode: Text.WordWrap
-        }
 
         Label {
             Layout.fillWidth: true

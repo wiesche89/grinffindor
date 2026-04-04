@@ -8,46 +8,24 @@ Item {
 
     implicitHeight: settingsCard.implicitHeight
 
-    Rectangle {
+    BrowserWalletSectionCard {
         id: settingsCard
         width: parent.width
-        radius: 26
-        color: "#0f1b26"
-        border.color: "#26465b"
-        implicitHeight: settingsColumn.implicitHeight + 34
+        title: walletRoot.tf("browser_wallet_nav_settings", "Settings")
 
         ColumnLayout {
             id: settingsColumn
-            anchors.fill: parent
-            anchors.margins: 18
+            width: parent.width
             spacing: 12
 
-            Label {
-                text: walletRoot.tf("browser_wallet_nav_settings", "Settings")
-                color: "#ffffff"
-                font.pixelSize: 28
-                font.weight: Font.Bold
-            }
-
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#132635"
-                border.color: "#2a4f64"
-                implicitHeight: overviewSettingsColumn.implicitHeight + 20
+                title: walletRoot.tf("browser_wallet_network_title", "Wallet Network")
+                description: walletRoot.tf("browser_wallet_backup_export_note", "Export a password-encrypted wallet backup before moving devices or clearing browser storage. This backup keeps local history, scan state, and the encrypted seed together.")
 
                 ColumnLayout {
                     id: overviewSettingsColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 6
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_network_title", "Wallet Network")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
 
                     Label {
                         Layout.fillWidth: true
@@ -55,42 +33,17 @@ Item {
                         color: "#8ff0c8"
                         wrapMode: Text.WordWrap
                     }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_backup_export_note", "Export a password-encrypted wallet backup before moving devices or clearing browser storage. This backup keeps local history, scan state, and the encrypted seed together.")
-                        color: "#d7e9f4"
-                        wrapMode: Text.WordWrap
-                    }
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#132635"
-                border.color: "#2a4f64"
-                implicitHeight: seedSettingsColumn.implicitHeight + 20
+                title: walletRoot.tf("browser_wallet_seed_manage_title", "Seed Phrase")
+                description: walletRoot.tf("browser_wallet_seed_manage_note", "Reveal the seed phrase only when you need to verify or back it up. Password confirmation is required every time.")
 
                 ColumnLayout {
                     id: seedSettingsColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 8
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_seed_manage_title", "Seed Phrase")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_seed_manage_note", "Reveal the seed phrase only when you need to verify or back it up. Password confirmation is required every time.")
-                        color: "#d7e9f4"
-                        wrapMode: Text.WordWrap
-                    }
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -129,32 +82,14 @@ Item {
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#132635"
-                border.color: "#2a4f64"
-                implicitHeight: securitySettingsColumn.implicitHeight + 20
+                title: walletRoot.tf("settings_security_title", "Security")
+                description: walletRoot.tf("settings_auto_lock_note", "Lock the wallet automatically when the app loses focus or is minimized.")
 
                 ColumnLayout {
                     id: securitySettingsColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 8
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("settings_security_title", "Security")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("settings_auto_lock_note", "Lock the wallet automatically when the app loses focus or is minimized.")
-                        color: "#d7e9f4"
-                        wrapMode: Text.WordWrap
-                    }
 
                     Switch {
                         Layout.alignment: Qt.AlignLeft
@@ -169,25 +104,15 @@ Item {
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#132635"
-                border.color: walletRoot.storageStatusColor()
-                implicitHeight: storageColumn.implicitHeight + 20
+                title: walletRoot.tf("browser_wallet_storage_title", "Storage Durability")
+                fillColor: "#132635"
+                strokeColor: walletRoot.storageStatusColor()
 
                 ColumnLayout {
                     id: storageColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 6
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_storage_title", "Storage Durability")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
 
                     Label {
                         Layout.fillWidth: true
@@ -211,32 +136,14 @@ Item {
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#132635"
-                border.color: "#2a4f64"
-                implicitHeight: backupSettingsColumn.implicitHeight + 20
+                title: walletRoot.tf("browser_wallet_backup_export", "Encrypted Backup")
+                description: walletRoot.tf("browser_wallet_backup_download_note", "Download a fresh encrypted backup file for this wallet. Inline display and clipboard copy are intentionally not offered here.")
 
                 ColumnLayout {
                     id: backupSettingsColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 8
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_backup_export", "Encrypted Backup")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_backup_download_note", "Download a fresh encrypted backup file for this wallet. Inline display and clipboard copy are intentionally not offered here.")
-                        color: "#d7e9f4"
-                        wrapMode: Text.WordWrap
-                    }
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -259,25 +166,13 @@ Item {
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#132635"
-                border.color: "#2a4f64"
-                implicitHeight: nodeSettingsColumn.implicitHeight + 20
+                title: walletRoot.tf("browser_wallet_node_title", "External Node")
 
                 ColumnLayout {
                     id: nodeSettingsColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 8
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_node_title", "External Node")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
 
                     TextField {
                         id: nodeUrlField
@@ -339,23 +234,20 @@ Item {
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: walletRoot.nodeStatusMode() === "offline" ? "#34191d"
-                     : (walletRoot.nodeStatusMode() === "connecting" ? "#2d2415" : "#132635")
-                border.color: walletRoot.recoveryBannerColor()
-                implicitHeight: settingsStatusColumn.implicitHeight + 20
+                fillColor: walletRoot.nodeStatusMode() === "offline" ? "#34191d"
+                         : (walletRoot.nodeStatusMode() === "connecting" ? "#2d2415" : "#132635")
+                strokeColor: walletRoot.recoveryBannerColor()
+                title: walletRoot.tf("browser_wallet_operational_status", "Operational Status")
 
                 ColumnLayout {
                     id: settingsStatusColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 6
 
                     Label {
                         Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_operational_status", "Operational Status") + ": " + grinWalletController.syncStatus
+                        text: grinWalletController.syncStatus
                         color: "#ffffff"
                         wrapMode: Text.WordWrap
                     }
@@ -371,25 +263,13 @@ Item {
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#132635"
-                border.color: "#2a4f64"
-                implicitHeight: balanceSettingsColumn.implicitHeight + 20
+                title: walletRoot.tf("browser_wallet_balances_title", "Wallet Balances")
 
                 ColumnLayout {
                     id: balanceSettingsColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 8
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_balances_title", "Wallet Balances")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
 
                     GridLayout {
                         Layout.fillWidth: true
@@ -413,32 +293,14 @@ Item {
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#132635"
-                border.color: "#2a4f64"
-                implicitHeight: maintenanceSettingsColumn.implicitHeight + 20
+                title: walletRoot.tf("browser_wallet_maintenance_title", "Wallet Maintenance")
+                description: walletRoot.tf("browser_wallet_maintenance_note", "Remove local (off-chain) UTXOs and cancelled transactions to clean up your wallet.")
 
                 ColumnLayout {
                     id: maintenanceSettingsColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 8
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_maintenance_title", "Wallet Maintenance")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_maintenance_note", "Remove local (off-chain) UTXOs and cancelled transactions to clean up your wallet.")
-                        color: "#d7e9f4"
-                        wrapMode: Text.WordWrap
-                    }
 
                     Label {
                         Layout.fillWidth: true
@@ -462,32 +324,17 @@ Item {
                 }
             }
 
-            Rectangle {
+            BrowserWalletPanel {
                 Layout.fillWidth: true
-                radius: 16
-                color: "#34191d"
-                border.color: "#8b3c46"
-                implicitHeight: dangerSettingsColumn.implicitHeight + 20
+                fillColor: "#34191d"
+                strokeColor: "#8b3c46"
+                title: walletRoot.tf("browser_wallet_danger_title", "Danger Zone")
+                description: walletRoot.tf("browser_wallet_delete_note", "Delete the currently selected wallet only if you have verified your backup and seed phrase.")
+                descriptionColor: "#ffd6d6"
 
                 ColumnLayout {
                     id: dangerSettingsColumn
-                    anchors.fill: parent
-                    anchors.margins: 10
                     spacing: 8
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_danger_title", "Danger Zone")
-                        color: "#ffffff"
-                        wrapMode: Text.WordWrap
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_delete_note", "Delete the currently selected wallet only if you have verified your backup and seed phrase.")
-                        color: "#ffd6d6"
-                        wrapMode: Text.WordWrap
-                    }
 
                     RowLayout {
                         Layout.fillWidth: true

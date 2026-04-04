@@ -17,8 +17,11 @@
         <file>qml/pages/browserwallet/BrowserWalletHomeHistory.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletHomeOverview.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletHomeRecovery.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletMetricTile.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletPanel.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletPastePopup.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletRevealSeedPopup.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletSectionCard.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletSettingsSection.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletSidebar.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletSlatepackSection.qml</file>

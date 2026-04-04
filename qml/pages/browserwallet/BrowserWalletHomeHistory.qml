@@ -2,46 +2,29 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Rectangle {
+BrowserWalletSectionCard {
     id: historyCard
     property var walletRoot
 
     width: parent ? parent.width : 0
-    radius: 26
-    color: "#0f1b26"
-    border.color: "#26465b"
-    implicitHeight: historyColumn.implicitHeight + 34
+    title: walletRoot.tf("browser_wallet_history_title", "Transaction History")
 
     ColumnLayout {
         id: historyColumn
-        anchors.fill: parent
-        anchors.margins: 18
+        width: parent.width
         spacing: 12
-
-        Label {
-            text: walletRoot.tf("browser_wallet_history_title", "Transaction History")
-            color: "#ffffff"
-            font.pixelSize: 28
-            font.weight: Font.Bold
-        }
 
         Repeater {
             model: grinWalletController.transactionHistory
 
-            Rectangle {
+            BrowserWalletPanel {
                 property bool detailsExpanded: false
 
                 Layout.fillWidth: true
-                radius: 18
-                color: "#132635"
-                border.color: "#2a4f64"
-                implicitHeight: txColumn.implicitHeight + 24
                 visible: modelData.workflow_id !== undefined
 
                 ColumnLayout {
                     id: txColumn
-                    anchors.fill: parent
-                    anchors.margins: 12
                     spacing: 8
 
                     Label {

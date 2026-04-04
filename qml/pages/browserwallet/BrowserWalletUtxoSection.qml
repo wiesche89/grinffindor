@@ -8,33 +8,16 @@ Item {
 
     implicitHeight: utxoCard.implicitHeight
 
-    Rectangle {
+    BrowserWalletSectionCard {
         id: utxoCard
         width: parent.width
-        radius: 26
-        color: "#0f1b26"
-        border.color: "#26465b"
-        implicitHeight: utxoColumn.implicitHeight + 34
+        title: walletRoot.tf("browser_wallet_utxo_title", "Wallet Outputs")
+        subtitle: walletRoot.tf("browser_wallet_utxo_note", "Tracked outputs, their wallet state, and the commitments currently held in the local wallet.")
 
         ColumnLayout {
             id: utxoColumn
-            anchors.fill: parent
-            anchors.margins: 18
+            width: parent.width
             spacing: 12
-
-            Label {
-                text: walletRoot.tf("browser_wallet_utxo_title", "Wallet Outputs")
-                color: "#ffffff"
-                font.pixelSize: 28
-                font.weight: Font.Bold
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: walletRoot.tf("browser_wallet_utxo_note", "Tracked outputs, their wallet state, and the commitments currently held in the local wallet.")
-                color: "#cbdbe4"
-                wrapMode: Text.WordWrap
-            }
 
             Label {
                 Layout.fillWidth: true
@@ -47,19 +30,13 @@ Item {
             Repeater {
                 model: grinWalletController.walletOutputs
 
-                Rectangle {
+                BrowserWalletPanel {
                     property bool detailsExpanded: false
 
                     Layout.fillWidth: true
-                    radius: 18
-                    color: "#132635"
-                    border.color: "#2a4f64"
-                    implicitHeight: outputColumn.implicitHeight + 24
 
                     ColumnLayout {
                         id: outputColumn
-                        anchors.fill: parent
-                        anchors.margins: 12
                         spacing: 8
 
                         Label {

@@ -2,38 +2,22 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Rectangle {
+BrowserWalletSectionCard {
     id: backupCard
     property var walletRoot
 
     width: parent ? parent.width : 0
-    radius: 26
-    color: "#143326"
-    border.color: "#2d7055"
+    fillColor: "#143326"
+    strokeColor: "#2d7055"
+    title: walletRoot.tf("browser_wallet_backup_title", "Write Down Your Seed Phrase Now")
+    subtitle: walletRoot.tf("browser_wallet_backup_note", "This is the only time the seed phrase is shown automatically. Store it offline and keep it away from screenshots, chat logs, and cloud notes.")
+    subtitleColor: "#d9f8e9"
     visible: grinWalletController.mnemonicPreview.length > 0
-    implicitHeight: backupColumn.implicitHeight + 34
 
     ColumnLayout {
         id: backupColumn
-        anchors.fill: parent
-        anchors.margins: 18
+        width: parent.width
         spacing: 12
-
-        Label {
-            Layout.fillWidth: true
-            text: walletRoot.tf("browser_wallet_backup_title", "Write Down Your Seed Phrase Now")
-            color: "#ffffff"
-            font.pixelSize: 26
-            font.weight: Font.Bold
-            wrapMode: Text.WordWrap
-        }
-
-        Label {
-            Layout.fillWidth: true
-            text: walletRoot.tf("browser_wallet_backup_note", "This is the only time the seed phrase is shown automatically. Store it offline and keep it away from screenshots, chat logs, and cloud notes.")
-            color: "#d9f8e9"
-            wrapMode: Text.WordWrap
-        }
 
         TextArea {
             id: mnemonicPreviewArea

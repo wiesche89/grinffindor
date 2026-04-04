@@ -261,7 +261,7 @@ Item {
         id: walletPageSettings
         category: "browserWalletPage"
         property string walletNameDraft: ""
-        property string amountDraft: ""
+        property string amountDraft: "1"
         property string noteDraft: ""
     }
 
