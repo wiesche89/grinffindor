@@ -240,7 +240,27 @@ void GrinWalletController::refreshStateFromStorage()
     m_immatureBalance = state.immatureBalance;
     m_awaitingConfirmationBalance = state.awaitingConfirmationBalance;
     m_awaitingFinalizationBalance = state.awaitingFinalizationBalance;
+    refreshDerivedModels();
+    emit walletSummaryChanged();
     emit statusChanged();
+}
+
+/**
+ * @brief Refreshes cached UI-facing list models and emits narrow change signals.
+ */
+void GrinWalletController::refreshDerivedModels()
+{
+    const QVariantList nextWalletOutputs = buildWalletOutputs();
+    if (m_walletOutputsCache != nextWalletOutputs) {
+        m_walletOutputsCache = nextWalletOutputs;
+        emit walletOutputsChanged();
+    }
+
+    const QVariantList nextTransactionHistory = buildTransactionHistory();
+    if (m_transactionHistoryCache != nextTransactionHistory) {
+        m_transactionHistoryCache = nextTransactionHistory;
+        emit transactionHistoryChanged();
+    }
 }
 
 /**
@@ -552,6 +572,7 @@ void GrinWalletController::refreshTransactionConfirmations()
 void GrinWalletController::refreshStoragePersistenceState()
 {
     m_storagePersistenceState = GrinWalletPlatformHelpers::storagePersistenceState();
+    emit storageStateChanged();
     emit statusChanged();
 }
 

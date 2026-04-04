@@ -6,6 +6,8 @@ Rectangle {
     id: topBar
     property var walletRoot
 
+    signal menuRequested()
+
     height: 72
     color: "#101822"
     border.color: "#234b63"
@@ -17,26 +19,16 @@ Rectangle {
         anchors.rightMargin: 18
         spacing: 14
 
-        Button {
-            text: walletRoot.tf("browser_wallet_back_lock", "Back (Lock)")
-            onClicked: {
-                if (grinWalletController.walletUnlocked)
-                    grinWalletController.lockWallet()
-                walletRoot.backRequested()
-            }
-        }
-
-        Label {
-            text: walletRoot.tf("browser_wallet_title", "Grin Browser Wallet") + " / "
-                  + walletRoot.tf("browser_wallet_self_custodial", "Self-Custodial")
-            color: "#f7fbff"
-            font.pixelSize: 28
-            font.weight: Font.Bold
+        ToolButton {
+            visible: walletRoot.compactNavigation && grinWalletController.walletUnlocked
+            text: walletRoot.tf("browser_wallet_menu", "Menu")
+            onClicked: topBar.menuRequested()
         }
 
         Item { Layout.fillWidth: true }
 
         Rectangle {
+            visible: !walletRoot.compactNavigation || topBar.width >= 760
             radius: 14
             color: "#122231"
             border.color: walletRoot.nodeStatusMode() === "offline" ? "#8a3f3f"

@@ -24,38 +24,146 @@ Rectangle {
             rowSpacing: 12
             columnSpacing: 12
 
-            Repeater {
-                model: [
-                    { title: walletRoot.tf("browser_wallet_metric_network", "Network"), value: grinWalletController.selectedNetwork },
-                    { title: walletRoot.tf("browser_wallet_metric_chain", "Chain Height"), value: "" + grinWalletController.chainHeight },
-                    { title: walletRoot.tf("browser_wallet_metric_scan", "Scan Height"), value: "" + grinWalletController.scanHeight },
-                    { title: walletRoot.tf("browser_wallet_metric_balance", "Spendable"), value: grinWalletController.spendableBalance + " GRIN" },
-                    { title: walletRoot.tf("browser_wallet_awaiting_confirmation", "Awaiting Confirmation"), value: grinWalletController.awaitingConfirmationBalance + " GRIN" },
-                    { title: walletRoot.tf("browser_wallet_locked", "Locked"), value: grinWalletController.lockedBalance + " GRIN" }
-                ]
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 20
+                color: "#0e1b27"
+                border.color: "#26465b"
+                implicitHeight: 88
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    radius: 20
-                    color: "#0e1b27"
-                    border.color: "#26465b"
-                    implicitHeight: 88
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 4
 
-                    Column {
-                        anchors.fill: parent
-                        anchors.margins: 14
-                        spacing: 4
+                    Label { text: walletRoot.tf("browser_wallet_metric_network", "Network"); color: "#8fb4c9"; font.pixelSize: 13 }
+                    Label {
+                        width: parent.width
+                        text: grinWalletController.selectedNetwork
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
+                    }
+                }
+            }
 
-                        Label { text: modelData.title; color: "#8fb4c9"; font.pixelSize: 13 }
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 20
+                color: "#0e1b27"
+                border.color: "#26465b"
+                implicitHeight: 88
 
-                        Label {
-                            width: parent.width
-                            text: modelData.value
-                            color: "#ffffff"
-                            wrapMode: Text.WordWrap
-                            font.pixelSize: 22
-                            font.weight: Font.Bold
-                        }
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 4
+
+                    Label { text: walletRoot.tf("browser_wallet_metric_chain", "Chain Height"); color: "#8fb4c9"; font.pixelSize: 13 }
+                    Label {
+                        width: parent.width
+                        text: "" + grinWalletController.chainHeight
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 20
+                color: "#0e1b27"
+                border.color: "#26465b"
+                implicitHeight: 88
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 4
+
+                    Label { text: walletRoot.tf("browser_wallet_metric_scan", "Scan Height"); color: "#8fb4c9"; font.pixelSize: 13 }
+                    Label {
+                        width: parent.width
+                        text: "" + grinWalletController.scanHeight
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 20
+                color: "#0e1b27"
+                border.color: "#26465b"
+                implicitHeight: 88
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 4
+
+                    Label { text: walletRoot.tf("browser_wallet_metric_balance", "Spendable"); color: "#8fb4c9"; font.pixelSize: 13 }
+                    Label {
+                        width: parent.width
+                        text: grinWalletController.spendableBalance + " GRIN"
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 20
+                color: "#0e1b27"
+                border.color: "#26465b"
+                implicitHeight: 88
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 4
+
+                    Label { text: walletRoot.tf("browser_wallet_awaiting_confirmation", "Awaiting Confirmation"); color: "#8fb4c9"; font.pixelSize: 13 }
+                    Label {
+                        width: parent.width
+                        text: grinWalletController.awaitingConfirmationBalance + " GRIN"
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 20
+                color: "#0e1b27"
+                border.color: "#26465b"
+                implicitHeight: 88
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 4
+
+                    Label { text: walletRoot.tf("browser_wallet_locked", "Locked"); color: "#8fb4c9"; font.pixelSize: 13 }
+                    Label {
+                        width: parent.width
+                        text: grinWalletController.lockedBalance + " GRIN"
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 22
+                        font.weight: Font.Bold
                     }
                 }
             }

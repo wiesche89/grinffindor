@@ -25,6 +25,7 @@ Item {
     property string pasteDialogTitle: ""
     property string pasteDialogPlaceholder: ""
     property string pasteDialogText: ""
+    property bool compactNavigation: width < 920
     property color slatepackStatusColor: "#8fb4c9"
     property var slatepackEditor: null
     property var decodedEditor: null
@@ -281,6 +282,7 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
+        onMenuRequested: mobileSidebarDrawer.open()
     }
 
     Column {
@@ -322,6 +324,7 @@ Item {
 
         BrowserWalletParts.BrowserWalletSidebar {
             walletRoot: root
+            visible: !root.compactNavigation
             Layout.preferredWidth: Math.min(300, root.width * 0.28)
             Layout.fillHeight: true
         }
@@ -364,6 +367,27 @@ Item {
                     walletRoot: root
                 }
             }
+        }
+    }
+
+    Drawer {
+        id: mobileSidebarDrawer
+        edge: Qt.LeftEdge
+        modal: true
+        interactive: root.compactNavigation
+        enabled: root.compactNavigation && grinWalletController.walletUnlocked
+        width: Math.min(root.width * 0.82, 340)
+        height: root.height
+        topMargin: topBar.height
+        background: Rectangle {
+            color: "#09121a"
+        }
+
+        BrowserWalletParts.BrowserWalletSidebar {
+            anchors.fill: parent
+            walletRoot: root
+            compactMode: true
+            onSectionSelected: mobileSidebarDrawer.close()
         }
     }
 
@@ -441,5 +465,10 @@ Item {
         root.syncNodeDraft()
         root.syncAuthNetworkDraft()
         root.updateSlatepackStatus("")
+    }
+
+    onCompactNavigationChanged: {
+        if (!compactNavigation)
+            mobileSidebarDrawer.close()
     }
 }

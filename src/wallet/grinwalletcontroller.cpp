@@ -46,6 +46,7 @@ GrinWalletController::GrinWalletController(QObject *parent) :
     m_shortcutBridge(new GrinWalletShortcutBridge(this)),
     m_autoRefreshTimer(0),
     m_sessionLockTimer(0),
+    m_initialized(false),
     m_walletExists(false),
     m_walletUnlocked(false),
     m_selectedNetwork(GrinWalletControllerHelpers::defaultNetworkName()),
@@ -260,7 +261,11 @@ void GrinWalletController::setSyncStatusMessage(const QString &status) { m_syncS
 /**
  * @brief Emits status-related change notifications.
  */
-void GrinWalletController::notifyStatusChanged() { emit statusChanged(); }
+void GrinWalletController::notifyStatusChanged()
+{
+    emit nodeStatusChanged();
+    emit statusChanged();
+}
 
 /**
  * @brief Sets chain height value.
@@ -473,6 +478,15 @@ void GrinWalletController::clearCurrentKernelCheck()
  */
 QVariantList GrinWalletController::transactionHistory() const
 {
+    return m_transactionHistoryCache;
+}
+
+/**
+ * @brief Builds wallet transaction history enriched with computed status data.
+ * @return
+ */
+QVariantList GrinWalletController::buildTransactionHistory() const
+{
     QVariantList history;
     const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
     const QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
@@ -517,6 +531,15 @@ QVariantList GrinWalletController::transactionHistory() const
  */
 QVariantList GrinWalletController::walletOutputs() const
 {
+    return m_walletOutputsCache;
+}
+
+/**
+ * @brief Builds wallet outputs enriched with maturity and spendability metadata.
+ * @return
+ */
+QVariantList GrinWalletController::buildWalletOutputs() const
+{
     const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     std::sort(outputs.begin(), outputs.end(), GrinWalletController::walletOutputLessThan);
@@ -560,6 +583,8 @@ QVariantList GrinWalletController::walletOutputs() const
     }
 
     return list;
+
+    return list;
 }
 
 /**
@@ -567,6 +592,13 @@ QVariantList GrinWalletController::walletOutputs() const
  */
 void GrinWalletController::initialize()
 {
+    if (m_initialized) {
+        refreshStoragePersistenceState();
+        return;
+    }
+
+    m_initialized = true;
+
     // -------------------------------------------------------------------------------------------------------
     // Setting Application Runtime Services
     // -------------------------------------------------------------------------------------------------------
@@ -621,6 +653,7 @@ void GrinWalletController::refreshNodeStatus()
         return;
     }
     m_syncStatus = QStringLiteral("Querying node...");
+    emit nodeStatusChanged();
     emit statusChanged();
     m_nodeApi->getTipAsync();
     m_nodeApi->getVersionAsync();

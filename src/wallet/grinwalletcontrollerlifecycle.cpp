@@ -398,6 +398,7 @@ void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
     }
 
     m_autoLockOnAppDeactivate = enabled;
+    emit settingsChanged();
     emit statusChanged();
     setLastError(QString());
     setLastInfo(enabled

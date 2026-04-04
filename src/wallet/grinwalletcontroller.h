@@ -34,16 +34,16 @@ class GrinWalletController : public QObject
     Q_PROPERTY(QString seedFingerprint READ seedFingerprint NOTIFY walletChanged)
     Q_PROPERTY(QString selectedNetwork READ selectedNetwork NOTIFY nodeConfigChanged)
     Q_PROPERTY(QString nodeUrl READ nodeUrl NOTIFY nodeConfigChanged)
-    Q_PROPERTY(QString storagePersistenceState READ storagePersistenceState NOTIFY statusChanged)
-    Q_PROPERTY(qulonglong chainHeight READ chainHeight NOTIFY statusChanged)
-    Q_PROPERTY(QString syncStatus READ syncStatus NOTIFY statusChanged)
-    Q_PROPERTY(QString totalBalance READ totalBalance NOTIFY statusChanged)
-    Q_PROPERTY(QString spendableBalance READ spendableBalance NOTIFY statusChanged)
-    Q_PROPERTY(QString lockedBalance READ lockedBalance NOTIFY statusChanged)
-    Q_PROPERTY(QString immatureBalance READ immatureBalance NOTIFY statusChanged)
-    Q_PROPERTY(QString awaitingConfirmationBalance READ awaitingConfirmationBalance NOTIFY statusChanged)
-    Q_PROPERTY(QString awaitingFinalizationBalance READ awaitingFinalizationBalance NOTIFY statusChanged)
-    Q_PROPERTY(qulonglong scanHeight READ scanHeight NOTIFY statusChanged)
+   Q_PROPERTY(QString storagePersistenceState READ storagePersistenceState NOTIFY storageStateChanged)
+   Q_PROPERTY(qulonglong chainHeight READ chainHeight NOTIFY nodeStatusChanged)
+   Q_PROPERTY(QString syncStatus READ syncStatus NOTIFY nodeStatusChanged)
+   Q_PROPERTY(QString totalBalance READ totalBalance NOTIFY walletSummaryChanged)
+   Q_PROPERTY(QString spendableBalance READ spendableBalance NOTIFY walletSummaryChanged)
+   Q_PROPERTY(QString lockedBalance READ lockedBalance NOTIFY walletSummaryChanged)
+   Q_PROPERTY(QString immatureBalance READ immatureBalance NOTIFY walletSummaryChanged)
+   Q_PROPERTY(QString awaitingConfirmationBalance READ awaitingConfirmationBalance NOTIFY walletSummaryChanged)
+   Q_PROPERTY(QString awaitingFinalizationBalance READ awaitingFinalizationBalance NOTIFY walletSummaryChanged)
+   Q_PROPERTY(qulonglong scanHeight READ scanHeight NOTIFY walletSummaryChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QString lastInfo READ lastInfo NOTIFY lastInfoChanged)
     Q_PROPERTY(QString workflowId READ workflowId NOTIFY workflowChanged)
@@ -51,9 +51,9 @@ class GrinWalletController : public QObject
     Q_PROPERTY(QString workflowMode READ workflowMode NOTIFY workflowChanged)
     Q_PROPERTY(QString workflowSlatepack READ workflowSlatepack NOTIFY workflowChanged)
     Q_PROPERTY(QString workflowDecoded READ workflowDecoded NOTIFY workflowChanged)
-    Q_PROPERTY(bool autoLockOnAppDeactivate READ autoLockOnAppDeactivate WRITE setAutoLockOnAppDeactivate NOTIFY statusChanged)
-    Q_PROPERTY(QVariantList walletOutputs READ walletOutputs NOTIFY statusChanged)
-    Q_PROPERTY(QVariantList transactionHistory READ transactionHistory NOTIFY statusChanged)
+   Q_PROPERTY(bool autoLockOnAppDeactivate READ autoLockOnAppDeactivate WRITE setAutoLockOnAppDeactivate NOTIFY settingsChanged)
+   Q_PROPERTY(QVariantList walletOutputs READ walletOutputs NOTIFY walletOutputsChanged)
+   Q_PROPERTY(QVariantList transactionHistory READ transactionHistory NOTIFY transactionHistoryChanged)
 
 public:
 /**
@@ -554,6 +554,22 @@ signals:
  */
     void statusChanged();
 /**
+ * @brief Processes node status changed.
+ */
+    void nodeStatusChanged();
+/**
+ * @brief Processes wallet summary changed.
+ */
+    void walletSummaryChanged();
+/**
+ * @brief Processes storage state changed.
+ */
+    void storageStateChanged();
+/**
+ * @brief Processes settings changed.
+ */
+    void settingsChanged();
+/**
  * @brief Processes last error changed.
  */
     void lastErrorChanged();
@@ -565,6 +581,14 @@ signals:
  * @brief Processes workflow changed.
  */
     void workflowChanged();
+/**
+ * @brief Processes wallet outputs changed.
+ */
+    void walletOutputsChanged();
+/**
+ * @brief Processes transaction history changed.
+ */
+    void transactionHistoryChanged();
 
 private:
 /**
@@ -579,6 +603,9 @@ private:
  * @brief Finalizes transaction store update.
  */
     void finalizeTransactionStoreUpdate(const QJsonObject &document, bool changed);
+   QVariantList buildWalletOutputs() const;
+   QVariantList buildTransactionHistory() const;
+   void refreshDerivedModels();
     void storeOutputsState(QJsonObject *document,
                            QJsonObject *walletState,
                            const QList<WalletOutput> &outputs,
@@ -621,6 +648,7 @@ private:
     GrinWalletShortcutBridge *m_shortcutBridge;
     QTimer *m_autoRefreshTimer;
     QTimer *m_sessionLockTimer;
+   bool m_initialized;
     bool m_walletExists;
     bool m_walletUnlocked;
     QString m_walletName;
@@ -647,6 +675,8 @@ private:
     QString m_workflowMode;
     QString m_workflowSlatepack;
     QString m_workflowDecoded;
+   QVariantList m_walletOutputsCache;
+   QVariantList m_transactionHistoryCache;
     bool m_autoLockOnAppDeactivate;
     bool m_walletScanInFlight;
     bool m_seedScanActive;
