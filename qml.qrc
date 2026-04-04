@@ -25,6 +25,7 @@
         <file>qml/pages/browserwallet/BrowserWalletSettingsSection.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletSidebar.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletSlatepackSection.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletStatementSection.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletTopBar.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletUtxoSection.qml</file>
         <file>qml/pages/TileExplorer.qml</file>

@@ -354,6 +354,12 @@ Item {
                     walletRoot: root
                 }
 
+                BrowserWalletParts.BrowserWalletStatementSection {
+                    width: parent.width
+                    visible: root.activeSection === "statement"
+                    walletRoot: root
+                }
+
                 BrowserWalletParts.BrowserWalletSlatepackSection {
                     width: parent.width
                     visible: root.activeSection === "slatepack"

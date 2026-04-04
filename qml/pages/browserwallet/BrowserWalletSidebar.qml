@@ -135,7 +135,30 @@ Rectangle {
 
         Button {
             width: parent.width
-            text: walletRoot.tf("browser_wallet_nav_slatepack", "Slatepack")
+            text: walletRoot.tf("browser_wallet_nav_statement", "Statement of Account")
+            leftPadding: 18
+            rightPadding: 18
+            topPadding: 14
+            bottomPadding: 14
+            highlighted: walletRoot.activeSection === "statement"
+            background: Rectangle {
+                radius: 16
+                color: parent.highlighted ? "#173247" : "#111c26"
+                border.color: parent.highlighted ? "#4d89aa" : "#223847"
+            }
+            contentItem: Label {
+                text: parent.text
+                color: parent.highlighted ? "#f7fbff" : "#b8cfdd"
+                font.pixelSize: 16
+                font.weight: parent.highlighted ? Font.DemiBold : Font.Medium
+                verticalAlignment: Text.AlignVCenter
+            }
+            onClicked: activateSection("statement")
+        }
+
+        Button {
+            width: parent.width
+            text: walletRoot.tf("browser_wallet_nav_send_receive", "Send / Receive")
             leftPadding: 18
             rightPadding: 18
             topPadding: 14

@@ -234,8 +234,8 @@ Item {
 
                 Button {
                     text: amountDialogMode === "receive"
-                          ? walletRoot.tf("browser_wallet_nav_receive", "Receive (I1-I3)")
-                          : walletRoot.tf("browser_wallet_nav_send", "Send (S1-S3)")
+                          ? walletRoot.tf("browser_wallet_receive", "Receive")
+                          : walletRoot.tf("browser_wallet_send", "Send")
                     enabled: amountField.text.trim().length > 0
                     onClicked: slatepackSection.confirmAmountDialog()
                 }
@@ -247,7 +247,7 @@ Item {
         id: slatepackCard
         width: parent.width
         contentPadding: 12
-        title: walletRoot.tf("browser_wallet_nav_slatepack", "Slatepack")
+        title: walletRoot.tf("browser_wallet_nav_send_receive", "Send / Receive")
         subtitle: walletRoot.tf("browser_wallet_slatepack_note", "Paste or decode a Slatepack, then start a send or receive flow from the same workspace.")
 
         ColumnLayout {
@@ -286,15 +286,14 @@ Item {
                 }
             }
 
-            GridLayout {
+            RowLayout {
                 Layout.fillWidth: true
-                columns: 2
-                rowSpacing: 12
-                columnSpacing: 12
+                spacing: 12
 
                 Button {
                     Layout.fillWidth: true
-                    text: walletRoot.tf("browser_wallet_nav_send", "Send (S1-S3)")
+                    Layout.preferredWidth: 1
+                    text: walletRoot.tf("browser_wallet_send", "Send")
                     enabled: walletRoot.nodeStatusMode() === "online" && !slatepackActionsBlocked
                     leftPadding: 18
                     rightPadding: 18
@@ -318,7 +317,8 @@ Item {
 
                 Button {
                     Layout.fillWidth: true
-                    text: walletRoot.tf("browser_wallet_nav_receive", "Receive (I1-I3)")
+                    Layout.preferredWidth: 1
+                    text: walletRoot.tf("browser_wallet_receive", "Receive")
                     enabled: !slatepackActionsBlocked
                     leftPadding: 18
                     rightPadding: 18
