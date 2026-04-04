@@ -6,6 +6,16 @@ BrowserWalletSectionCard {
     id: overviewCard
     property var walletRoot
 
+    function amountStringToValue(amountText) {
+        var parsed = Number(amountText ? amountText.toString().trim() : "")
+        return isFinite(parsed) ? parsed : 0
+    }
+
+    function formatAmountValue(value) {
+        var fixed = Math.max(0, value).toFixed(9)
+        return fixed.replace(/0+$/, "").replace(/\.$/, "")
+    }
+
     width: parent ? parent.width : 0
     title: walletRoot.tf("browser_wallet_overview_title", "Overview")
     fillColor: "#102131"
@@ -39,8 +49,10 @@ BrowserWalletSectionCard {
         }
 
         BrowserWalletMetricTile {
-            title: walletRoot.tf("browser_wallet_awaiting_confirmation", "Awaiting Confirmation")
-            value: grinWalletController.awaitingConfirmationBalance + " GRIN"
+            title: walletRoot.tf("browser_wallet_awaiting", "Awaiting")
+            value: overviewCard.formatAmountValue(
+                       overviewCard.amountStringToValue(grinWalletController.awaitingConfirmationBalance)
+                       + overviewCard.amountStringToValue(grinWalletController.awaitingFinalizationBalance)) + " GRIN"
         }
 
         BrowserWalletMetricTile {

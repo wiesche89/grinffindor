@@ -540,7 +540,10 @@ QVariantList GrinWalletController::walletOutputs() const
  */
 QVariantList GrinWalletController::buildWalletOutputs() const
 {
-    const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    const QJsonObject document = GrinWalletStorage::loadDocument();
+    const QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    const QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
+    const QJsonObject workflowContexts = document.value(QStringLiteral("workflow_contexts")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     std::sort(outputs.begin(), outputs.end(), GrinWalletController::walletOutputLessThan);
 
@@ -551,27 +554,36 @@ QVariantList GrinWalletController::buildWalletOutputs() const
         const WalletOutput &output = outputs.at(i);
         QJsonObject entry = output.toJson();
 
+        const bool mature = !output.coinbase
+            || output.height == 0
+            || m_chainHeight == 0
+            || m_chainHeight >= output.height + 1000;
+        const qint64 confirmations =
+            output.onChain && output.height > 0 && m_chainHeight >= output.height
+                ? static_cast<qint64>(m_chainHeight - output.height + 1)
+                : (output.onChain && !output.coinbase && output.height == 0 ? 10 : 0);
+        const bool confirmed = confirmations >= 10;
+
         QString status;
         if (output.spent) {
             status = QStringLiteral("spent");
-        } else if (output.pending) {
-            status = QStringLiteral("pending");
         } else if (output.locked) {
             status = QStringLiteral("locked");
-        } else if (output.coinbase && (!output.onChain || output.height == 0 || m_chainHeight < output.height + 1000)) {
-            status = QStringLiteral("immature");
+        } else if (output.pending) {
+            status = output.coinbase
+                ? QStringLiteral("immature")
+                : QStringLiteral("awaiting_finalization");
         } else if (!output.onChain) {
-            status = QStringLiteral("local");
+            status = output.coinbase
+                ? QStringLiteral("immature")
+                : QStringLiteral("awaiting_finalization");
+        } else if (output.coinbase && !mature) {
+            status = QStringLiteral("immature");
+        } else if (!confirmed) {
+            status = QStringLiteral("awaiting_confirmation");
         } else {
             status = QStringLiteral("spendable");
         }
-
-        const bool mature = !output.coinbase || (output.height > 0 && m_chainHeight >= output.height + 1000);
-        const bool confirmed = output.onChain && output.height > 0 && m_chainHeight >= output.height + 10;
-        const qint64 confirmations =
-            output.height > 0 && m_chainHeight >= output.height
-                ? static_cast<qint64>(m_chainHeight - output.height + 1)
-                : 0;
         const bool spendable = !output.spent && !output.locked && !output.pending && output.onChain && mature && confirmed;
 
         entry.insert(QStringLiteral("status"), status);
@@ -579,6 +591,62 @@ QVariantList GrinWalletController::buildWalletOutputs() const
         entry.insert(QStringLiteral("confirmed"), confirmed);
         entry.insert(QStringLiteral("confirmations"), confirmations);
         entry.insert(QStringLiteral("spendable"), spendable);
+
+        if (output.locked) {
+            QString lockWorkflowId;
+            QString lockWorkflowState;
+            QString lockWorkflowMode;
+            QString lockWorkflowStatus;
+
+            const QStringList contextKeys = workflowContexts.keys();
+            for (int j = 0; j < contextKeys.size(); ++j) {
+                const QString workflowId = contextKeys.at(j);
+                const QJsonObject context = workflowContexts.value(workflowId).toObject();
+                const QJsonArray selectedInputCommits = context.value(QStringLiteral("selected_input_commits")).toArray();
+
+                bool foundCommit = false;
+                for (int k = 0; k < selectedInputCommits.size(); ++k) {
+                    if (selectedInputCommits.at(k).toString() == output.commitment) {
+                        foundCommit = true;
+                        break;
+                    }
+                }
+
+                if (!foundCommit) {
+                    continue;
+                }
+
+                for (int k = 0; k < transactions.size(); ++k) {
+                    const QJsonObject tx = transactions.at(k).toObject();
+                    if (tx.value(QStringLiteral("workflow_id")).toString() != workflowId) {
+                        continue;
+                    }
+
+                    const QString txStatus = tx.value(QStringLiteral("status")).toString();
+                    if (GrinWalletControllerHelpers::isFinalTransactionStatus(txStatus)) {
+                        break;
+                    }
+
+                    lockWorkflowId = workflowId;
+                    lockWorkflowState = tx.value(QStringLiteral("state")).toString();
+                    lockWorkflowMode = tx.value(QStringLiteral("mode")).toString();
+                    lockWorkflowStatus = txStatus;
+                    break;
+                }
+
+                if (!lockWorkflowId.isEmpty()) {
+                    break;
+                }
+            }
+
+            if (!lockWorkflowId.isEmpty()) {
+                entry.insert(QStringLiteral("lock_workflow_id"), lockWorkflowId);
+                entry.insert(QStringLiteral("lock_workflow_state"), lockWorkflowState);
+                entry.insert(QStringLiteral("lock_workflow_mode"), lockWorkflowMode);
+                entry.insert(QStringLiteral("lock_workflow_status"), lockWorkflowStatus);
+            }
+        }
+
         list.append(entry.toVariantMap());
     }
 

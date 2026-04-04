@@ -359,6 +359,7 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
                 slate->metadata.insert(QStringLiteral("tx_skeleton"), txBuild.transaction.toJson());
                 slate->metadata.insert(QStringLiteral("tx_ready"), true);
                 slate->metadata.remove(QStringLiteral("tx_build_error"));
+                m_controller->finalizeWorkflowOutputs(*slate, false);
             } else {
                 slate->metadata.insert(QStringLiteral("tx_build_error"), txBuild.error);
             }

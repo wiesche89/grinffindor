@@ -232,8 +232,6 @@ QJsonArray GrinWalletHistoryHelpers::rebuildTransactionHistoryFromOutputs(const 
 
         quint64 confirmedHeight = 0;
         bool anySpent = false;
-        bool anyPending = false;
-        bool anyLocked = false;
         quint64 displayAmount = 0;
         QString primaryCommitment;
         QJsonArray outputCommitments;
@@ -250,8 +248,6 @@ QJsonArray GrinWalletHistoryHelpers::rebuildTransactionHistoryFromOutputs(const 
                 }
             }
             anySpent = anySpent || output.spent;
-            anyPending = anyPending || output.pending;
-            anyLocked = anyLocked || output.locked;
             if (displayAmount == 0 && output.source != QStringLiteral("change")) {
                 displayAmount = GrinWalletWorkflowHelpers::amountToNanogrin(output.amount);
             }
@@ -269,9 +265,6 @@ QJsonArray GrinWalletHistoryHelpers::rebuildTransactionHistoryFromOutputs(const 
             status = anySpent && mode == QStringLiteral("send")
                 ? QStringLiteral("spent")
                 : QStringLiteral("confirmed");
-        }
-        if (anyPending || anyLocked) {
-            status = QStringLiteral("in_progress");
         }
         const bool broadcasted = existingBroadcasted
             || (mode == QStringLiteral("send") && status != QStringLiteral("cancelled"));

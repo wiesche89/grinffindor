@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QSet>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUrl>
@@ -774,7 +775,64 @@ GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject do
     state.scanHeight = static_cast<qulonglong>(walletState.value(QStringLiteral("scan_height")).toInt());
 
     const qulonglong effectiveHeight = chainHeight > 0 ? chainHeight : state.scanHeight;
-    const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+    QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
+
+    const QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
+    const QJsonObject workflowContexts = document.value(QStringLiteral("workflow_contexts")).toObject();
+    QSet<QString> activeWorkflowIds;
+    for (int i = 0; i < transactions.size(); ++i) {
+        const QJsonObject entry = transactions.at(i).toObject();
+        const QString status = entry.value(QStringLiteral("status")).toString();
+        const QString workflowId = entry.value(QStringLiteral("workflow_id")).toString();
+        if (!workflowId.isEmpty()
+            && status != QStringLiteral("confirmed")
+            && status != QStringLiteral("cancelled")
+            && status != QStringLiteral("spent")) {
+            activeWorkflowIds.insert(workflowId);
+        }
+    }
+
+    QSet<QString> activeSelectedInputCommits;
+    const QStringList contextKeys = workflowContexts.keys();
+    for (int i = 0; i < contextKeys.size(); ++i) {
+        const QString workflowId = contextKeys.at(i);
+        if (!activeWorkflowIds.contains(workflowId)) {
+            continue;
+        }
+        const QJsonArray commits = workflowContexts.value(workflowId).toObject().value(QStringLiteral("selected_input_commits")).toArray();
+        for (int j = 0; j < commits.size(); ++j) {
+            const QString commitment = commits.at(j).toString();
+            if (!commitment.isEmpty()) {
+                activeSelectedInputCommits.insert(commitment);
+            }
+        }
+    }
+
+    bool outputsChanged = false;
+    for (int i = 0; i < outputs.size(); ++i) {
+        WalletOutput &output = outputs[i];
+
+        if (output.spent) {
+            continue;
+        }
+
+        if (output.onChain && output.height > 0 && output.pending) {
+            output.pending = false;
+            outputsChanged = true;
+        }
+
+        if (output.locked
+            && output.onChain
+            && !activeSelectedInputCommits.contains(output.commitment)) {
+            output.locked = false;
+            outputsChanged = true;
+        }
+    }
+
+    if (outputsChanged) {
+        walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
+        state.document.insert(QStringLiteral("wallet_state"), walletState);
+    }
 
     const QJsonObject recalculatedBalances = WalletScanner::balancesFromOutputs(outputs, effectiveHeight);
 

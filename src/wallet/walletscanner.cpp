@@ -201,10 +201,10 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
  */
 QJsonObject WalletScanner::balancesFromOutputs(const QList<WalletOutput> &outputs, qulonglong chainHeight)
 {
-    // Balance categories following grin-wallet reference implementation
-    // See libwallet/src/internal/updater.rs::retrieve_info()
-    
-    quint64 total = 0;
+    // Balance categories following grin-wallet reference implementation.
+    // Reference: grin-wallet/libwallet/src/internal/updater.rs::retrieve_info()
+    static const qulonglong kMinimumConfirmations = 10;
+
     quint64 spendable = 0;
     quint64 locked = 0;
     quint64 immature = 0;
@@ -220,82 +220,69 @@ QJsonObject WalletScanner::balancesFromOutputs(const QList<WalletOutput> &output
             continue;
         }
 
-        total += amount;
-
-        // Priority 1: Check if output is locked (in-flight transaction)
+        // Locked outputs are excluded from total and tracked separately.
         if (output.locked) {
             locked += amount;
             continue;
         }
 
-        // Priority 2: Check if output is pending (not yet on-chain)
+        // Non-coinbase local outputs under construction/finalization map to
+        // grin-wallet's Unconfirmed bucket, which becomes awaiting_finalization
+        // when minimum confirmations are required.
         if (output.pending) {
-            // Pending outputs are awaiting confirmation
-            if (!output.onChain) {
-                awaiting_confirmation += amount;
-            } else {
-                // Rare case: on-chain but pending flag still set
+            if (!output.coinbase) {
                 awaiting_finalization += amount;
             }
             continue;
         }
 
-        // Priority 3: If not on-chain yet, definitely immature (local output)
+        // Fallback for inconsistent local outputs without the pending flag.
         if (!output.onChain) {
-            immature += amount;
+            if (output.coinbase) {
+                immature += amount;
+            } else {
+                awaiting_finalization += amount;
+            }
             continue;
         }
 
-        // For on-chain outputs, check maturity and confirmation
-        // Priority 4: Check coinbase maturity (1000 block delay)
         const bool isCoinbase = output.coinbase;
         bool coinbaseMature = true;
-        
+
         if (isCoinbase && output.height > 0) {
-            // Coinbase needs 1000 block maturity
-            // But if chainHeight is 0 (node not synced), assume it's mature since it's on-chain
             if (chainHeight > 0) {
                 coinbaseMature = chainHeight >= output.height + 1000;
             } else {
-                // When chainHeight is unknown but output is on-chain, assume mature
                 coinbaseMature = true;
             }
         }
-        
-        // Priority 5: Check if confirmed on-chain (10 block confirmations)
-        // Reference formula: num_confirmations = 1 + (chainHeight - height) >= 10
-        //   => chainHeight >= height + 9
-        bool confirmed = false;
+
+        qulonglong confirmations = 0;
         if (output.height > 0 && chainHeight > 0) {
-            confirmed = chainHeight >= output.height + 9;
+            confirmations = chainHeight >= output.height ? (chainHeight - output.height + 1) : 0;
         } else if (output.height > 0 && chainHeight == 0) {
-            // If chainHeight is 0 but output is on-chain, assume it's confirmed
-            // since it was persisted
-            confirmed = true;
+            confirmations = kMinimumConfirmations;
         } else if (!isCoinbase && output.height == 0) {
-            // Fallback for node payloads where height is not provided for tx outputs.
-            confirmed = true;
+            // Some node payloads do not provide a reliable height for regular tx outputs.
+            confirmations = kMinimumConfirmations;
         }
 
-        // grin-wallet style split:
-        // - coinbase that is not mature -> immature
-        // - regular tx output that is on-chain but <10 conf -> awaiting_confirmation
-        // - mature + confirmed -> spendable
         if (!coinbaseMature) {
             immature += amount;
-        } else if (!confirmed) {
+        } else if (confirmations < kMinimumConfirmations) {
             awaiting_confirmation += amount;
         } else {
             spendable += amount;
         }
     }
 
+    const quint64 total = spendable + awaiting_confirmation + immature;
+
     QJsonObject balances;
     balances.insert(QStringLiteral("total"), formatNanogrin(total));
     balances.insert(QStringLiteral("spendable"), formatNanogrin(spendable));
     balances.insert(QStringLiteral("locked"), formatNanogrin(locked));
     balances.insert(QStringLiteral("immature"), formatNanogrin(immature));
-    // Extended categories for detailed reporting
     balances.insert(QStringLiteral("awaiting_confirmation"), formatNanogrin(awaiting_confirmation));
     balances.insert(QStringLiteral("awaiting_finalization"), formatNanogrin(awaiting_finalization));
 

@@ -74,15 +74,6 @@ Item {
                                       : walletRoot.tf("browser_wallet_show_details", "Details")
                                 onClicked: detailsExpanded = !detailsExpanded
                             }
-
-                            Item { Layout.fillWidth: true }
-
-                            Button {
-                                visible: !!(modelData.locked && modelData.workflow_id && modelData.workflow_id.length > 0)
-                                text: walletRoot.tf("browser_wallet_utxo_cancel_lock", "Cancel Lock")
-                                enabled: grinWalletController.walletUnlocked
-                                onClicked: grinWalletController.cancelTransaction(modelData.workflow_id)
-                            }
                         }
 
                         ColumnLayout {
@@ -127,6 +118,18 @@ Item {
                                     text: walletRoot.tf("browser_wallet_utxo_workflow", "Workflow") + ": "
                                           + ((modelData.workflow_id || "").length > 0 ? modelData.workflow_id : "-")
                                     color: "#d7e9f4"
+                                    wrapMode: Text.WrapAnywhere
+                                }
+
+                                Label {
+                                    Layout.fillWidth: true
+                                    visible: modelData.lock_workflow_id !== undefined && (modelData.lock_workflow_id || "").length > 0
+                                    text: walletRoot.tf("browser_wallet_utxo_locked_by", "Locked by") + ": "
+                                          + (modelData.lock_workflow_mode || "-") + " / "
+                                          + (modelData.lock_workflow_state || "-") + " / "
+                                          + (modelData.lock_workflow_status || "-") + " / "
+                                          + modelData.lock_workflow_id
+                                    color: "#ffd280"
                                     wrapMode: Text.WrapAnywhere
                                 }
                             }

@@ -2,9 +2,23 @@
 
 #include <QDateTime>
 #include <QJsonDocument>
+#include <QSet>
 
 #include "grinwalletcontroller.h"
 #include "walletscanner.h"
+
+namespace {
+
+QString inputCommitmentFromTxInput(const QJsonObject &input)
+{
+    QString commitment = input.value(QStringLiteral("commit")).toString();
+    if (!commitment.isEmpty()) {
+        return commitment;
+    }
+    return input.value(QStringLiteral("commit")).toObject().value(QStringLiteral("hex")).toString();
+}
+
+}
 
 // -------------------------------------------------------------------------------------------------------
 // Clearing, Broadcasting, And Cancelling Workflows
@@ -36,9 +50,43 @@ void GrinWalletWorkflowService::cleanupLocalAndCancelledItems()
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
 
+    const QJsonArray existingTransactions = walletState.value(QStringLiteral("transactions")).toArray();
+    QSet<QString> cancelledWorkflowIds;
+    QSet<QString> cancelledInputCommitments;
+    for (int i = 0; i < existingTransactions.size(); ++i) {
+        const QJsonObject tx = existingTransactions.at(i).toObject();
+        if (tx.value(QStringLiteral("status")).toString() != QStringLiteral("cancelled")) {
+            continue;
+        }
+
+        const QString workflowId = tx.value(QStringLiteral("workflow_id")).toString();
+        if (!workflowId.isEmpty()) {
+            cancelledWorkflowIds.insert(workflowId);
+        }
+
+        const QJsonArray inputs = tx.value(QStringLiteral("tx_skeleton"))
+                                  .toObject()
+                                  .value(QStringLiteral("body"))
+                                  .toObject()
+                                  .value(QStringLiteral("inputs"))
+                                  .toArray();
+        for (int j = 0; j < inputs.size(); ++j) {
+            const QString commitment = inputCommitmentFromTxInput(inputs.at(j).toObject());
+            if (!commitment.isEmpty()) {
+                cancelledInputCommitments.insert(commitment);
+            }
+        }
+    }
+
     int localCount = 0;
     for (int i = outputs.size() - 1; i >= 0; --i) {
-        if (!outputs.at(i).onChain) {
+        if (cancelledInputCommitments.contains(outputs.at(i).commitment)) {
+            outputs[i].locked = false;
+            outputs[i].pending = false;
+            continue;
+        }
+
+        if (cancelledWorkflowIds.contains(outputs.at(i).workflowId) && !outputs.at(i).onChain) {
             outputs.removeAt(i);
             ++localCount;
         }
@@ -209,11 +257,7 @@ void GrinWalletWorkflowService::cancelTransaction(const QString &workflowId)
         selectedInputCommitments.append(selectedInputCommits.at(j).toString());
     }
 
-    for (int i = 0; i < outputs.size(); ++i) {
-        if (outputs[i].workflowId != workflowId) {
-            continue;
-        }
-
+    for (int i = outputs.size() - 1; i >= 0; --i) {
         if (outputs[i].spent) {
             continue;
         }
@@ -221,10 +265,20 @@ void GrinWalletWorkflowService::cancelTransaction(const QString &workflowId)
         if (selectedInputCommitments.contains(outputs[i].commitment)) {
             outputs[i].locked = false;
             outputs[i].pending = false;
-        } else {
-            outputs.removeAt(i);
-            --i;
+            continue;
         }
+
+        if (outputs[i].workflowId != workflowId) {
+            continue;
+        }
+
+        if (!outputs[i].onChain) {
+            outputs.removeAt(i);
+            continue;
+        }
+
+        outputs[i].locked = false;
+        outputs[i].pending = false;
     }
 
     QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
