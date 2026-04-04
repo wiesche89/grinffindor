@@ -4,7 +4,7 @@ services:
       context: .
       args:
         PREBUILT_DIR: build/WebAssembly_Qt_6_10_1_single_threaded-Release
-    image: wiesche89/grinffindor:0.1.0
+    image: wiesche89/grinffindor:0.1.1
     container_name: grinffindor
     restart: unless-stopped
     ports:
