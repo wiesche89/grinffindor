@@ -1,0 +1,321 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+
+Item {
+    id: authPanel
+    property var walletRoot
+    property var walletPageSettings
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#05080dcc"
+
+        MouseArea { anchors.fill: parent }
+
+        Rectangle {
+            width: Math.min(parent.width - 28, 640)
+            anchors.centerIn: parent
+            radius: 30
+            color: "#0f1b26"
+            border.color: "#2a4f64"
+            implicitHeight: authColumn.implicitHeight + 38
+
+            ColumnLayout {
+                id: authColumn
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 14
+
+                Label {
+                    Layout.fillWidth: true
+                    text: walletRoot.authMode === "unlock"
+                          ? walletRoot.tf("browser_wallet_login_title", "Unlock Your Wallet")
+                          : walletRoot.tf("browser_wallet_setup_title", "Set Up Your Wallet")
+                    color: "#ffffff"
+                    font.pixelSize: 30
+                    font.weight: Font.Bold
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    text: walletRoot.authMode === "unlock"
+                          ? walletRoot.tf("browser_wallet_login_note", "Enter your password to unlock the locally stored wallet for this browser session.")
+                          : (walletRoot.authMode === "import_backup"
+                             ? walletRoot.tf("browser_wallet_import_backup_note", "Paste a previously exported encrypted wallet backup JSON. The wallet stays locked after import until you unlock it with its password.")
+                             : walletRoot.tf("browser_wallet_setup_note", "Create a new wallet with a fresh seed phrase or restore an existing wallet from its 24 words."))
+                    color: "#d7e9f4"
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode !== "import_backup"
+                    text: walletRoot.tf("browser_wallet_auth_network", "Active wallet network") + ": " + walletRoot.authNetworkDraft
+                    color: "#8ff0c8"
+                    wrapMode: Text.WordWrap
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode !== "import_backup"
+                    spacing: 8
+
+                    Button {
+                        text: walletRoot.tf("browser_wallet_network_mainnet", "Mainnet")
+                        highlighted: walletRoot.authNetworkDraft === "mainnet"
+                        Layout.fillWidth: true
+                        onClicked: {
+                            walletRoot.authNetworkDraft = "mainnet"
+                            grinWalletController.setSelectedNetwork("mainnet")
+                        }
+                    }
+
+                    Button {
+                        text: walletRoot.tf("browser_wallet_network_testnet", "Testnet")
+                        highlighted: walletRoot.authNetworkDraft === "testnet"
+                        Layout.fillWidth: true
+                        onClicked: {
+                            walletRoot.authNetworkDraft = "testnet"
+                            grinWalletController.setSelectedNetwork("testnet")
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: !grinWalletController.walletExists
+                    spacing: 8
+
+                    Button {
+                        text: walletRoot.tf("browser_wallet_create_mode", "New Wallet")
+                        highlighted: walletRoot.authMode === "create"
+                        Layout.fillWidth: true
+                        onClicked: {
+                            walletRoot.authMode = "create"
+                            walletRoot.restoreMnemonicDraft = ""
+                            walletRoot.backupImportDraft = ""
+                        }
+                    }
+
+                    Button {
+                        text: walletRoot.tf("browser_wallet_restore_mode", "Restore Seed")
+                        highlighted: walletRoot.authMode === "restore"
+                        Layout.fillWidth: true
+                        onClicked: {
+                            walletRoot.authMode = "restore"
+                            walletRoot.backupImportDraft = ""
+                        }
+                    }
+
+                    Button {
+                        text: walletRoot.tf("browser_wallet_import_backup", "Import Backup")
+                        highlighted: walletRoot.authMode === "import_backup"
+                        Layout.fillWidth: true
+                        onClicked: {
+                            walletRoot.authMode = "import_backup"
+                            walletRoot.restoreMnemonicDraft = ""
+                        }
+                    }
+                }
+
+                TextField {
+                    id: walletNameField
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
+                    text: walletPageSettings.walletNameDraft
+                    placeholderText: walletRoot.tf("browser_wallet_name_placeholder", "Wallet name")
+                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(walletNameField)
+                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(walletNameField)
+                    onTextChanged: {
+                        walletPageSettings.walletNameDraft = text
+                        walletRoot.syncBrowserShortcutContext(walletNameField)
+                    }
+                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(walletNameField, event) }
+                }
+
+                TextArea {
+                    id: restoreMnemonicArea
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: walletRoot.authMode === "restore" ? 132 : 0
+                    visible: walletRoot.authMode === "restore"
+                    wrapMode: TextEdit.Wrap
+                    selectByMouse: true
+                    persistentSelection: true
+                    activeFocusOnPress: true
+                    text: walletRoot.restoreMnemonicDraft
+                    placeholderText: walletRoot.tf("browser_wallet_mnemonic_placeholder", "24-word mnemonic for importing an existing wallet.")
+                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(restoreMnemonicArea)
+                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(restoreMnemonicArea)
+                    onTextChanged: {
+                        walletRoot.restoreMnemonicDraft = text
+                        walletRoot.syncBrowserShortcutContext(restoreMnemonicArea)
+                    }
+                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(restoreMnemonicArea, event) }
+                }
+
+                TextArea {
+                    id: importBackupArea
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: walletRoot.authMode === "import_backup" ? 176 : 0
+                    visible: walletRoot.authMode === "import_backup"
+                    wrapMode: TextEdit.WrapAnywhere
+                    selectByMouse: true
+                    persistentSelection: true
+                    activeFocusOnPress: true
+                    text: walletRoot.backupImportDraft
+                    placeholderText: walletRoot.tf("browser_wallet_backup_import_placeholder", "Paste encrypted wallet backup JSON here.")
+                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(importBackupArea)
+                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(importBackupArea)
+                    onTextChanged: {
+                        walletRoot.backupImportDraft = text
+                        walletRoot.syncBrowserShortcutContext(importBackupArea)
+                    }
+                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(importBackupArea, event) }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode === "restore"
+                    Item { Layout.fillWidth: true }
+
+                    Button {
+                        text: walletRoot.tf("browser_wallet_paste", "Paste")
+                        onClicked: {
+                            walletRoot.openPasteDialog(
+                                restoreMnemonicArea,
+                                walletRoot.tf("browser_wallet_paste_restore_title", "Paste Seed Phrase"),
+                                walletRoot.tf("browser_wallet_mnemonic_placeholder", "24-word mnemonic for importing an existing wallet."))
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode === "import_backup"
+                    Item { Layout.fillWidth: true }
+
+                    Button {
+                        text: walletRoot.tf("browser_wallet_paste", "Paste")
+                        onClicked: {
+                            walletRoot.openPasteDialog(
+                                importBackupArea,
+                                walletRoot.tf("browser_wallet_paste_backup_title", "Paste Encrypted Backup"),
+                                walletRoot.tf("browser_wallet_backup_import_placeholder", "Paste encrypted wallet backup JSON here."))
+                        }
+                    }
+                }
+
+                TextField {
+                    id: unlockPasswordField
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode === "unlock"
+                    echoMode: TextInput.Password
+                    text: walletRoot.unlockPasswordDraft
+                    placeholderText: walletRoot.tf("browser_wallet_password_placeholder", "Encryption password")
+                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(unlockPasswordField)
+                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(unlockPasswordField)
+                    onTextChanged: {
+                        walletRoot.unlockPasswordDraft = text
+                        walletRoot.syncBrowserShortcutContext(unlockPasswordField)
+                    }
+                    onAccepted: walletRoot.submitAuth()
+                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(unlockPasswordField, event) }
+                }
+
+                TextField {
+                    id: createPasswordField
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
+                    echoMode: TextInput.Password
+                    text: walletRoot.passwordDraft
+                    placeholderText: walletRoot.tf("browser_wallet_password_placeholder", "Encryption password")
+                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(createPasswordField)
+                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(createPasswordField)
+                    onTextChanged: {
+                        walletRoot.passwordDraft = text
+                        walletRoot.syncBrowserShortcutContext(createPasswordField)
+                    }
+                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(createPasswordField, event) }
+                }
+
+                TextField {
+                    id: confirmPasswordField
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
+                    echoMode: TextInput.Password
+                    text: walletRoot.passwordConfirmDraft
+                    placeholderText: walletRoot.tf("browser_wallet_confirm_password_placeholder", "Confirm password")
+                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(confirmPasswordField)
+                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(confirmPasswordField)
+                    onTextChanged: {
+                        walletRoot.passwordConfirmDraft = text
+                        walletRoot.syncBrowserShortcutContext(confirmPasswordField)
+                    }
+                    onAccepted: walletRoot.submitAuth()
+                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(confirmPasswordField, event) }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: walletRoot.authMode !== "unlock"
+                             && walletRoot.authMode !== "import_backup"
+                             && walletRoot.passwordDraft.length > 0
+                    text: walletRoot.passwordDraft === walletRoot.passwordConfirmDraft
+                          ? walletRoot.tf("browser_wallet_password_match", "Passwords match.")
+                          : walletRoot.tf("browser_wallet_password_no_match", "Passwords do not match yet.")
+                    color: walletRoot.passwordDraft === walletRoot.passwordConfirmDraft ? "#8ff0c8" : "#ffb4b4"
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: false
+                    text: grinWalletController.lastError
+                    color: "#ffb4b4"
+                    wrapMode: Text.WordWrap
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: grinWalletController.lastInfo.length > 0
+                    text: grinWalletController.lastInfo
+                    color: "#8ff0c8"
+                    wrapMode: Text.WordWrap
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Button {
+                        visible: grinWalletController.walletExists
+                        text: walletRoot.tf("browser_wallet_delete", "Delete Wallet")
+                        onClicked: walletRoot.deleteConfirmOpen = true
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Button {
+                        text: walletRoot.authMode === "unlock"
+                              ? walletRoot.tf("browser_wallet_unlock", "Unlock")
+                              : (walletRoot.authMode === "create"
+                                 ? walletRoot.tf("browser_wallet_create", "Create")
+                                 : (walletRoot.authMode === "restore"
+                                    ? walletRoot.tf("browser_wallet_restore", "Restore")
+                                    : walletRoot.tf("browser_wallet_import_backup", "Import Backup")))
+                        enabled: walletRoot.authMode === "unlock"
+                                 ? walletRoot.unlockPasswordDraft.length > 0
+                                 : (walletRoot.authMode === "import_backup"
+                                    ? walletRoot.backupImportDraft.trim().length > 0
+                                    : (walletPageSettings.walletNameDraft.trim().length > 0
+                                       && walletRoot.passwordDraft.length > 0
+                                       && walletRoot.passwordDraft === walletRoot.passwordConfirmDraft
+                                       && (walletRoot.authMode !== "restore" || walletRoot.restoreMnemonicDraft.trim().length > 0)))
+                        onClicked: walletRoot.submitAuth()
+                    }
+                }
+            }
+        }
+    }
+}

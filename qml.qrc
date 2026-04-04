@@ -9,6 +9,21 @@
         <file>qml/translation/de.json</file>
         <file>qml/pages/TileExchange.qml</file>
         <file>qml/pages/TileBrowserWallet.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletAuthPanel.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletDeletePopup.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletErrorPopup.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletHomeBackup.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletHomeSection.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletHomeHistory.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletHomeOverview.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletHomeRecovery.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletPastePopup.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletRevealSeedPopup.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletSettingsSection.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletSidebar.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletSlatepackSection.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletTopBar.qml</file>
+        <file>qml/pages/browserwallet/BrowserWalletUtxoSection.qml</file>
         <file>qml/pages/TileExplorer.qml</file>
         <file>qml/pages/TileGrinffindor.qml</file>
         <file>qml/pages/TileGrinNode.qml</file>

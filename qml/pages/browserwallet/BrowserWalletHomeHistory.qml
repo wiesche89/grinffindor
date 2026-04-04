@@ -1,0 +1,245 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+
+Rectangle {
+    id: historyCard
+    property var walletRoot
+
+    width: parent ? parent.width : 0
+    radius: 26
+    color: "#0f1b26"
+    border.color: "#26465b"
+    implicitHeight: historyColumn.implicitHeight + 34
+
+    ColumnLayout {
+        id: historyColumn
+        anchors.fill: parent
+        anchors.margins: 18
+        spacing: 12
+
+        Label {
+            text: walletRoot.tf("browser_wallet_history_title", "Transaction History")
+            color: "#ffffff"
+            font.pixelSize: 28
+            font.weight: Font.Bold
+        }
+
+        Repeater {
+            model: grinWalletController.transactionHistory
+
+            Rectangle {
+                Layout.fillWidth: true
+                radius: 18
+                color: "#132635"
+                border.color: "#2a4f64"
+                implicitHeight: txColumn.implicitHeight + 24
+                visible: modelData.workflow_id !== undefined
+
+                ColumnLayout {
+                    id: txColumn
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 8
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: (modelData.mode || "-") + " / " + (modelData.state || "-") + " / " + (modelData.status || "-")
+                        color: walletRoot.txStatusColor(modelData.status || "")
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: (modelData.amount || "0") + " GRIN  fee " + (modelData.fee || "0")
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: modelData.workflow_id || ""
+                        color: "#8fb4c9"
+                        wrapMode: Text.WrapAnywhere
+                        font.pixelSize: 12
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: walletRoot.tf("browser_wallet_history_confirmations", "Confirmations") + ": "
+                              + (modelData.confirmations !== undefined ? modelData.confirmations : 0)
+                        color: "#d7e9f4"
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: walletRoot.tf("browser_wallet_history_confirmed_height", "Confirmed Height") + ": "
+                              + (modelData.confirmed_height !== undefined && modelData.confirmed_height !== "" ? modelData.confirmed_height : "-")
+                        color: "#d7e9f4"
+                        wrapMode: Text.WordWrap
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: width < 820 ? 1 : 2
+                        rowSpacing: 6
+                        columnSpacing: 12
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: modelData.payment_proof_status !== undefined
+                            text: walletRoot.tf("browser_wallet_history_payment_proof", "Payment Proof") + ": "
+                                  + (modelData.payment_proof_status || "-")
+                            color: modelData.payment_proof_status === "verified" ? "#8ff0c8"
+                                 : modelData.payment_proof_status === "invalid" ? "#ffb4b4"
+                                 : "#ffd280"
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: modelData.rescan_rebuilt === true
+                            text: walletRoot.tf("browser_wallet_history_rescan", "Rebuilt from rescan backup")
+                            color: "#8fb4c9"
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: modelData.last_node_check !== undefined && (modelData.last_node_check || "").length > 0
+                            text: walletRoot.tf("browser_wallet_history_last_node_check", "Last node check") + ": " + modelData.last_node_check
+                            color: "#8fb4c9"
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            visible: modelData.last_broadcast_attempt !== undefined && (modelData.last_broadcast_attempt || "").length > 0
+                            text: walletRoot.tf("browser_wallet_history_last_broadcast", "Last broadcast attempt") + ": " + modelData.last_broadcast_attempt
+                            color: "#8fb4c9"
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: walletRoot.txRecoveryHint(modelData).length > 0
+                        text: walletRoot.txRecoveryHint(modelData)
+                        color: walletRoot.txStatusColor(modelData.status || "")
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: modelData.broadcast_error !== undefined && (modelData.broadcast_error || "").length > 0
+                        text: walletRoot.tf("browser_wallet_history_broadcast_error", "Broadcast error") + ": " + modelData.broadcast_error
+                        color: "#ffb4b4"
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: modelData.output_commitments !== undefined
+                                 && modelData.output_commitments.length !== undefined
+                                 && modelData.output_commitments.length > 0
+                        text: walletRoot.tf("browser_wallet_history_outputs", "Outputs") + ": "
+                              + ((modelData.output_commitments && modelData.output_commitments.join)
+                                    ? modelData.output_commitments.join(", ")
+                                    : "")
+                        color: "#8fb4c9"
+                        wrapMode: Text.WrapAnywhere
+                        font.pixelSize: 12
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: modelData.kernel_excess !== undefined && (modelData.kernel_excess || "").length > 0
+                        text: walletRoot.tf("browser_wallet_history_kernel", "Kernel Excess") + ": " + modelData.kernel_excess
+                        color: "#8fb4c9"
+                        wrapMode: Text.WrapAnywhere
+                        font.pixelSize: 12
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: modelData.payment_proof_error !== undefined && (modelData.payment_proof_error || "").length > 0
+                        text: walletRoot.tf("browser_wallet_history_payment_proof_error", "Payment proof error") + ": "
+                              + modelData.payment_proof_error
+                        color: "#ffb4b4"
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: modelData.payment_proof !== undefined
+                                 && modelData.payment_proof.saddr !== undefined
+                                 && (modelData.payment_proof.saddr || "").length > 0
+                        text: walletRoot.tf("browser_wallet_history_payment_proof_sender", "Proof sender") + ": "
+                              + ((modelData.payment_proof && modelData.payment_proof.saddr) ? modelData.payment_proof.saddr : "")
+                        color: "#8fb4c9"
+                        wrapMode: Text.WrapAnywhere
+                        font.pixelSize: 12
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: modelData.payment_proof !== undefined
+                                 && modelData.payment_proof.raddr !== undefined
+                                 && (modelData.payment_proof.raddr || "").length > 0
+                        text: walletRoot.tf("browser_wallet_history_payment_proof_receiver", "Proof receiver") + ": "
+                              + ((modelData.payment_proof && modelData.payment_proof.raddr) ? modelData.payment_proof.raddr : "")
+                        color: "#8fb4c9"
+                        wrapMode: Text.WrapAnywhere
+                        font.pixelSize: 12
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: modelData.payment_proof !== undefined
+                                 && modelData.payment_proof.rsig !== undefined
+                                 && (modelData.payment_proof.rsig || "").length > 0
+                        text: walletRoot.tf("browser_wallet_history_payment_proof_signature", "Receiver signature") + ": "
+                              + ((modelData.payment_proof && modelData.payment_proof.rsig) ? modelData.payment_proof.rsig : "")
+                        color: "#8fb4c9"
+                        wrapMode: Text.WrapAnywhere
+                        font.pixelSize: 12
+                    }
+
+                    TextArea {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: visible ? Math.min(140, Math.max(72, contentHeight + 18)) : 0
+                        visible: modelData.payment_proof !== undefined
+                                 && JSON.stringify(modelData.payment_proof).length > 2
+                        readOnly: true
+                        selectByMouse: true
+                        persistentSelection: true
+                        activeFocusOnPress: true
+                        wrapMode: TextEdit.WrapAnywhere
+                        color: "#d7e9f4"
+                        text: modelData.payment_proof !== undefined ? JSON.stringify(modelData.payment_proof, null, 2) : ""
+                        Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(this, event) }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+
+                        Button {
+                            text: modelData.status === "broadcast_failed"
+                                  ? walletRoot.tf("browser_wallet_history_retry_broadcast", "Retry Broadcast")
+                                  : walletRoot.tf("browser_wallet_history_broadcast", "Broadcast")
+                            enabled: walletRoot.canBroadcastEntry(modelData)
+                            onClicked: grinWalletController.broadcastTransaction(modelData.workflow_id)
+                        }
+
+                        Button {
+                            text: walletRoot.tf("browser_wallet_history_cancel", "Cancel")
+                            enabled: walletRoot.canCancelEntry(modelData)
+                            onClicked: grinWalletController.cancelTransaction(modelData.workflow_id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
