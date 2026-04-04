@@ -1,6 +1,7 @@
 #include "grinwalletnodesyncservice.h"
 
 #include <QDateTime>
+#include <QtGlobal>
 #include <QSet>
 
 #include "grinwalletcontroller.h"
@@ -284,6 +285,7 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
         m_controller->setLastError(result.errorMessage());
         m_controller->setSeedScanActive(false);
         m_controller->setWalletScanInFlight(false);
+        m_controller->setFullRescanInFlight(false);
         return;
     }
 
@@ -296,6 +298,7 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
         m_controller->setLastError(QStringLiteral("Wallet keychain could not be derived for seed scan."));
         m_controller->setSeedScanActive(false);
         m_controller->setWalletScanInFlight(false);
+        m_controller->setFullRescanInFlight(false);
         return;
     }
 
@@ -318,13 +321,17 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
     if (listing.lastRetrievedIndex() > 0 && listing.highestIndex() > 0
 
         && listing.lastRetrievedIndex() < listing.highestIndex()) {
+        const int progressPercent = qBound(0,
+                                           static_cast<int>((listing.lastRetrievedIndex() * 100) / listing.highestIndex()),
+                                           99);
         m_controller->setSeedScanNextIndex(listing.lastRetrievedIndex() + 1);
         QJsonObject document = m_controller->loadDocumentForService();
         QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
         walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(listing.lastRetrievedIndex()));
         document.insert(QStringLiteral("wallet_state"), walletState);
         m_controller->saveDocumentForService(document);
-        m_controller->setSyncStatusMessage(QStringLiteral("Seed scan page %1 / %2")
+        m_controller->setSyncStatusMessage(QStringLiteral("Seed scan %1% (%2 / %3)")
+                                               .arg(QString::number(progressPercent))
                                                .arg(QString::number(listing.lastRetrievedIndex()))
                                                .arg(QString::number(listing.highestIndex())));
         m_controller->notifyStatusChanged();
@@ -338,7 +345,8 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
         walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(m_controller->seedScanNextIndex() - 1));
         document.insert(QStringLiteral("wallet_state"), walletState);
         m_controller->saveDocumentForService(document);
-        m_controller->setSyncStatusMessage(QStringLiteral("Seed scan page starting at %1").arg(QString::number(m_controller->seedScanNextIndex())));
+        m_controller->setSyncStatusMessage(QStringLiteral("Seed scan 0% (starting at leaf %1)")
+                               .arg(QString::number(m_controller->seedScanNextIndex())));
         m_controller->notifyStatusChanged();
         m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, 1000, true);
         return;
@@ -366,7 +374,6 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
                 merged.spent = discovered.spent;
                 if (discovered.onChain && !discovered.spent) {
                     merged.pending = false;
-                    merged.locked = false;
                 }
                 tracked[j] = merged;
                 exists = true;
@@ -417,12 +424,13 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
     }
 
     m_controller->refreshStateFromStorage();
-    m_controller->setSyncStatusMessage(QStringLiteral("Seed scan complete"));
+    m_controller->setSyncStatusMessage(QStringLiteral("Seed scan 100% complete"));
     m_controller->notifyStatusChanged();
     m_controller->setLastError(QString());
     m_controller->setLastInfo(QString());
     m_controller->setSeedScanActive(false);
     m_controller->setWalletScanInFlight(false);
+    m_controller->setFullRescanInFlight(false);
 }
 
 /**

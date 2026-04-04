@@ -132,9 +132,6 @@ QList<WalletOutput> WalletScanner::reconcileTrackedOutputs(const QList<WalletOut
                 reconciled[j].spent = chainOutput.spent();
                 reconciled[j].height = chainOutput.blockHeight().toULongLong();
                 reconciled[j].pending = false;
-                if (!chainOutput.spent()) {
-                    reconciled[j].locked = false;
-                }
                 reconciled[j].coinbase =
                     chainOutput.outputType() == OutputPrintable::OutputType::OutputTypeCoinbase;
             }

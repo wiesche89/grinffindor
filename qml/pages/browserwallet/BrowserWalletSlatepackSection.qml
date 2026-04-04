@@ -9,6 +9,7 @@ Item {
     property bool syncingAmountControls: false
     property real spendableAmountValue: amountStringToValue(grinWalletController.spendableBalance)
     property string amountDialogMode: "send"
+    property bool slatepackActionsBlocked: grinWalletController.fullRescanInFlight
 
     implicitHeight: slatepackCard.implicitHeight
 
@@ -88,12 +89,16 @@ Item {
     }
 
     function openAmountDialog(mode) {
+        if (slatepackActionsBlocked)
+            return
         amountDialogMode = mode
         walletPageSettings.amountDraft = "1"
         amountActionPopup.open()
     }
 
     function confirmAmountDialog() {
+        if (slatepackActionsBlocked)
+            return
         syncSliderFromAmountField()
         if (amountDialogMode === "receive")
             grinWalletController.startReceiveWorkflow(amountField.text, "")
@@ -267,6 +272,20 @@ Item {
                 }
             }
 
+            BrowserWalletPanel {
+                Layout.fillWidth: true
+                visible: slatepackActionsBlocked
+                fillColor: "#352816"
+                strokeColor: "#ffd280"
+
+                Label {
+                    Layout.fillWidth: true
+                    text: walletRoot.tf("browser_wallet_slatepack_full_rescan_blocked", "Full rescan is active. Creating or processing Slatepacks is disabled until the scan completes.")
+                    color: "#ffd280"
+                    wrapMode: Text.WordWrap
+                }
+            }
+
             GridLayout {
                 Layout.fillWidth: true
                 columns: 2
@@ -276,7 +295,7 @@ Item {
                 Button {
                     Layout.fillWidth: true
                     text: walletRoot.tf("browser_wallet_nav_send", "Send (S1-S3)")
-                    enabled: walletRoot.nodeStatusMode() === "online"
+                    enabled: walletRoot.nodeStatusMode() === "online" && !slatepackActionsBlocked
                     leftPadding: 18
                     rightPadding: 18
                     topPadding: 16
@@ -300,6 +319,7 @@ Item {
                 Button {
                     Layout.fillWidth: true
                     text: walletRoot.tf("browser_wallet_nav_receive", "Receive (I1-I3)")
+                    enabled: !slatepackActionsBlocked
                     leftPadding: 18
                     rightPadding: 18
                     topPadding: 16
@@ -307,11 +327,11 @@ Item {
                     background: Rectangle {
                         radius: 18
                         color: "#111c26"
-                        border.color: "#223847"
+                        border.color: parent.enabled ? "#223847" : "#1a2a35"
                     }
                     contentItem: Label {
                         text: parent.text
-                        color: "#67b98d"
+                        color: parent.enabled ? "#67b98d" : "#6c8378"
                         font.pixelSize: 16
                         font.weight: Font.DemiBold
                         horizontalAlignment: Text.AlignHCenter
@@ -348,7 +368,7 @@ Item {
 
                 Button {
                     text: walletRoot.tf("browser_wallet_process", "Process")
-                    enabled: slatepackArea.text.trim().length > 0
+                    enabled: slatepackArea.text.trim().length > 0 && !slatepackActionsBlocked
                     highlighted: false
                     onClicked: {
                         var previousWorkflowId = grinWalletController.workflowId

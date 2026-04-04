@@ -64,6 +64,7 @@ GrinWalletController::GrinWalletController(QObject *parent) :
     m_autoLockOnAppDeactivate(false),
     m_walletScanInFlight(false),
     m_seedScanActive(false),
+    m_fullRescanInFlight(false),
     m_seedScanNextIndex(1),
     m_pendingBroadcastInputLookup(false),
     m_broadcastStatusRefreshInFlight(false),
@@ -176,6 +177,12 @@ QString GrinWalletController::awaitingFinalizationBalance() const { return m_awa
  * @return
  */
 qulonglong GrinWalletController::scanHeight() const { return m_scanHeight; }
+
+/**
+ * @brief Returns whether a full wallet rescan is currently active.
+ * @return
+ */
+bool GrinWalletController::fullRescanInFlight() const { return m_fullRescanInFlight; }
 
 /**
  * @brief Returns the latest error message.
@@ -302,6 +309,12 @@ bool GrinWalletController::seedScanActive() const { return m_seedScanActive; }
  * @param active
  */
 void GrinWalletController::setSeedScanActive(bool active) { m_seedScanActive = active; }
+
+/**
+ * @brief Sets whether a full wallet rescan is currently active.
+ * @param inFlight
+ */
+void GrinWalletController::setFullRescanInFlight(bool inFlight) { m_fullRescanInFlight = inFlight; }
 
 /**
  * @brief Returns the next seed index scheduled for scanning.
@@ -786,8 +799,10 @@ void GrinWalletController::rescanWallet()
     GrinWalletStorage::saveDocument(document);
     refreshStateFromStorage();
 
+    setFullRescanInFlight(true);
     m_seedScanNextIndex = 1;
     setLastError(QString());
+    notifyStatusChanged();
 
     setLastInfo(QStringLiteral("Full wallet rescan queued from the beginning."));
 
@@ -873,6 +888,10 @@ bool GrinWalletController::isValidNodeUrl(const QString &nodeUrl) const
  */
 QString GrinWalletController::createSlatepackTemplate(const QString &sender) const
 {
+    if (m_fullRescanInFlight) {
+        return QString();
+    }
+
     QJsonObject slate;
     slate.insert(QStringLiteral("ver"), QStringLiteral("4:3"));
     slate.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
@@ -891,6 +910,11 @@ QString GrinWalletController::createSlatepackTemplate(const QString &sender) con
  */
 void GrinWalletController::startSendWorkflow(const QString &amount, const QString &note)
 {
+    if (m_fullRescanInFlight) {
+        setLastError(QStringLiteral("Full wallet rescan is still running. Slatepack sends are temporarily disabled."));
+        return;
+    }
+
     m_workflowService->startSendWorkflow(amount, note);
 }
 
@@ -901,6 +925,11 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
  */
 void GrinWalletController::startReceiveWorkflow(const QString &amount, const QString &note)
 {
+    if (m_fullRescanInFlight) {
+        setLastError(QStringLiteral("Full wallet rescan is still running. Slatepack receives are temporarily disabled."));
+        return;
+    }
+
     m_workflowService->startReceiveWorkflow(amount, note);
 }
 
@@ -910,6 +939,11 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
  */
 void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
 {
+    if (m_fullRescanInFlight) {
+        setLastError(QStringLiteral("Full wallet rescan is still running. Slatepack processing is temporarily disabled."));
+        return;
+    }
+
     m_workflowService->processWorkflowSlatepack(slatepack);
 }
 

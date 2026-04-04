@@ -777,8 +777,58 @@ GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject do
     const qulonglong effectiveHeight = chainHeight > 0 ? chainHeight : state.scanHeight;
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
 
-    const QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
-    const QJsonObject workflowContexts = document.value(QStringLiteral("workflow_contexts")).toObject();
+    QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
+    QJsonObject workflowContexts = document.value(QStringLiteral("workflow_contexts")).toObject();
+
+    QSet<QString> workflowIdsWithOutputs;
+    for (int i = 0; i < outputs.size(); ++i) {
+        const QString workflowId = outputs.at(i).workflowId.trimmed();
+        if (!workflowId.isEmpty()) {
+            workflowIdsWithOutputs.insert(workflowId);
+        }
+    }
+
+    bool transactionsChanged = false;
+    for (int i = transactions.size() - 1; i >= 0; --i) {
+        const QJsonObject entry = transactions.at(i).toObject();
+        const QString workflowId = entry.value(QStringLiteral("workflow_id")).toString().trimmed();
+        const QString status = entry.value(QStringLiteral("status")).toString();
+
+        if (workflowId.isEmpty()
+            || status == QStringLiteral("confirmed")
+            || status == QStringLiteral("cancelled")
+            || status == QStringLiteral("spent")) {
+            continue;
+        }
+
+        if (workflowIdsWithOutputs.contains(workflowId)) {
+            continue;
+        }
+
+        const bool broadcasted = entry.value(QStringLiteral("broadcasted")).toBool();
+        const bool txReady = entry.value(QStringLiteral("tx_ready")).toBool();
+        const bool hasTxSkeleton = !entry.value(QStringLiteral("tx_skeleton")).toObject().isEmpty();
+        const bool hasAmount = !entry.value(QStringLiteral("amount")).toString().trimmed().isEmpty();
+        const bool hasFee = !entry.value(QStringLiteral("fee")).toString().trimmed().isEmpty();
+        const QJsonObject context = workflowContexts.value(workflowId).toObject();
+        const bool hasSelectedInputs = !context.value(QStringLiteral("selected_input_commits")).toArray().isEmpty();
+
+        if (broadcasted || txReady || hasTxSkeleton || hasAmount || hasFee || hasSelectedInputs) {
+            continue;
+        }
+
+        transactions.removeAt(i);
+        workflowContexts.remove(workflowId);
+        transactionsChanged = true;
+    }
+
+    if (transactionsChanged) {
+        walletState.insert(QStringLiteral("transactions"), transactions);
+        state.document.insert(QStringLiteral("wallet_state"), walletState);
+        state.document.insert(QStringLiteral("workflow_contexts"), workflowContexts);
+        state.documentChanged = true;
+    }
+
     QSet<QString> activeWorkflowIds;
     for (int i = 0; i < transactions.size(); ++i) {
         const QJsonObject entry = transactions.at(i).toObject();
@@ -816,6 +866,11 @@ GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject do
             continue;
         }
 
+        if (activeSelectedInputCommits.contains(output.commitment) && !output.locked) {
+            output.locked = true;
+            outputsChanged = true;
+        }
+
         if (output.onChain && output.height > 0 && output.pending) {
             output.pending = false;
             outputsChanged = true;
@@ -832,6 +887,7 @@ GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject do
     if (outputsChanged) {
         walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
         state.document.insert(QStringLiteral("wallet_state"), walletState);
+        state.documentChanged = true;
     }
 
     const QJsonObject recalculatedBalances = WalletScanner::balancesFromOutputs(outputs, effectiveHeight);
@@ -841,6 +897,7 @@ GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject do
     if (balances != storedBalances) {
         walletState.insert(QStringLiteral("balances"), balances);
         state.document.insert(QStringLiteral("wallet_state"), walletState);
+        state.documentChanged = true;
         state.balancesChanged = true;
     }
 

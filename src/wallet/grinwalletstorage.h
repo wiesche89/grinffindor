@@ -27,6 +27,7 @@ public:
         QString immatureBalance;
         QString awaitingConfirmationBalance;
         QString awaitingFinalizationBalance;
+        bool documentChanged{false};
         bool balancesChanged{false};
     };
 

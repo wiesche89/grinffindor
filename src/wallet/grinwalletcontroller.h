@@ -44,6 +44,7 @@ class GrinWalletController : public QObject
    Q_PROPERTY(QString awaitingConfirmationBalance READ awaitingConfirmationBalance NOTIFY walletSummaryChanged)
    Q_PROPERTY(QString awaitingFinalizationBalance READ awaitingFinalizationBalance NOTIFY walletSummaryChanged)
    Q_PROPERTY(qulonglong scanHeight READ scanHeight NOTIFY walletSummaryChanged)
+   Q_PROPERTY(bool fullRescanInFlight READ fullRescanInFlight NOTIFY nodeStatusChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QString lastInfo READ lastInfo NOTIFY lastInfoChanged)
     Q_PROPERTY(QString workflowId READ workflowId NOTIFY workflowChanged)
@@ -129,6 +130,10 @@ public:
  * @brief Returns scan height.
  */
     qulonglong scanHeight() const;
+/**
+ * @brief Returns whether a full wallet rescan is currently active.
+ */
+    bool fullRescanInFlight() const;
 /**
  * @brief Returns last error.
  */
@@ -261,6 +266,10 @@ public:
  * @brief Sets seed scan active.
  */
     void setSeedScanActive(bool active);
+/**
+ * @brief Sets full rescan in flight.
+ */
+    void setFullRescanInFlight(bool inFlight);
 /**
  * @brief Returns seed scan next index.
  */
@@ -680,6 +689,7 @@ private:
     bool m_autoLockOnAppDeactivate;
     bool m_walletScanInFlight;
     bool m_seedScanActive;
+   bool m_fullRescanInFlight;
     qulonglong m_seedScanNextIndex;
     QList<WalletOutput> m_seedScanDiscovered;
     QString m_pendingBroadcastWorkflowId;

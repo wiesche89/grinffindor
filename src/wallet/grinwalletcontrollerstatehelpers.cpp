@@ -232,7 +232,7 @@ void GrinWalletController::refreshStateFromStorage()
     // Refreshing Derived Wallet Status Fields
     // -------------------------------------------------------------------------------------------------------
     GrinWalletStorage::RefreshedState state = GrinWalletStorage::refreshState(GrinWalletStorage::loadDocument(), m_chainHeight);
-    if (state.balancesChanged) {
+    if (state.documentChanged) {
         GrinWalletStorage::saveDocument(state.document);
     }
 

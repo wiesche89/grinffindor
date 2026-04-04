@@ -126,6 +126,7 @@ void GrinWalletNodeSyncService::finishSeedScan(const QString &message)
 {
 
     m_controller->setSeedScanActive(false);
+    m_controller->setFullRescanInFlight(false);
     if (!message.isEmpty()) {
         m_controller->setLastInfo(message);
     }

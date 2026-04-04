@@ -66,6 +66,6 @@ GrinWalletNodeSync::SeedScanState GrinWalletNodeSync::buildSeedScanState(const Q
     state.nextIndex = qMax<qulonglong>(
         1,
         walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toULongLong() + 1);
-    state.syncStatus = QStringLiteral("Seed scan started at leaf %1").arg(QString::number(state.nextIndex));
+    state.syncStatus = QStringLiteral("Seed scan 0% (starting at leaf %1)").arg(QString::number(state.nextIndex));
     return state;
 }
