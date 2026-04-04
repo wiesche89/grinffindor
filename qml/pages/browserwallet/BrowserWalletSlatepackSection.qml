@@ -146,7 +146,7 @@ Item {
                       ? walletRoot.tf("browser_wallet_amount_dialog_receive_title", "Receive Amount")
                       : walletRoot.tf("browser_wallet_amount_dialog_send_title", "Send Amount")
                 color: "#ffffff"
-                font.pixelSize: 28
+                font.pixelSize: walletRoot.veryPhoneMode ? 20 : (walletRoot.phoneMode ? 24 : 28)
                 font.weight: Font.Bold
                 wrapMode: Text.WordWrap
             }
@@ -157,6 +157,7 @@ Item {
                       ? walletRoot.tf("browser_wallet_amount_dialog_receive_note", "Enter the invoice amount to start the receive workflow.")
                       : walletRoot.tf("browser_wallet_amount_dialog_send_note", "Choose how much you want to send. Use Max to fill the spendable balance.")
                 color: "#d7e9f4"
+                    font.pixelSize: walletRoot.bodyTextSize
                 wrapMode: Text.WordWrap
             }
 
@@ -164,6 +165,7 @@ Item {
                 id: amountField
                 Layout.fillWidth: true
                 implicitHeight: 42
+                font.pixelSize: walletRoot.controlTextSize
                 text: walletPageSettings.amountDraft
                 placeholderText: walletRoot.tf("browser_wallet_amount_placeholder", "Amount")
                 selectByMouse: true
@@ -206,6 +208,7 @@ Item {
 
                 Button {
                     text: walletRoot.tf("browser_wallet_amount_max", "Max")
+                    font.pixelSize: walletRoot.controlTextSize
                     enabled: spendableAmountValue > 0
                     onClicked: {
                         amountSlider.value = spendableAmountValue
@@ -218,7 +221,7 @@ Item {
                 Label {
                     text: walletRoot.tf("browser_wallet_spendable", "Spendable") + ": " + grinWalletController.spendableBalance
                     color: "#7ea0b3"
-                    font.pixelSize: 12
+                    font.pixelSize: walletRoot.compactTextSize
                     horizontalAlignment: Text.AlignRight
                 }
             }
@@ -229,6 +232,7 @@ Item {
 
                 Button {
                     text: walletRoot.tf("browser_wallet_cancel", "Cancel")
+                    font.pixelSize: walletRoot.controlTextSize
                     onClicked: amountActionPopup.close()
                 }
 
@@ -236,6 +240,7 @@ Item {
                     text: amountDialogMode === "receive"
                           ? walletRoot.tf("browser_wallet_receive", "Receive")
                           : walletRoot.tf("browser_wallet_send", "Send")
+                    font.pixelSize: walletRoot.controlTextSize
                     enabled: amountField.text.trim().length > 0
                     onClicked: slatepackSection.confirmAmountDialog()
                 }
@@ -268,6 +273,7 @@ Item {
                           ? walletRoot.tf("browser_wallet_slatepack_recovery_pending", "Broadcast recovery is still in progress for one or more transactions. You can decode and process Slatepacks, but confirm node status before sending again.")
                           : walletRoot.tf("browser_wallet_slatepack_recovery_offline", "Node connectivity is degraded. Decoding still works, but sending and broadcast recovery should wait for a successful refresh.")
                     color: walletRoot.recoveryBannerColor()
+                    font.pixelSize: walletRoot.bodyTextSize
                     wrapMode: Text.WordWrap
                 }
             }
@@ -282,6 +288,7 @@ Item {
                     Layout.fillWidth: true
                     text: walletRoot.tf("browser_wallet_slatepack_full_rescan_blocked", "Full rescan is active. Creating or processing Slatepacks is disabled until the scan completes.")
                     color: "#ffd280"
+                    font.pixelSize: walletRoot.bodyTextSize
                     wrapMode: Text.WordWrap
                 }
             }
@@ -295,6 +302,7 @@ Item {
                     Layout.preferredWidth: 1
                     text: walletRoot.tf("browser_wallet_send", "Send")
                     enabled: walletRoot.nodeStatusMode() === "online" && !slatepackActionsBlocked
+                    font.pixelSize: walletRoot.controlTextSize
                     leftPadding: 18
                     rightPadding: 18
                     topPadding: 16
@@ -307,7 +315,7 @@ Item {
                     contentItem: Label {
                         text: parent.text
                         color: parent.enabled ? "#d96a76" : "#7b6669"
-                        font.pixelSize: 16
+                        font.pixelSize: walletRoot.controlTextSize
                         font.weight: Font.DemiBold
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -320,6 +328,7 @@ Item {
                     Layout.preferredWidth: 1
                     text: walletRoot.tf("browser_wallet_receive", "Receive")
                     enabled: !slatepackActionsBlocked
+                    font.pixelSize: walletRoot.controlTextSize
                     leftPadding: 18
                     rightPadding: 18
                     topPadding: 16
@@ -332,7 +341,7 @@ Item {
                     contentItem: Label {
                         text: parent.text
                         color: parent.enabled ? "#67b98d" : "#6c8378"
-                        font.pixelSize: 16
+                        font.pixelSize: walletRoot.controlTextSize
                         font.weight: Font.DemiBold
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -347,6 +356,7 @@ Item {
 
                 Button {
                     text: walletRoot.tf("browser_wallet_paste_slatepack", "Paste Slatepack")
+                    font.pixelSize: walletRoot.controlTextSize
                     highlighted: false
                     onClicked: {
                         walletRoot.openPasteDialog(
@@ -358,6 +368,7 @@ Item {
 
                 Button {
                     text: walletRoot.tf("browser_wallet_decode", "Decode")
+                    font.pixelSize: walletRoot.controlTextSize
                     enabled: slatepackArea.text.trim().length > 0
                     highlighted: false
                     onClicked: {
@@ -368,6 +379,7 @@ Item {
 
                 Button {
                     text: walletRoot.tf("browser_wallet_process", "Process")
+                    font.pixelSize: walletRoot.controlTextSize
                     enabled: slatepackArea.text.trim().length > 0 && !slatepackActionsBlocked
                     highlighted: false
                     onClicked: {
@@ -387,6 +399,7 @@ Item {
 
                 Button {
                     text: walletRoot.tf("browser_wallet_clear", "Clear")
+                    font.pixelSize: walletRoot.controlTextSize
                     highlighted: false
                     onClicked: slatepackSection.clearSlatepackWorkspace()
                 }
@@ -405,6 +418,7 @@ Item {
                     anchors.margins: 10
                     text: walletRoot.slatepackStatusText
                     color: walletRoot.slatepackStatusColor
+                    font.pixelSize: walletRoot.bodyTextSize
                     wrapMode: Text.WordWrap
                 }
             }
@@ -418,6 +432,7 @@ Item {
                       + " / "
                       + (grinWalletController.workflowId.length > 0 ? grinWalletController.workflowId : "-")
                 color: "#8ff0c8"
+                    font.pixelSize: walletRoot.bodyTextSize
                 wrapMode: Text.WordWrap
             }
 
@@ -435,6 +450,7 @@ Item {
                     color: "#e2f4ff"
                     selectionColor: "#2ad4ff"
                     selectedTextColor: "#08131c"
+                    font.pixelSize: walletRoot.controlTextSize
                     selectByMouse: true
                     persistentSelection: true
                     activeFocusOnPress: true

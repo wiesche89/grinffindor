@@ -81,7 +81,9 @@ void GrinWalletNodeSyncService::onNodeTipFinished(const Result<Tip> &result)
 
         && !m_controller->walletScanInFlight()
         && !m_controller->seedScanActive()) {
-        if (m_controller->scanHeight() == 0) {
+        if (m_controller->resumePendingFullRescan()) {
+            // Resume takes precedence over starting a fresh rescan because it preserves leaf progress.
+        } else if (m_controller->scanHeight() == 0) {
             m_controller->rescanWallet();
         } else {
             requestWalletScan();
@@ -335,11 +337,11 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
                                                .arg(QString::number(listing.lastRetrievedIndex()))
                                                .arg(QString::number(listing.highestIndex())));
         m_controller->notifyStatusChanged();
-        m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, 1000, true);
+        m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
         return;
     }
-    if (listing.lastRetrievedIndex() == 0 && discovered.size() >= 1000) {
-        m_controller->setSeedScanNextIndex(m_controller->seedScanNextIndex() + 1000);
+    if (listing.lastRetrievedIndex() == 0 && discovered.size() >= kSeedScanBatchSize) {
+        m_controller->setSeedScanNextIndex(m_controller->seedScanNextIndex() + kSeedScanBatchSize);
         QJsonObject document = m_controller->loadDocumentForService();
         QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
         walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(m_controller->seedScanNextIndex() - 1));
@@ -348,7 +350,7 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
         m_controller->setSyncStatusMessage(QStringLiteral("Seed scan 0% (starting at leaf %1)")
                                .arg(QString::number(m_controller->seedScanNextIndex())));
         m_controller->notifyStatusChanged();
-        m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, 1000, true);
+        m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
         return;
     }
 

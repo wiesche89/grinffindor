@@ -24,6 +24,7 @@ BrowserWalletSectionCard {
             Layout.fillWidth: true
             Layout.preferredHeight: 116
             readOnly: true
+            font.pixelSize: walletRoot.controlTextSize
             wrapMode: TextEdit.Wrap
             textFormat: TextEdit.PlainText
             selectByMouse: true
@@ -42,6 +43,7 @@ BrowserWalletSectionCard {
 
             Button {
                 text: walletRoot.tf("browser_wallet_backup_done", "I saved it")
+                font.pixelSize: walletRoot.controlTextSize
                 onClicked: grinWalletController.dismissMnemonicPreview()
             }
         }

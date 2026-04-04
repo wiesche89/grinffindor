@@ -26,6 +26,18 @@ Item {
     property string pasteDialogPlaceholder: ""
     property string pasteDialogText: ""
     property bool compactNavigation: width < 920
+    readonly property bool veryPhoneMode: width < 420
+    readonly property bool phoneMode: width < 560
+    readonly property real mobileScale: veryPhoneMode ? 0.72 : (phoneMode ? 0.78 : (compactNavigation ? 0.88 : 1.0))
+    readonly property int pageMargin: veryPhoneMode ? 10 : (phoneMode ? 12 : 18)
+    readonly property int pageSpacing: Math.max(8, Math.round(16 * mobileScale))
+    readonly property int compactTextSize: veryPhoneMode ? 11 : (phoneMode ? 12 : 13)
+    readonly property int bodyTextSize: veryPhoneMode ? 12 : (phoneMode ? 13 : 14)
+    readonly property int sectionTitleSize: veryPhoneMode ? 18 : (phoneMode ? 20 : (compactNavigation ? 24 : 28))
+    readonly property int panelTitleSize: veryPhoneMode ? 13 : (phoneMode ? 14 : 16)
+    readonly property int metricValueSize: veryPhoneMode ? 16 : (phoneMode ? 18 : (compactNavigation ? 20 : 22))
+    readonly property int metricLabelSize: veryPhoneMode ? 11 : (phoneMode ? 12 : 13)
+    readonly property int controlTextSize: veryPhoneMode ? 12 : (phoneMode ? 13 : 14)
     property color slatepackStatusColor: "#8fb4c9"
     property var slatepackEditor: null
     property var decodedEditor: null
@@ -289,8 +301,8 @@ Item {
         anchors.top: topBar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: 18
-        spacing: 10
+        anchors.margins: root.pageMargin
+        spacing: Math.max(8, Math.round(10 * root.mobileScale))
         visible: grinWalletController.walletUnlocked
 
         Label {
@@ -298,6 +310,7 @@ Item {
             visible: grinWalletController.lastInfo.length > 0
             text: grinWalletController.lastInfo
             color: "#8ff0c8"
+            font.pixelSize: root.bodyTextSize
             wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
         }
@@ -307,6 +320,7 @@ Item {
             visible: grinWalletController.lastError.length > 0
             text: grinWalletController.lastError
             color: "#ffb4b4"
+            font.pixelSize: root.bodyTextSize
             wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
         }
@@ -317,9 +331,9 @@ Item {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.margins: 18
-        anchors.topMargin: 54
-        spacing: 18
+        anchors.margins: root.pageMargin
+        anchors.topMargin: root.phoneMode ? 38 : 54
+        spacing: root.pageSpacing
         visible: grinWalletController.walletUnlocked
 
         BrowserWalletParts.BrowserWalletSidebar {
@@ -382,7 +396,7 @@ Item {
         modal: true
         interactive: root.compactNavigation
         enabled: root.compactNavigation && grinWalletController.walletUnlocked
-        width: Math.min(root.width * 0.82, 340)
+        width: Math.min(root.width * (root.veryPhoneMode ? 0.78 : 0.82), root.veryPhoneMode ? 300 : 340)
         height: root.height
         topMargin: topBar.height
         background: Rectangle {

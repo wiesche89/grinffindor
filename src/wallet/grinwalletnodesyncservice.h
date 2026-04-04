@@ -93,6 +93,7 @@ private slots:
     void onNodePushTransactionFinished(const Result<bool> &result);
 
 private:
+    static constexpr int kSeedScanBatchSize = 5000;
 /**
  * @brief Clears pending broadcast state.
  */

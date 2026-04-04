@@ -158,7 +158,7 @@ Item {
                                 Layout.fillWidth: true
                                 text: walletRoot.tf("browser_wallet_statement_current_balance", "Current Balance")
                                 color: "#8fb4c9"
-                                font.pixelSize: 13
+                                font.pixelSize: walletRoot.compactTextSize
                                 font.letterSpacing: 1.1
                             }
 
@@ -166,7 +166,7 @@ Item {
                                 Layout.fillWidth: true
                                 text: grinWalletController.totalBalance + " GRIN"
                                 color: "#ffffff"
-                                font.pixelSize: 30
+                                font.pixelSize: walletRoot.veryPhoneMode ? 20 : (walletRoot.phoneMode ? 24 : 30)
                                 font.weight: Font.Bold
                                 wrapMode: Text.WordWrap
                             }
@@ -174,6 +174,7 @@ Item {
 
                         Button {
                             text: walletRoot.tf("browser_wallet_statement_export", "Export")
+                            font.pixelSize: walletRoot.controlTextSize
                             onClicked: grinWalletController.downloadTextFile("statement-of-account.txt", statementSection.statementExportText())
                         }
                     }
@@ -184,19 +185,20 @@ Item {
                         rowSpacing: 10
                         columnSpacing: 12
 
-                        Label { text: walletRoot.tf("browser_wallet_statement_spendable", "Spendable"); color: "#8fb4c9" }
-                        Label { text: grinWalletController.spendableBalance + " GRIN"; color: "#d7e9f4" }
-                        Label { text: walletRoot.tf("browser_wallet_statement_awaiting", "Awaiting"); color: "#8fb4c9" }
+                        Label { text: walletRoot.tf("browser_wallet_statement_spendable", "Spendable"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
+                        Label { text: grinWalletController.spendableBalance + " GRIN"; color: "#d7e9f4"; font.pixelSize: walletRoot.bodyTextSize }
+                        Label { text: walletRoot.tf("browser_wallet_statement_awaiting", "Awaiting"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
                         Label {
                             text: (statementSection.formatAmountValue(
                                        statementSection.amountStringToValue(grinWalletController.awaitingConfirmationBalance)
                                        + statementSection.amountStringToValue(grinWalletController.awaitingFinalizationBalance)) || "0") + " GRIN"
                             color: "#d7e9f4"
+                            font.pixelSize: walletRoot.bodyTextSize
                         }
-                        Label { text: walletRoot.tf("browser_wallet_statement_locked", "Locked"); color: "#8fb4c9" }
-                        Label { text: grinWalletController.lockedBalance + " GRIN"; color: "#d7e9f4" }
-                        Label { text: walletRoot.tf("browser_wallet_history_confirmations", "Confirmations"); color: "#8fb4c9" }
-                        Label { text: "≥ 10"; color: "#d7e9f4" }
+                        Label { text: walletRoot.tf("browser_wallet_statement_locked", "Locked"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
+                        Label { text: grinWalletController.lockedBalance + " GRIN"; color: "#d7e9f4"; font.pixelSize: walletRoot.bodyTextSize }
+                        Label { text: walletRoot.tf("browser_wallet_history_confirmations", "Confirmations"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
+                        Label { text: "≥ 10"; color: "#d7e9f4"; font.pixelSize: walletRoot.bodyTextSize }
                     }
                 }
             }
@@ -230,12 +232,14 @@ Item {
                                 Layout.preferredWidth: parent.columns >= 3 ? statementSection.statementDateColumnWidth(parent.width) : -1
                                 text: walletRoot.tf("browser_wallet_statement_date", "Date / Time")
                                 color: "#7ea0b3"
+                                font.pixelSize: walletRoot.bodyTextSize
                                 font.weight: Font.DemiBold
                             }
                             Label {
                                 Layout.preferredWidth: parent.columns >= 3 ? statementSection.statementReferenceColumnWidth(parent.width) : -1
                                 text: walletRoot.tf("browser_wallet_statement_reference", "Reference")
                                 color: "#7ea0b3"
+                                font.pixelSize: walletRoot.bodyTextSize
                                 font.weight: Font.DemiBold
                             }
                             Label {
@@ -243,6 +247,7 @@ Item {
                                 visible: parent.columns >= 3
                                 text: walletRoot.tf("browser_wallet_statement_amount", "Amount")
                                 color: "#7ea0b3"
+                                font.pixelSize: walletRoot.bodyTextSize
                                 font.weight: Font.DemiBold
                                 horizontalAlignment: Text.AlignRight
                             }
@@ -277,6 +282,7 @@ Item {
                                         Layout.fillWidth: parent.columns < 3
                                         text: statementSection.statementTimestamp(modelData)
                                         color: "#d7e9f4"
+                                        font.pixelSize: walletRoot.bodyTextSize
                                         wrapMode: Text.WordWrap
                                     }
 
@@ -289,6 +295,7 @@ Item {
                                             Layout.fillWidth: true
                                             text: statementSection.statementLabel(modelData)
                                             color: "#ffffff"
+                                            font.pixelSize: walletRoot.bodyTextSize
                                             font.weight: Font.DemiBold
                                             wrapMode: Text.WordWrap
                                         }
@@ -297,6 +304,7 @@ Item {
                                             Layout.fillWidth: true
                                             text: statementSection.statementDetail(modelData)
                                             color: "#8fb4c9"
+                                            font.pixelSize: walletRoot.bodyTextSize
                                             wrapMode: Text.WordWrap
                                         }
 
@@ -304,7 +312,7 @@ Item {
                                             Layout.fillWidth: true
                                             text: (modelData.workflow_id || "")
                                             color: "#6f94a8"
-                                            font.pixelSize: 12
+                                            font.pixelSize: walletRoot.compactTextSize
                                             wrapMode: Text.WrapAnywhere
                                         }
                                     }
@@ -314,6 +322,7 @@ Item {
                                         visible: parent.columns >= 3
                                         text: statementSection.signedStatementText(modelData)
                                         color: statementSection.signedStatementColor(modelData)
+                                        font.pixelSize: walletRoot.bodyTextSize
                                         horizontalAlignment: Text.AlignRight
                                         font.weight: Font.DemiBold
                                     }
@@ -326,7 +335,7 @@ Item {
                                     Label {
                                         text: walletRoot.tf("browser_wallet_statement_amount", "Amount") + ": " + statementSection.signedStatementText(modelData)
                                         color: statementSection.signedStatementColor(modelData)
-                                        font.pixelSize: 12
+                                        font.pixelSize: walletRoot.compactTextSize
                                         font.weight: Font.DemiBold
                                     }
                                 }
@@ -339,6 +348,7 @@ Item {
                         visible: statementSection.confirmedStatementEntries().length === 0
                         text: walletRoot.tf("browser_wallet_statement_empty", "No statement entries are available yet. Complete or receive a transaction first.")
                         color: "#8fb4c9"
+                        font.pixelSize: walletRoot.bodyTextSize
                         wrapMode: Text.WordWrap
                     }
                 }

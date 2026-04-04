@@ -547,6 +547,11 @@ public:
  * @brief Returns next child index from state for service.
  */
     quint32 nextChildIndexFromStateForService(const QJsonObject &walletState) const;
+/**
+ * @brief Resumes a persisted full rescan without resetting restore_leaf_index.
+ * @return True when a pending full rescan was detected.
+ */
+    bool resumePendingFullRescan();
     QJsonObject filterWorkflowContextsForTransactionsForService(const QJsonObject &contexts,
                                                                const QJsonArray &transactions) const;
 signals:

@@ -194,7 +194,7 @@ void GrinWalletController::unlockWallet(const QString &password)
         }
     }
 
-    if (m_scanHeight == 0) {
+    if (!resumePendingFullRescan() && m_scanHeight == 0) {
         rescanWallet();
     }
 }

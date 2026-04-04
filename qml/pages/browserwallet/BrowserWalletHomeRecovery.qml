@@ -22,6 +22,7 @@ BrowserWalletSectionCard {
             Layout.fillWidth: true
             text: walletRoot.recoveryBannerText()
             color: walletRoot.recoveryBannerColor()
+            font.pixelSize: walletRoot.bodyTextSize
             wrapMode: Text.WordWrap
         }
 
@@ -30,6 +31,7 @@ BrowserWalletSectionCard {
             visible: grinWalletController.lastError.length > 0 && walletRoot.nodeStatusMode() !== "online"
             text: grinWalletController.lastError
             color: "#ffd3d3"
+            font.pixelSize: walletRoot.bodyTextSize
             wrapMode: Text.WordWrap
         }
 
@@ -38,17 +40,20 @@ BrowserWalletSectionCard {
 
             Button {
                 text: walletRoot.tf("browser_wallet_refresh", "Refresh")
+                font.pixelSize: walletRoot.controlTextSize
                 onClicked: grinWalletController.refreshNodeStatus()
             }
 
             Button {
                 text: walletRoot.tf("browser_wallet_rescan", "Full Rescan")
+                font.pixelSize: walletRoot.controlTextSize
                 enabled: walletRoot.nodeStatusMode() === "online"
                 onClicked: grinWalletController.rescanWallet()
             }
 
             Button {
                 text: walletRoot.tf("browser_wallet_nav_settings", "Settings")
+                font.pixelSize: walletRoot.controlTextSize
                 onClicked: walletRoot.activeSection = "settings"
             }
 

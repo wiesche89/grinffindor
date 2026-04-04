@@ -692,6 +692,42 @@ void GrinWalletController::initialize()
 }
 
 /**
+ * @brief Resumes an interrupted full rescan from persisted restore-leaf progress.
+ * @return True when pending full-rescan state exists.
+ */
+bool GrinWalletController::resumePendingFullRescan()
+{
+    if (!hasUnlockedSession()) {
+        return false;
+    }
+
+    const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
+    if (walletState.value(QStringLiteral("last_sync_mode")).toString() != QStringLiteral("full-rescan")) {
+        return false;
+    }
+
+    const qulonglong restoreLeafIndex = walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toULongLong();
+    const qulonglong resumeLeaf = qMax<qulonglong>(1, restoreLeafIndex + 1);
+
+    setFullRescanInFlight(true);
+    setLastError(QString());
+
+    if (m_chainHeight == 0) {
+        setLastInfo(QStringLiteral("Resuming full wallet rescan from stored progress after node refresh."));
+        return true;
+    }
+
+    if (walletScanInFlight() || seedScanActive()) {
+        return true;
+    }
+
+    setWalletScanInFlight(true);
+    setLastInfo(QStringLiteral("Resuming full wallet rescan from leaf %1.").arg(QString::number(resumeLeaf)));
+    startSeedScan();
+    return true;
+}
+
+/**
  * @brief Generates a new mnemonic phrase for wallet creation.
  * @return
  */

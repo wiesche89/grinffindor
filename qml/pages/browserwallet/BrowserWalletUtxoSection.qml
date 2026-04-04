@@ -24,6 +24,7 @@ Item {
                 visible: grinWalletController.walletOutputs.length === 0
                 text: walletRoot.tf("browser_wallet_utxo_empty", "No wallet outputs are tracked yet. Run a scan or complete a transaction first.")
                 color: "#8fb4c9"
+                font.pixelSize: walletRoot.bodyTextSize
                 wrapMode: Text.WordWrap
             }
 
@@ -47,6 +48,7 @@ Item {
                             color: modelData.status === "spendable" ? "#8ff0c8"
                                  : modelData.status === "spent" ? "#ffb4b4"
                                  : "#ffd280"
+                            font.pixelSize: walletRoot.bodyTextSize
                             wrapMode: Text.WordWrap
                         }
 
@@ -54,6 +56,7 @@ Item {
                             Layout.fillWidth: true
                             text: walletRoot.tf("browser_wallet_utxo_source", "Source") + ": " + (modelData.source || "-")
                             color: "#d7e9f4"
+                            font.pixelSize: walletRoot.bodyTextSize
                             wrapMode: Text.WordWrap
                         }
 
@@ -62,6 +65,7 @@ Item {
                             text: walletRoot.tf("browser_wallet_history_confirmations", "Confirmations") + ": "
                                   + (modelData.confirmations !== undefined ? modelData.confirmations : 0)
                             color: "#d7e9f4"
+                                font.pixelSize: walletRoot.bodyTextSize
                             wrapMode: Text.WordWrap
                         }
 
@@ -72,6 +76,7 @@ Item {
                                 text: detailsExpanded
                                       ? walletRoot.tf("browser_wallet_hide_details", "Hide Details")
                                       : walletRoot.tf("browser_wallet_show_details", "Details")
+                                font.pixelSize: walletRoot.controlTextSize
                                 onClicked: detailsExpanded = !detailsExpanded
                             }
                         }
@@ -92,6 +97,7 @@ Item {
                                     text: walletRoot.tf("browser_wallet_utxo_height", "Height") + ": "
                                           + ((modelData.height || "").length > 0 ? modelData.height : "-")
                                     color: "#d7e9f4"
+                                    font.pixelSize: walletRoot.bodyTextSize
                                     wrapMode: Text.WordWrap
                                 }
 
@@ -101,6 +107,7 @@ Item {
                                           + (modelData.coinbase ? walletRoot.tf("browser_wallet_utxo_yes", "yes")
                                                                 : walletRoot.tf("browser_wallet_utxo_no", "no"))
                                     color: "#d7e9f4"
+                                    font.pixelSize: walletRoot.bodyTextSize
                                     wrapMode: Text.WordWrap
                                 }
 
@@ -110,6 +117,7 @@ Item {
                                           + (modelData.on_chain ? walletRoot.tf("browser_wallet_utxo_yes", "yes")
                                                                 : walletRoot.tf("browser_wallet_utxo_no", "no"))
                                     color: "#d7e9f4"
+                                    font.pixelSize: walletRoot.bodyTextSize
                                     wrapMode: Text.WordWrap
                                 }
 
@@ -118,6 +126,7 @@ Item {
                                     text: walletRoot.tf("browser_wallet_utxo_workflow", "Workflow") + ": "
                                           + ((modelData.workflow_id || "").length > 0 ? modelData.workflow_id : "-")
                                     color: "#d7e9f4"
+                                    font.pixelSize: walletRoot.bodyTextSize
                                     wrapMode: Text.WrapAnywhere
                                 }
 
@@ -130,6 +139,7 @@ Item {
                                           + (modelData.lock_workflow_status || "-") + " / "
                                           + modelData.lock_workflow_id
                                     color: "#ffd280"
+                                    font.pixelSize: walletRoot.bodyTextSize
                                     wrapMode: Text.WrapAnywhere
                                 }
                             }
@@ -139,7 +149,7 @@ Item {
                                 text: walletRoot.tf("browser_wallet_utxo_commitment", "Commitment") + ": " + (modelData.commitment || "-")
                                 color: "#8fb4c9"
                                 wrapMode: Text.WrapAnywhere
-                                font.pixelSize: 12
+                                font.pixelSize: walletRoot.compactTextSize
                             }
 
                             Label {
@@ -148,7 +158,7 @@ Item {
                                 text: walletRoot.tf("browser_wallet_utxo_keypath", "Key path") + ": " + modelData.key_path
                                 color: "#8fb4c9"
                                 wrapMode: Text.WrapAnywhere
-                                font.pixelSize: 12
+                                font.pixelSize: walletRoot.compactTextSize
                             }
                         }
                     }
