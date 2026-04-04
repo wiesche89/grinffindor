@@ -1,4 +1,4 @@
-#include "walletcryptoslatepackhelpers.h"
+﻿#include "walletcryptoslatepackhelpers.h"
 
 #include "walletcryptobasehelpers.h"
 
@@ -12,7 +12,7 @@ namespace WalletCryptoSlatepackHelpers
 {
 
 /**
- * @brief slatepackAddress
+ * @brief Processes slatepack address.
  * @param keychain
  * @param networkName
  * @return
@@ -44,7 +44,7 @@ QString slatepackAddress(const WalletKeychain &keychain, const QString &networkN
 }
 
 /**
- * @brief paymentProofAddress
+ * @brief Processes payment proof address.
  * @param keychain
  * @return
  */
@@ -70,7 +70,7 @@ QString paymentProofAddress(const WalletKeychain &keychain)
 }
 
 /**
- * @brief signPaymentProof
+ * @brief Signs payment proof.
  * @param slate
  * @param keychain
  * @param errorOut
@@ -141,7 +141,7 @@ bool signPaymentProof(SlateV4 *slate, const WalletKeychain &keychain, QString *e
 }
 
 /**
- * @brief verifyPaymentProof
+ * @brief Validates payment proof.
  * @param slate
  * @param errorOut
  * @return

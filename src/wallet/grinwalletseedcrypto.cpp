@@ -1,4 +1,4 @@
-#include "grinwalletseedcrypto.h"
+﻿#include "grinwalletseedcrypto.h"
 
 #include <QByteArray>
 #include <QCryptographicHash>
@@ -22,7 +22,7 @@ const int kSeedCipherKeyBytes = 32;
 const int kSeedCipherMacBytes = 16;
 
 /**
- * @brief randomBytes
+ * @brief Generates bytes.
  * @param size
  * @return
  */
@@ -36,7 +36,7 @@ QByteArray randomBytes(int size)
 }
 
 /**
- * @brief mnemonicWords
+ * @brief Processes mnemonic words.
  * @return
  */
 QStringList &mnemonicWords()
@@ -62,7 +62,7 @@ QStringList &mnemonicWords()
 }
 
 /**
- * @brief bitsFromBytes
+ * @brief Processes bits from bytes.
  * @param bytes
  * @return
  */
@@ -80,7 +80,7 @@ QByteArray bitsFromBytes(const QByteArray &bytes)
 }
 
 /**
- * @brief bytesFromBits
+ * @brief Processes bytes from bits.
  * @param bits
  * @return
  */
@@ -99,7 +99,7 @@ QByteArray bytesFromBits(const QByteArray &bits)
 }
 
 /**
- * @brief mnemonicFromEntropy
+ * @brief Processes mnemonic from entropy.
  * @param entropy
  * @return
  */
@@ -127,7 +127,7 @@ QString mnemonicFromEntropy(const QByteArray &entropy)
 }
 
 /**
- * @brief entropyFromMnemonic
+ * @brief Returns whether entropy from mnemonic.
  * @param mnemonic
  * @param entropyOut
  * @return
@@ -171,7 +171,7 @@ bool entropyFromMnemonic(const QString &mnemonic, QByteArray *entropyOut)
 }
 
 /**
- * @brief deriveLegacyKeyMaterial
+ * @brief Builds legacy key material.
  * @param password
  * @param salt
  * @return
@@ -187,7 +187,7 @@ QByteArray deriveLegacyKeyMaterial(const QString &password, const QByteArray &sa
 }
 
 /**
- * @brief xorStream
+ * @brief Processes xor stream.
  * @param data
  * @param key
  * @param nonce
@@ -210,7 +210,7 @@ QByteArray xorStream(const QByteArray &data, const QByteArray &key, const QByteA
 }
 
 /**
- * @brief deriveKeyMaterialV2
+ * @brief Builds key material v2.
  * @param password
  * @param salt
  * @param iterations
@@ -240,7 +240,7 @@ QByteArray deriveKeyMaterialV2(const QString &password, const QByteArray &salt, 
 }
 
 /**
- * @brief deriveKeyMaterialV3
+ * @brief Builds key material v3.
  * @param password
  * @param salt
  * @param blocks

@@ -1,4 +1,4 @@
-#include "walletscanner.h"
+﻿#include "walletscanner.h"
 
 #include <QStringList>
 
@@ -8,7 +8,7 @@
 namespace {
 
 /**
- * @brief amountToNanogrin
+ * @brief Processes amount to nanogrin.
  * @param amount
  * @return
  */
@@ -48,7 +48,7 @@ quint64 amountToNanogrin(const QString &amount)
 }
 
 /**
- * @brief formatNanogrin
+ * @brief Builds nanogrin.
  * @param amount
  * @return
  */

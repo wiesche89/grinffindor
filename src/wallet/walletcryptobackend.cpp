@@ -1,4 +1,4 @@
-#include "walletcryptobackend.h"
+﻿#include "walletcryptobackend.h"
 
 #include "walletcryptoaggsighelpers.h"
 #include "walletcryptobasehelpers.h"
@@ -12,8 +12,12 @@
 #include <QRandomGenerator>
 #include <QStringList>
 
+// -------------------------------------------------------------------------------------------------------
+// Backend Capability And Participant Context
+// -------------------------------------------------------------------------------------------------------
+
 /**
- * @brief WalletCryptoBackend::supportsRealGrinTransactions
+ * @brief Indicates whether the backend supports real Grin transaction primitives.
  * @return
  */
 bool WalletCryptoBackend::supportsRealGrinTransactions()
@@ -22,7 +26,7 @@ bool WalletCryptoBackend::supportsRealGrinTransactions()
 }
 
 /**
- * @brief WalletCryptoBackend::createParticipant
+ * @brief Creates participant.
  * @param walletFingerprint
  * @param workflowId
  * @param roleTag
@@ -50,7 +54,7 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipant(c
 }
 
 /**
- * @brief WalletCryptoBackend::createParticipantFromBlindSecret
+ * @brief Creates participant from blind secret.
  * @param blindSecretHex
  * @param walletFingerprint
  * @param workflowId
@@ -89,7 +93,7 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipantFr
 }
 
 /**
- * @brief WalletCryptoBackend::createRandomParticipant
+ * @brief Creates random participant.
  * @param roleTag
  * @return
  */
@@ -116,7 +120,7 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createRandomPartici
 }
 
 /**
- * @brief WalletCryptoBackend::createOffset
+ * @brief Creates offset.
  * @param walletFingerprint
  * @param workflowId
  * @return
@@ -128,7 +132,7 @@ QString WalletCryptoBackend::createOffset(const QString &walletFingerprint, cons
 }
 
 /**
- * @brief WalletCryptoBackend::addOffsets
+ * @brief Adds two transaction offset scalars.
  * @param leftOffset
  * @param rightOffset
  * @param errorOut
@@ -149,7 +153,7 @@ QString WalletCryptoBackend::addOffsets(const QString &leftOffset, const QString
 }
 
 /**
- * @brief WalletCryptoBackend::negateScalar
+ * @brief Negates a scalar value modulo secp256k1 curve order.
  * @param value
  * @param errorOut
  * @return
@@ -176,7 +180,7 @@ QString WalletCryptoBackend::negateScalar(const QString &value, QString *errorOu
 }
 
 /**
- * @brief WalletCryptoBackend::combineBlindingFactors
+ * @brief Combines blinding factors.
  * @param positiveBlinds
  * @param negativeBlinds
  * @param errorOut
@@ -236,8 +240,12 @@ QString WalletCryptoBackend::combineBlindingFactors(const QStringList &positiveB
     return QString::fromUtf8(combined.toHex());
 }
 
+// -------------------------------------------------------------------------------------------------------
+// Commitment, Signature, And Slate Helpers
+// -------------------------------------------------------------------------------------------------------
+
 /**
- * @brief WalletCryptoBackend::createCommitment
+ * @brief Creates commitment.
  * @param walletFingerprint
  * @param workflowId
  * @param roleTag
@@ -260,7 +268,7 @@ WalletCryptoBackend::CommitmentResult WalletCryptoBackend::createCommitment(cons
 }
 
 /**
- * @brief WalletCryptoBackend::createOwnedCommitment
+ * @brief Creates owned commitment.
  * @param keychain
  * @param childIndex
  * @param amount
@@ -295,7 +303,7 @@ WalletCryptoBackend::OwnedCommitment WalletCryptoBackend::createOwnedCommitment(
 }
 
 /**
- * @brief WalletCryptoBackend::slatepackAddress
+ * @brief Derives the slatepack address for the provided keychain and network.
  * @param keychain
  * @param networkName
  * @return
@@ -306,7 +314,7 @@ QString WalletCryptoBackend::slatepackAddress(const WalletKeychain &keychain, co
 }
 
 /**
- * @brief WalletCryptoBackend::paymentProofAddress
+ * @brief Derives the payment-proof address for the provided keychain.
  * @param keychain
  * @return
  */
@@ -316,7 +324,7 @@ QString WalletCryptoBackend::paymentProofAddress(const WalletKeychain &keychain)
 }
 
 /**
- * @brief WalletCryptoBackend::createParticipantData
+ * @brief Creates participant data.
  * @param context
  * @return
  */
@@ -329,7 +337,7 @@ SlateV4::ParticipantData WalletCryptoBackend::createParticipantData(const Partic
 }
 
 /**
- * @brief WalletCryptoBackend::createPaymentProof
+ * @brief Creates payment proof.
  * @param sender
  * @param receiver
  * @return
@@ -344,7 +352,7 @@ SlateV4::PaymentProof WalletCryptoBackend::createPaymentProof(const ParticipantC
 }
 
 /**
- * @brief WalletCryptoBackend::signPaymentProof
+ * @brief Signs payment proof fields for the provided slate.
  * @param slate
  * @param keychain
  * @param errorOut
@@ -358,7 +366,7 @@ bool WalletCryptoBackend::signPaymentProof(SlateV4 *slate,
 }
 
 /**
- * @brief WalletCryptoBackend::verifyPaymentProof
+ * @brief Verifies payment proof.
  * @param slate
  * @param errorOut
  * @return
@@ -369,7 +377,7 @@ bool WalletCryptoBackend::verifyPaymentProof(const SlateV4 &slate, QString *erro
 }
 
 /**
- * @brief WalletCryptoBackend::applyRound2Signature
+ * @brief Applies round-2 aggsig partial signature to a slate.
  * @param slate
  * @param walletFingerprint
  * @param roleTag
@@ -388,7 +396,7 @@ bool WalletCryptoBackend::applyRound2Signature(SlateV4 *slate,
 }
 
 /**
- * @brief WalletCryptoBackend::verifyPartialSignatures
+ * @brief Verifies partial signatures.
  * @param slate
  * @param errorOut
  * @return
@@ -399,7 +407,7 @@ bool WalletCryptoBackend::verifyPartialSignatures(const SlateV4 &slate, QString 
 }
 
 /**
- * @brief WalletCryptoBackend::calculateExcessCommitment
+ * @brief Calculates excess commitment.
  * @param slate
  * @param errorOut
  * @return
@@ -410,7 +418,7 @@ QString WalletCryptoBackend::calculateExcessCommitment(const SlateV4 &slate, QSt
 }
 
 /**
- * @brief WalletCryptoBackend::kernelSignatureMessageHex
+ * @brief Returns the kernel-signature message digest as hex.
  * @param slate
  * @return
  */
@@ -420,7 +428,7 @@ QString WalletCryptoBackend::kernelSignatureMessageHex(const SlateV4 &slate)
 }
 
 /**
- * @brief WalletCryptoBackend::combinedBlindPublicKeyHex
+ * @brief Returns the combined participant blind public key as hex.
  * @param slate
  * @param errorOut
  * @return
@@ -431,7 +439,7 @@ QString WalletCryptoBackend::combinedBlindPublicKeyHex(const SlateV4 &slate, QSt
 }
 
 /**
- * @brief WalletCryptoBackend::combinedNoncePublicKeyHex
+ * @brief Returns the combined participant nonce public key as hex.
  * @param slate
  * @param errorOut
  * @return
@@ -442,7 +450,7 @@ QString WalletCryptoBackend::combinedNoncePublicKeyHex(const SlateV4 &slate, QSt
 }
 
 /**
- * @brief WalletCryptoBackend::buildFinalSignature
+ * @brief Builds final signature.
  * @param slate
  * @param finalSignatureOut
  * @param errorOut
@@ -456,7 +464,7 @@ bool WalletCryptoBackend::buildFinalSignature(const SlateV4 &slate,
 }
 
 /**
- * @brief WalletCryptoBackend::finalizeSlate
+ * @brief Finalizes slate.
  * @param slate
  * @param errorOut
  * @return
@@ -466,8 +474,12 @@ bool WalletCryptoBackend::finalizeSlate(SlateV4 *slate, QString *errorOut)
     return WalletCryptoSignatureHelpers::finalizeSlate(slate, errorOut);
 }
 
+// -------------------------------------------------------------------------------------------------------
+// Transaction Ordering And Validation
+// -------------------------------------------------------------------------------------------------------
+
 /**
- * @brief WalletCryptoBackend::inputOrderHash
+ * @brief Returns the deterministic ordering hash for a transaction input.
  * @param input
  * @return
  */
@@ -477,7 +489,7 @@ QString WalletCryptoBackend::inputOrderHash(const Input &input)
 }
 
 /**
- * @brief WalletCryptoBackend::outputOrderHash
+ * @brief Returns the deterministic ordering hash for a transaction output.
  * @param output
  * @return
  */
@@ -487,7 +499,7 @@ QString WalletCryptoBackend::outputOrderHash(const Output &output)
 }
 
 /**
- * @brief WalletCryptoBackend::kernelOrderHash
+ * @brief Returns the deterministic ordering hash for a transaction kernel.
  * @param kernel
  * @return
  */
@@ -497,7 +509,7 @@ QString WalletCryptoBackend::kernelOrderHash(const TxKernel &kernel)
 }
 
 /**
- * @brief WalletCryptoBackend::validateTransactionBody
+ * @brief Validates transaction body.
  * @param tx
  * @param errorOut
  * @return
@@ -508,7 +520,7 @@ bool WalletCryptoBackend::validateTransactionBody(const Transaction &tx, QString
 }
 
 /**
- * @brief WalletCryptoBackend::validateTransactionKernelSums
+ * @brief Validates transaction kernel sums.
  * @param tx
  * @param errorOut
  * @return
@@ -519,7 +531,7 @@ bool WalletCryptoBackend::validateTransactionKernelSums(const Transaction &tx, Q
 }
 
 /**
- * @brief WalletCryptoBackend::validateTransactionKernelSignatures
+ * @brief Validates transaction kernel signatures.
  * @param tx
  * @param errorOut
  * @return
@@ -530,7 +542,7 @@ bool WalletCryptoBackend::validateTransactionKernelSignatures(const Transaction 
 }
 
 /**
- * @brief WalletCryptoBackend::describeBackend
+ * @brief Returns the backend implementation identifier.
  * @return
  */
 QString WalletCryptoBackend::describeBackend()
@@ -539,7 +551,7 @@ QString WalletCryptoBackend::describeBackend()
 }
 
 /**
- * @brief WalletCryptoBackend::randomHex
+ * @brief Generates random bytes and returns them as hex text.
  * @param bytes
  * @return
  */
@@ -554,7 +566,7 @@ QString WalletCryptoBackend::randomHex(int bytes)
 }
 
 /**
- * @brief WalletCryptoBackend::hashHex
+ * @brief Computes SHA-256 hash of input text and returns hex encoding.
  * @param input
  * @return
  */

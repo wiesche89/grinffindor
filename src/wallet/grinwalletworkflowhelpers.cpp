@@ -1,4 +1,4 @@
-#include "grinwalletworkflowhelpers.h"
+﻿#include "grinwalletworkflowhelpers.h"
 
 #include "binaryslatev4reader.h"
 
@@ -12,7 +12,7 @@ namespace
 const char kBase58Alphabet[] = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 /**
- * @brief compactCommitLessThan
+ * @brief Returns whether compact commit less than.
  * @param left
  * @param right
  * @return
@@ -28,7 +28,7 @@ bool compactCommitLessThan(const SlateV4::Commit &left, const SlateV4::Commit &r
 }
 
 /**
- * @brief encodeBase58
+ * @brief Builds base58.
  * @param input
  * @return
  */
@@ -63,7 +63,7 @@ QString encodeBase58(const QByteArray &input)
 }
 
 /**
- * @brief decodeBase58
+ * @brief Parses base58.
  * @param text
  * @return
  */
@@ -103,7 +103,7 @@ QByteArray decodeBase58(const QString &text)
 }
 
 /**
- * @brief formatArmored
+ * @brief Builds armored.
  * @param data
  * @return
  */
@@ -337,7 +337,7 @@ namespace
 {
 
 /**
- * @brief userFacingSlatepackParseNote
+ * @brief Processes user facing slatepack parse note.
  * @param parseError
  * @return
  */
@@ -365,7 +365,7 @@ QString userFacingSlatepackParseNote(const QString &parseError)
 }
 
 /**
- * @brief buildSlatepackDiagnostic
+ * @brief Builds slatepack diagnostic.
  * @param kind
  * @param payload
  * @param note
@@ -385,7 +385,7 @@ QString buildSlatepackDiagnostic(const QString &kind,
 }
 
 /**
- * @brief decodeSlatepackArmor
+ * @brief Parses slatepack armor.
  * @param slatepack
  * @param decryptionKey
  * @return

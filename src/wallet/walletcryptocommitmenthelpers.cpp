@@ -1,4 +1,4 @@
-#include "walletcryptohelpers.h"
+﻿#include "walletcryptohelpers.h"
 
 #include "walletblake2b.h"
 
@@ -18,7 +18,7 @@ namespace WalletCryptoHelpers
 {
 
 /**
- * @brief parseCommitmentHex
+ * @brief Parses commitment hex.
  * @param hex
  * @param commitmentOut
  * @return
@@ -40,7 +40,7 @@ bool parseCommitmentHex(const QString &hex, secp256k1_pedersen_commitment *commi
 }
 
 /**
- * @brief buildZeroValueCommitment
+ * @brief Builds zero value commitment.
  * @param blindHex
  * @param commitmentOut
  * @return
@@ -70,7 +70,7 @@ bool buildZeroValueCommitment(const QString &blindHex, secp256k1_pedersen_commit
 }
 
 /**
- * @brief buildValueOnlyCommitment
+ * @brief Builds value only commitment.
  * @param value
  * @param commitmentOut
  * @return
@@ -92,7 +92,7 @@ bool buildValueOnlyCommitment(quint64 value, secp256k1_pedersen_commitment *comm
 }
 
 /**
- * @brief serializeCommitment
+ * @brief Builds commitment.
  * @param commitment
  * @return
  */
@@ -106,7 +106,7 @@ QString serializeCommitment(const secp256k1_pedersen_commitment &commitment)
 }
 
 /**
- * @brief appendFixedHexBytes
+ * @brief Appends fixed hex bytes to the target buffer.
  * @param serialized
  * @param hex
  * @param expectedSize
@@ -128,7 +128,7 @@ bool appendFixedHexBytes(QByteArray *serialized, const QString &hex, int expecte
 }
 
 /**
- * @brief appendOutputFeatureForOrdering
+ * @brief Appends output feature for ordering to the target buffer.
  * @param serialized
  * @param feature
  * @return
@@ -153,7 +153,7 @@ bool appendOutputFeatureForOrdering(QByteArray *serialized, const QString &featu
 }
 
 /**
- * @brief appendKernelFeaturesForOrdering
+ * @brief Appends kernel features for ordering to the target buffer.
  * @param serialized
  * @param kernel
  * @return
@@ -179,7 +179,7 @@ bool appendKernelFeaturesForOrdering(QByteArray *serialized, const TxKernel &ker
 }
 
 /**
- * @brief verifyOutputsBatchRangeproofs
+ * @brief Validates outputs batch rangeproofs.
  * @param outputs
  * @param errorOut
  * @return
@@ -279,7 +279,7 @@ bool verifyOutputsBatchRangeproofs(const QVector<Output> &outputs, QString *erro
 }
 
 /**
- * @brief verifyOutputRangeproof
+ * @brief Validates output rangeproof.
  * @param output
  * @param scratch
  * @param errorOut
@@ -327,7 +327,7 @@ bool verifyOutputRangeproof(const Output &output,
 }
 
 /**
- * @brief createCommitmentAndRangeproof
+ * @brief Builds commitment and rangeproof.
  * @param walletFingerprint
  * @param workflowId
  * @param roleTag
@@ -448,7 +448,7 @@ bool createCommitmentAndRangeproof(const QString &walletFingerprint,
 }
 
 /**
- * @brief createCommitmentAndRangeproofFromSecrets
+ * @brief Builds commitment and rangeproof from secrets.
  * @param blind
  * @param privateNonceHash
  * @param rewindNonceHash

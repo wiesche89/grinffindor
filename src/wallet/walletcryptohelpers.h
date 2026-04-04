@@ -1,5 +1,9 @@
-#ifndef WALLETCRYPTOHELPERS_H
+﻿#ifndef WALLETCRYPTOHELPERS_H
 #define WALLETCRYPTOHELPERS_H
+
+/**
+ * @brief Aggregates wallet crypto helper modules used across the wallet stack.
+ */
 
 #include "walletcryptoaggsighelpers.h"
 #include "walletcryptobasehelpers.h"

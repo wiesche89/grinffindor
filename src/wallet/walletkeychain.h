@@ -1,4 +1,4 @@
-#ifndef WALLETKEYCHAIN_H
+﻿#ifndef WALLETKEYCHAIN_H
 #define WALLETKEYCHAIN_H
 
 #include <QByteArray>
@@ -25,12 +25,30 @@ public:
         QByteArray proofMessage;
     };
 
+/**
+ * @brief Returns wallet keychain.
+ */
     explicit WalletKeychain(const QString &mnemonic = QString());
 
+/**
+ * @brief Returns whether valid.
+ */
     bool isValid() const;
+/**
+ * @brief Returns master public key.
+ */
     QString masterPublicKey() const;
+/**
+ * @brief Returns slatepack secret key.
+ */
     QByteArray slatepackSecretKey() const;
+/**
+ * @brief Returns rewind output proof.
+ */
     RewindResult rewindOutputProof(const QString &commitment, const QString &proof) const;
+/**
+ * @brief Computes derive output secrets.
+ */
     OutputSecrets deriveOutputSecrets(quint32 childIndex, quint64 amount) const;
 
 private:

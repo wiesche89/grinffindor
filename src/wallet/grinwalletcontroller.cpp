@@ -1,4 +1,4 @@
-#include "grinwalletcontroller.h"
+﻿#include "grinwalletcontroller.h"
 
 #include <QByteArray>
 #include <QJsonDocument>
@@ -35,7 +35,7 @@
 #include "transaction.h"
 
 /**
- * @brief GrinWalletController::GrinWalletController
+ * @brief Constructs and initializes the wallet controller.
  * @param parent
  */
 GrinWalletController::GrinWalletController(QObject *parent) :
@@ -75,163 +75,163 @@ GrinWalletController::GrinWalletController(QObject *parent) :
 // -------------------------------------------------------------------------------------------------------
 
 /**
- * @brief GrinWalletController::walletExists
+ * @brief Returns whether a wallet is configured for the active network.
  * @return
  */
 bool GrinWalletController::walletExists() const { return m_walletExists; }
 
 /**
- * @brief GrinWalletController::walletUnlocked
+ * @brief Returns whether the active wallet session is unlocked.
  * @return
  */
 bool GrinWalletController::walletUnlocked() const { return m_walletUnlocked; }
 
 /**
- * @brief GrinWalletController::walletName
+ * @brief Returns the active wallet display name.
  * @return
  */
 QString GrinWalletController::walletName() const { return m_walletName; }
 
 /**
- * @brief GrinWalletController::mnemonicPreview
+ * @brief Returns the currently shown mnemonic preview text.
  * @return
  */
 QString GrinWalletController::mnemonicPreview() const { return m_mnemonicPreview; }
 
 /**
- * @brief GrinWalletController::seedFingerprint
+ * @brief Returns the fingerprint of the active wallet seed.
  * @return
  */
 QString GrinWalletController::seedFingerprint() const { return m_seedFingerprint; }
 
 /**
- * @brief GrinWalletController::selectedNetwork
+ * @brief Returns the currently selected network name.
  * @return
  */
 QString GrinWalletController::selectedNetwork() const { return m_selectedNetwork; }
 
 /**
- * @brief GrinWalletController::nodeUrl
+ * @brief Returns the configured node URL.
  * @return
  */
 QString GrinWalletController::nodeUrl() const { return m_nodeUrl; }
 
 /**
- * @brief GrinWalletController::storagePersistenceState
+ * @brief Returns the browser storage persistence status.
  * @return
  */
 QString GrinWalletController::storagePersistenceState() const { return m_storagePersistenceState; }
 
 /**
- * @brief GrinWalletController::chainHeight
+ * @brief Returns the latest known chain height.
  * @return
  */
 qulonglong GrinWalletController::chainHeight() const { return m_chainHeight; }
 
 /**
- * @brief GrinWalletController::syncStatus
+ * @brief Returns the current node synchronization status text.
  * @return
  */
 QString GrinWalletController::syncStatus() const { return m_syncStatus; }
 
 /**
- * @brief GrinWalletController::totalBalance
+ * @brief Returns the total wallet balance.
  * @return
  */
 QString GrinWalletController::totalBalance() const { return m_totalBalance; }
 
 /**
- * @brief GrinWalletController::spendableBalance
+ * @brief Returns the currently spendable wallet balance.
  * @return
  */
 QString GrinWalletController::spendableBalance() const { return m_spendableBalance; }
 
 /**
- * @brief GrinWalletController::lockedBalance
+ * @brief Returns the currently locked wallet balance.
  * @return
  */
 QString GrinWalletController::lockedBalance() const { return m_lockedBalance; }
 
 /**
- * @brief GrinWalletController::immatureBalance
+ * @brief Returns the immature wallet balance.
  * @return
  */
 QString GrinWalletController::immatureBalance() const { return m_immatureBalance; }
 
 /**
- * @brief GrinWalletController::awaitingConfirmationBalance
+ * @brief Returns the balance awaiting on-chain confirmations.
  * @return
  */
 QString GrinWalletController::awaitingConfirmationBalance() const { return m_awaitingConfirmationBalance; }
 
 /**
- * @brief GrinWalletController::awaitingFinalizationBalance
+ * @brief Returns the balance awaiting transaction finalization.
  * @return
  */
 QString GrinWalletController::awaitingFinalizationBalance() const { return m_awaitingFinalizationBalance; }
 
 /**
- * @brief GrinWalletController::scanHeight
+ * @brief Returns the latest scanned chain height recorded for this wallet.
  * @return
  */
 qulonglong GrinWalletController::scanHeight() const { return m_scanHeight; }
 
 /**
- * @brief GrinWalletController::lastError
+ * @brief Returns the latest error message.
  * @return
  */
 QString GrinWalletController::lastError() const { return m_lastError; }
 
 /**
- * @brief GrinWalletController::lastInfo
+ * @brief Returns the latest informational status message.
  * @return
  */
 QString GrinWalletController::lastInfo() const { return m_lastInfo; }
 
 /**
- * @brief GrinWalletController::workflowId
+ * @brief Returns the active workflow identifier.
  * @return
  */
 QString GrinWalletController::workflowId() const { return m_workflowId; }
 
 /**
- * @brief GrinWalletController::workflowState
+ * @brief Returns the active workflow state code.
  * @return
  */
 QString GrinWalletController::workflowState() const { return m_workflowState; }
 
 /**
- * @brief GrinWalletController::workflowMode
+ * @brief Returns the active workflow mode.
  * @return
  */
 QString GrinWalletController::workflowMode() const { return m_workflowMode; }
 
 /**
- * @brief GrinWalletController::workflowSlatepack
+ * @brief Returns the current workflow slatepack payload.
  * @return
  */
 QString GrinWalletController::workflowSlatepack() const { return m_workflowSlatepack; }
 
 /**
- * @brief GrinWalletController::workflowDecoded
+ * @brief Returns the decoded view of the current workflow payload.
  * @return
  */
 QString GrinWalletController::workflowDecoded() const { return m_workflowDecoded; }
 
 /**
- * @brief GrinWalletController::autoLockOnAppDeactivate
+ * @brief Returns whether auto-lock on app deactivation is enabled.
  * @return
  */
 bool GrinWalletController::autoLockOnAppDeactivate() const { return m_autoLockOnAppDeactivate; }
 
 /**
- * @brief GrinWalletController::sessionMnemonic
+ * @brief Returns the in-memory session mnemonic.
  * @return
  */
 QString GrinWalletController::sessionMnemonic() const { return m_sessionMnemonic; }
 
 /**
- * @brief GrinWalletController::hasUnlockedSession
+ * @brief Returns whether an unlocked session with mnemonic material is available.
  * @return
  */
 bool GrinWalletController::hasUnlockedSession() const
@@ -240,184 +240,184 @@ bool GrinWalletController::hasUnlockedSession() const
 }
 
 /**
- * @brief GrinWalletController::nodeApi
+ * @brief Sets node api.
  * @return
  */
 NodeForeignApi *GrinWalletController::nodeApi() const { return m_nodeApi; }
 
 /**
- * @brief GrinWalletController::setNodeApi
+ * @brief Sets node api.
  * @param nodeApi
  */
 void GrinWalletController::setNodeApi(NodeForeignApi *nodeApi) { m_nodeApi = nodeApi; }
 
 /**
- * @brief GrinWalletController::setSyncStatusMessage
+ * @brief Sets sync status message.
  * @param status
  */
 void GrinWalletController::setSyncStatusMessage(const QString &status) { m_syncStatus = status; }
 
 /**
- * @brief GrinWalletController::notifyStatusChanged
+ * @brief Emits status-related change notifications.
  */
 void GrinWalletController::notifyStatusChanged() { emit statusChanged(); }
 
 /**
- * @brief GrinWalletController::setChainHeightValue
+ * @brief Sets chain height value.
  * @param height
  */
 void GrinWalletController::setChainHeightValue(qulonglong height) { m_chainHeight = height; }
 
 /**
- * @brief GrinWalletController::setNodeBlockHeaderVersionValue
+ * @brief Sets node block header version value.
  * @param version
  */
 void GrinWalletController::setNodeBlockHeaderVersionValue(int version) { m_nodeBlockHeaderVersion = version; }
 
 /**
- * @brief GrinWalletController::walletScanInFlight
+ * @brief Returns whether a wallet scan request is currently running.
  * @return
  */
 bool GrinWalletController::walletScanInFlight() const { return m_walletScanInFlight; }
 
 /**
- * @brief GrinWalletController::setWalletScanInFlight
+ * @brief Sets wallet scan in flight.
  * @param inFlight
  */
 void GrinWalletController::setWalletScanInFlight(bool inFlight) { m_walletScanInFlight = inFlight; }
 
 /**
- * @brief GrinWalletController::seedScanActive
+ * @brief Returns whether seed restoration scanning is currently active.
  * @return
  */
 bool GrinWalletController::seedScanActive() const { return m_seedScanActive; }
 
 /**
- * @brief GrinWalletController::setSeedScanActive
+ * @brief Sets seed scan active.
  * @param active
  */
 void GrinWalletController::setSeedScanActive(bool active) { m_seedScanActive = active; }
 
 /**
- * @brief GrinWalletController::seedScanNextIndex
+ * @brief Returns the next seed index scheduled for scanning.
  * @return
  */
 qulonglong GrinWalletController::seedScanNextIndex() const { return m_seedScanNextIndex; }
 
 /**
- * @brief GrinWalletController::setSeedScanNextIndex
+ * @brief Sets seed scan next index.
  * @param nextIndex
  */
 void GrinWalletController::setSeedScanNextIndex(qulonglong nextIndex) { m_seedScanNextIndex = nextIndex; }
 
 /**
- * @brief GrinWalletController::seedScanDiscovered
+ * @brief Clears seed scan discovered.
  * @return
  */
 const QList<WalletOutput> &GrinWalletController::seedScanDiscovered() const { return m_seedScanDiscovered; }
 
 /**
- * @brief GrinWalletController::clearSeedScanDiscovered
+ * @brief Clears seed scan discovered.
  */
 void GrinWalletController::clearSeedScanDiscovered() { m_seedScanDiscovered.clear(); }
 
 /**
- * @brief GrinWalletController::appendSeedScanDiscovered
+ * @brief Appends a discovered output to the seed-scan results list.
  * @param output
  */
 void GrinWalletController::appendSeedScanDiscovered(const WalletOutput &output) { m_seedScanDiscovered.append(output); }
 
 /**
- * @brief GrinWalletController::pendingBroadcastWorkflowId
+ * @brief Returns the workflow ID currently pending broadcast.
  * @return
  */
 QString GrinWalletController::pendingBroadcastWorkflowId() const { return m_pendingBroadcastWorkflowId; }
 
 /**
- * @brief GrinWalletController::setPendingBroadcastWorkflowId
+ * @brief Sets pending broadcast workflow id.
  * @param workflowId
  */
 void GrinWalletController::setPendingBroadcastWorkflowId(const QString &workflowId) { m_pendingBroadcastWorkflowId = workflowId; }
 
 /**
- * @brief GrinWalletController::pendingBroadcastInputLookup
+ * @brief Returns whether pending broadcast input lookup is in progress.
  * @return
  */
 bool GrinWalletController::pendingBroadcastInputLookup() const { return m_pendingBroadcastInputLookup; }
 
 /**
- * @brief GrinWalletController::setPendingBroadcastInputLookup
+ * @brief Sets pending broadcast input lookup.
  * @param pending
  */
 void GrinWalletController::setPendingBroadcastInputLookup(bool pending) { m_pendingBroadcastInputLookup = pending; }
 
 /**
- * @brief GrinWalletController::pendingBroadcastTxSkeleton
+ * @brief Returns the pending transaction skeleton prepared for broadcast.
  * @return
  */
 QJsonObject GrinWalletController::pendingBroadcastTxSkeleton() const { return m_pendingBroadcastTxSkeleton; }
 
 /**
- * @brief GrinWalletController::setPendingBroadcastTxSkeleton
+ * @brief Sets pending broadcast tx skeleton.
  * @param txSkeleton
  */
 void GrinWalletController::setPendingBroadcastTxSkeleton(const QJsonObject &txSkeleton) { m_pendingBroadcastTxSkeleton = txSkeleton; }
 
 /**
- * @brief GrinWalletController::pendingBroadcastInputCommits
+ * @brief Returns input commitments collected for pending broadcast validation.
  * @return
  */
 QJsonArray GrinWalletController::pendingBroadcastInputCommits() const { return m_pendingBroadcastInputCommits; }
 
 /**
- * @brief GrinWalletController::setPendingBroadcastInputCommits
+ * @brief Sets pending broadcast input commits.
  * @param commits
  */
 void GrinWalletController::setPendingBroadcastInputCommits(const QJsonArray &commits) { m_pendingBroadcastInputCommits = commits; }
 
 /**
- * @brief GrinWalletController::hasPendingBroadcastWorkflow
+ * @brief Returns whether any workflow is waiting for broadcast.
  * @return
  */
 bool GrinWalletController::hasPendingBroadcastWorkflow() const { return !m_pendingBroadcastWorkflowId.isEmpty(); }
 
 /**
- * @brief GrinWalletController::broadcastStatusRefreshInFlight
+ * @brief Returns whether a broadcast-status refresh is currently running.
  * @return
  */
 bool GrinWalletController::broadcastStatusRefreshInFlight() const { return m_broadcastStatusRefreshInFlight; }
 
 /**
- * @brief GrinWalletController::setBroadcastStatusRefreshInFlight
+ * @brief Sets broadcast status refresh in flight.
  * @param inFlight
  */
 void GrinWalletController::setBroadcastStatusRefreshInFlight(bool inFlight) { m_broadcastStatusRefreshInFlight = inFlight; }
 
 /**
- * @brief GrinWalletController::kernelStatusCheckInFlight
+ * @brief Returns whether a kernel status check is currently running.
  * @return
  */
 bool GrinWalletController::kernelStatusCheckInFlight() const { return m_kernelStatusCheckInFlight; }
 
 /**
- * @brief GrinWalletController::setKernelStatusCheckInFlight
+ * @brief Sets kernel status check in flight.
  * @param inFlight
  */
 void GrinWalletController::setKernelStatusCheckInFlight(bool inFlight) { m_kernelStatusCheckInFlight = inFlight; }
 
 /**
- * @brief GrinWalletController::clearKernelStatusQueue
+ * @brief Clears kernel status queue.
  */
 void GrinWalletController::clearKernelStatusQueue() { m_kernelStatusQueue.clear(); }
 
 /**
- * @brief GrinWalletController::hasPendingKernelStatusChecks
+ * @brief Returns whether kernel status checks are queued.
  * @return
  */
 bool GrinWalletController::hasPendingKernelStatusChecks() const { return !m_kernelStatusQueue.isEmpty(); }
 
 /**
- * @brief GrinWalletController::appendKernelStatusCheck
+ * @brief Appends a kernel status check request to the processing queue.
  * @param workflowId
  * @param excess
  */
@@ -427,7 +427,7 @@ void GrinWalletController::appendKernelStatusCheck(const QString &workflowId, co
 }
 
 /**
- * @brief GrinWalletController::takeNextKernelStatusCheck
+ * @brief Returns and removes the next pending kernel status check request.
  * @return
  */
 QPair<QString, QString> GrinWalletController::takeNextKernelStatusCheck()
@@ -436,19 +436,19 @@ QPair<QString, QString> GrinWalletController::takeNextKernelStatusCheck()
 }
 
 /**
- * @brief GrinWalletController::currentKernelWorkflowIdInternal
+ * @brief Returns the internally tracked workflow ID for kernel checks.
  * @return
  */
 QString GrinWalletController::currentKernelWorkflowIdInternal() const { return m_currentKernelWorkflowId; }
 
 /**
- * @brief GrinWalletController::currentKernelExcessInternal
+ * @brief Returns the internally tracked kernel excess commitment.
  * @return
  */
 QString GrinWalletController::currentKernelExcessInternal() const { return m_currentKernelExcess; }
 
 /**
- * @brief GrinWalletController::setCurrentKernelCheck
+ * @brief Sets current kernel check.
  * @param workflowId
  * @param excess
  */
@@ -459,7 +459,7 @@ void GrinWalletController::setCurrentKernelCheck(const QString &workflowId, cons
 }
 
 /**
- * @brief GrinWalletController::clearCurrentKernelCheck
+ * @brief Clears current kernel check.
  */
 void GrinWalletController::clearCurrentKernelCheck()
 {
@@ -468,7 +468,7 @@ void GrinWalletController::clearCurrentKernelCheck()
 }
 
 /**
- * @brief GrinWalletController::transactionHistory
+ * @brief Returns the wallet transaction history enriched with computed status data.
  * @return
  */
 QVariantList GrinWalletController::transactionHistory() const
@@ -512,7 +512,7 @@ QVariantList GrinWalletController::transactionHistory() const
 }
 
 /**
- * @brief GrinWalletController::walletOutputs
+ * @brief Returns wallet outputs enriched with maturity and spendability metadata.
  * @return
  */
 QVariantList GrinWalletController::walletOutputs() const
@@ -563,7 +563,7 @@ QVariantList GrinWalletController::walletOutputs() const
 }
 
 /**
- * @brief GrinWalletController::initialize
+ * @brief Initializes runtime services and loads persisted wallet state.
  */
 void GrinWalletController::initialize()
 {
@@ -579,7 +579,7 @@ void GrinWalletController::initialize()
 }
 
 /**
- * @brief GrinWalletController::generateMnemonic
+ * @brief Generates a new mnemonic phrase for wallet creation.
  * @return
  */
 QString GrinWalletController::generateMnemonic() const
@@ -588,7 +588,7 @@ QString GrinWalletController::generateMnemonic() const
 }
 
 /**
- * @brief GrinWalletController::validateMnemonic
+ * @brief Validates mnemonic.
  * @param mnemonic
  * @return
  */
@@ -598,7 +598,7 @@ bool GrinWalletController::validateMnemonic(const QString &mnemonic) const
 }
 
 /**
- * @brief GrinWalletController::clearLastError
+ * @brief Clears last error.
  */
 void GrinWalletController::clearLastError()
 {
@@ -609,7 +609,7 @@ void GrinWalletController::clearLastError()
 }
 
 /**
- * @brief GrinWalletController::refreshNodeStatus
+ * @brief Refreshes node status.
  */
 void GrinWalletController::refreshNodeStatus()
 {
@@ -627,7 +627,7 @@ void GrinWalletController::refreshNodeStatus()
 }
 
 /**
- * @brief GrinWalletController::syncWallet
+ * @brief Synchronizes wallet.
  */
 void GrinWalletController::syncWallet()
 {
@@ -648,7 +648,7 @@ void GrinWalletController::syncWallet()
 }
 
 /**
- * @brief GrinWalletController::rescanWallet
+ * @brief Processes rescan wallet.
  */
 void GrinWalletController::rescanWallet()
 {
@@ -699,7 +699,7 @@ void GrinWalletController::rescanWallet()
 }
 
 /**
- * @brief GrinWalletController::requestPasteText
+ * @brief Requests paste text.
  * @return
  */
 QString GrinWalletController::requestPasteText() const
@@ -708,7 +708,7 @@ QString GrinWalletController::requestPasteText() const
 }
 
 /**
- * @brief GrinWalletController::copyTextToClipboard
+ * @brief Copies the provided text to the system clipboard.
  * @param text
  * @return
  */
@@ -718,7 +718,7 @@ bool GrinWalletController::copyTextToClipboard(const QString &text) const
 }
 
 /**
- * @brief GrinWalletController::downloadTextFile
+ * @brief Downloads the provided text as a file using platform integration.
  * @param suggestedName
  * @param text
  * @return
@@ -729,7 +729,7 @@ bool GrinWalletController::downloadTextFile(const QString &suggestedName, const 
 }
 
 /**
- * @brief GrinWalletController::requestPersistentBrowserStorage
+ * @brief Requests persistent browser storage.
  */
 void GrinWalletController::requestPersistentBrowserStorage()
 {
@@ -743,7 +743,7 @@ void GrinWalletController::requestPersistentBrowserStorage()
 }
 
 /**
- * @brief GrinWalletController::updateBrowserShortcutContext
+ * @brief Updates browser shortcut context.
  * @param text
  * @param selectedText
  * @param focused
@@ -756,7 +756,7 @@ void GrinWalletController::updateBrowserShortcutContext(const QString &text,
 }
 
 /**
- * @brief GrinWalletController::isValidNodeUrl
+ * @brief Returns whether the provided node URL is accepted by wallet rules.
  * @param nodeUrl
  * @return
  */
@@ -766,7 +766,7 @@ bool GrinWalletController::isValidNodeUrl(const QString &nodeUrl) const
 }
 
 /**
- * @brief GrinWalletController::createSlatepackTemplate
+ * @brief Creates slatepack template.
  * @param sender
  * @return
  */
@@ -784,7 +784,7 @@ QString GrinWalletController::createSlatepackTemplate(const QString &sender) con
 }
 
 /**
- * @brief GrinWalletController::startSendWorkflow
+ * @brief Starts send workflow.
  * @param amount
  * @param note
  */
@@ -794,7 +794,7 @@ void GrinWalletController::startSendWorkflow(const QString &amount, const QStrin
 }
 
 /**
- * @brief GrinWalletController::startReceiveWorkflow
+ * @brief Starts receive workflow.
  * @param amount
  * @param note
  */
@@ -804,7 +804,7 @@ void GrinWalletController::startReceiveWorkflow(const QString &amount, const QSt
 }
 
 /**
- * @brief GrinWalletController::processWorkflowSlatepack
+ * @brief Processes a workflow slatepack through the workflow service.
  * @param slatepack
  */
 void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
@@ -813,7 +813,7 @@ void GrinWalletController::processWorkflowSlatepack(const QString &slatepack)
 }
 
 /**
- * @brief GrinWalletController::clearWorkflow
+ * @brief Clears workflow.
  */
 void GrinWalletController::clearWorkflow()
 {
@@ -821,7 +821,7 @@ void GrinWalletController::clearWorkflow()
 }
 
 /**
- * @brief GrinWalletController::cleanupLocalAndCancelledItems
+ * @brief Cleans up locally staged and cancelled transaction artifacts.
  */
 void GrinWalletController::cleanupLocalAndCancelledItems()
 {
@@ -829,7 +829,7 @@ void GrinWalletController::cleanupLocalAndCancelledItems()
 }
 
 /**
- * @brief GrinWalletController::broadcastCurrentWorkflowTransaction
+ * @brief Broadcasts the transaction of the currently active workflow.
  */
 void GrinWalletController::broadcastCurrentWorkflowTransaction()
 {
@@ -837,7 +837,7 @@ void GrinWalletController::broadcastCurrentWorkflowTransaction()
 }
 
 /**
- * @brief GrinWalletController::broadcastTransaction
+ * @brief Broadcasts the transaction associated with the given workflow ID.
  * @param workflowId
  */
 void GrinWalletController::broadcastTransaction(const QString &workflowId)
@@ -846,7 +846,7 @@ void GrinWalletController::broadcastTransaction(const QString &workflowId)
 }
 
 /**
- * @brief GrinWalletController::beginBroadcastWithInputPreflight
+ * @brief Starts transaction broadcast after input preflight verification.
  * @param workflowId
  * @param txSkeleton
  */
@@ -857,7 +857,7 @@ void GrinWalletController::beginBroadcastWithInputPreflight(const QString &workf
 }
 
 /**
- * @brief GrinWalletController::cancelTransaction
+ * @brief Cancels the transaction associated with the given workflow ID.
  * @param workflowId
  */
 void GrinWalletController::cancelTransaction(const QString &workflowId)
@@ -866,7 +866,7 @@ void GrinWalletController::cancelTransaction(const QString &workflowId)
 }
 
 /**
- * @brief GrinWalletController::encodeSlatepack
+ * @brief Encodes slate JSON into a binary or armored slatepack payload.
  * @param slateJson
  * @param sender
  * @return
@@ -897,7 +897,7 @@ QString GrinWalletController::encodeSlatepack(const QString &slateJson, const QS
 }
 
 /**
- * @brief GrinWalletController::decodeSlatepack
+ * @brief Decodes an incoming slatepack into readable slate JSON.
  * @param slatepack
  * @return
  */

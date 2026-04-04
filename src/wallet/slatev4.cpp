@@ -4,8 +4,8 @@
 #include <QUuid>
 
 /**
- * @brief SlateV4::ParticipantData::toJson
- * @return
+ * @brief Serializes participant data to JSON.
+ * @return Participant data object.
  */
 QJsonObject SlateV4::ParticipantData::toJson() const
 {
@@ -20,9 +20,9 @@ QJsonObject SlateV4::ParticipantData::toJson() const
 }
 
 /**
- * @brief SlateV4::ParticipantData::fromJson
- * @param json
- * @return
+ * @brief Parses participant data from JSON.
+ * @param json Participant data object.
+ * @return Parsed participant data.
  */
 SlateV4::ParticipantData SlateV4::ParticipantData::fromJson(const QJsonObject &json)
 {
@@ -34,8 +34,8 @@ SlateV4::ParticipantData SlateV4::ParticipantData::fromJson(const QJsonObject &j
 }
 
 /**
- * @brief SlateV4::PaymentProof::toJson
- * @return
+ * @brief Serializes payment proof data to JSON.
+ * @return Payment proof object.
  */
 QJsonObject SlateV4::PaymentProof::toJson() const
 {
@@ -50,9 +50,9 @@ QJsonObject SlateV4::PaymentProof::toJson() const
 }
 
 /**
- * @brief SlateV4::PaymentProof::fromJson
- * @param json
- * @return
+ * @brief Parses payment proof data from JSON.
+ * @param json Payment proof object.
+ * @return Parsed payment proof.
  */
 SlateV4::PaymentProof SlateV4::PaymentProof::fromJson(const QJsonObject &json)
 {
@@ -64,8 +64,8 @@ SlateV4::PaymentProof SlateV4::PaymentProof::fromJson(const QJsonObject &json)
 }
 
 /**
- * @brief SlateV4::Commit::toJson
- * @return
+ * @brief Serializes commitment data to JSON.
+ * @return Commitment object.
  */
 QJsonObject SlateV4::Commit::toJson() const
 {
@@ -82,9 +82,9 @@ QJsonObject SlateV4::Commit::toJson() const
 }
 
 /**
- * @brief SlateV4::Commit::fromJson
- * @param json
- * @return
+ * @brief Parses commitment data from JSON.
+ * @param json Commitment object.
+ * @return Parsed commitment record.
  */
 SlateV4::Commit SlateV4::Commit::fromJson(const QJsonObject &json)
 {
@@ -96,7 +96,7 @@ SlateV4::Commit SlateV4::Commit::fromJson(const QJsonObject &json)
 }
 
 /**
- * @brief SlateV4::SlateV4
+ * @brief Constructs a slate with default protocol values and a generated id.
  */
 SlateV4::SlateV4() :
     state(Unknown),
@@ -108,8 +108,8 @@ SlateV4::SlateV4() :
 }
 
 /**
- * @brief SlateV4::stateCode
- * @return
+ * @brief Returns compact state code used in JSON serialization.
+ * @return State code string.
  */
 QString SlateV4::stateCode() const
 {
@@ -127,8 +127,8 @@ QString SlateV4::stateCode() const
 }
 
 /**
- * @brief SlateV4::versionCode
- * @return
+ * @brief Returns compact version code used in JSON serialization.
+ * @return Version code string.
  */
 QString SlateV4::versionCode() const
 {
@@ -136,8 +136,8 @@ QString SlateV4::versionCode() const
 }
 
 /**
- * @brief SlateV4::modeCode
- * @return
+ * @brief Returns logical workflow mode derived from state.
+ * @return Mode string.
  */
 QString SlateV4::modeCode() const
 {
@@ -151,8 +151,8 @@ QString SlateV4::modeCode() const
 }
 
 /**
- * @brief SlateV4::isFinalState
- * @return
+ * @brief Returns whether state is a terminal workflow state.
+ * @return True for final send/invoice states.
  */
 bool SlateV4::isFinalState() const
 {
@@ -160,8 +160,8 @@ bool SlateV4::isFinalState() const
 }
 
 /**
- * @brief SlateV4::workflowId
- * @return
+ * @brief Returns workflow id metadata value.
+ * @return Workflow id string.
  */
 QString SlateV4::workflowId() const
 {
@@ -169,8 +169,8 @@ QString SlateV4::workflowId() const
 }
 
 /**
- * @brief SlateV4::note
- * @return
+ * @brief Returns free-form note metadata value.
+ * @return Note string.
  */
 QString SlateV4::note() const
 {
@@ -178,8 +178,8 @@ QString SlateV4::note() const
 }
 
 /**
- * @brief SlateV4::network
- * @return
+ * @brief Returns network metadata value.
+ * @return Network string.
  */
 QString SlateV4::network() const
 {
@@ -187,8 +187,8 @@ QString SlateV4::network() const
 }
 
 /**
- * @brief SlateV4::setStateFromCode
- * @param code
+ * @brief Sets state from compact state code.
+ * @param code State code string.
  */
 void SlateV4::setStateFromCode(const QString &code)
 {
@@ -196,7 +196,7 @@ void SlateV4::setStateFromCode(const QString &code)
 }
 
 /**
- * @brief SlateV4::advanceState
+ * @brief Advances state to the next workflow step when possible.
  */
 void SlateV4::advanceState()
 {
@@ -210,11 +210,14 @@ void SlateV4::advanceState()
 }
 
 /**
- * @brief SlateV4::toJson
- * @return
+ * @brief Serializes slate to JSON object.
+ * @return Serialized slate object.
  */
 QJsonObject SlateV4::toJson() const
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Serializing Core Slate Fields
+    // -------------------------------------------------------------------------------------------------------
     QJsonObject json;
     json.insert(QStringLiteral("ver"), versionCode());
     json.insert(QStringLiteral("id"), id);
@@ -239,6 +242,9 @@ QJsonObject SlateV4::toJson() const
         json.insert(QStringLiteral("ttl"), ttl);
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Serializing Signatures, Commitments, And Metadata
+    // -------------------------------------------------------------------------------------------------------
     QJsonArray sigs;
     for (int i = 0; i < signatures.size(); ++i) {
         sigs.append(signatures.at(i).toJson());
@@ -266,9 +272,9 @@ QJsonObject SlateV4::toJson() const
 }
 
 /**
- * @brief SlateV4::fromJson
- * @param json
- * @return
+ * @brief Parses slate from JSON object.
+ * @param json Serialized slate object.
+ * @return Parsed slate instance.
  */
 SlateV4 SlateV4::fromJson(const QJsonObject &json)
 {
@@ -291,6 +297,9 @@ SlateV4 SlateV4::fromJson(const QJsonObject &json)
     slate.kernelFeatures = json.value(QStringLiteral("feat")).toInt();
     slate.ttl = json.value(QStringLiteral("ttl")).toVariant().toString();
 
+    // -------------------------------------------------------------------------------------------------------
+    // Parsing Signatures, Commitments, And Optional Proof
+    // -------------------------------------------------------------------------------------------------------
     const QJsonArray sigs = json.value(QStringLiteral("sigs")).toArray();
     for (int i = 0; i < sigs.size(); ++i) {
         if (sigs.at(i).isObject()) {
@@ -336,9 +345,9 @@ SlateV4 SlateV4::fromJson(const QJsonObject &json)
 }
 
 /**
- * @brief SlateV4::fromJsonString
- * @param json
- * @return
+ * @brief Parses slate from JSON text.
+ * @param json Serialized slate JSON string.
+ * @return Parsed slate instance.
  */
 SlateV4 SlateV4::fromJsonString(const QString &json)
 {
@@ -347,9 +356,9 @@ SlateV4 SlateV4::fromJsonString(const QString &json)
 }
 
 /**
- * @brief SlateV4::stateFromCode
- * @param code
- * @return
+ * @brief Resolves compact state code to enum value.
+ * @param code State code string.
+ * @return Parsed state enum value.
  */
 SlateV4::State SlateV4::stateFromCode(const QString &code)
 {

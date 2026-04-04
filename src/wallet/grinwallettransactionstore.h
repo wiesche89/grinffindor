@@ -1,4 +1,4 @@
-#ifndef GRINWALLETTRANSACTIONSTORE_H
+﻿#ifndef GRINWALLETTRANSACTIONSTORE_H
 #define GRINWALLETTRANSACTIONSTORE_H
 
 #include <QJsonObject>
@@ -7,13 +7,25 @@
 class GrinWalletTransactionStore
 {
 public:
+/**
+ * @brief Marks broadcast pending.
+ */
     static bool markBroadcastPending(QJsonObject *document, const QString &workflowId);
+/**
+ * @brief Marks broadcast failed.
+ */
     static bool markBroadcastFailed(QJsonObject *document, const QString &workflowId, const QString &message);
     static bool markKernelConfirmed(QJsonObject *document,
                                     const QString &workflowId,
                                     qulonglong chainHeight,
                                     qulonglong confirmedHeight);
+/**
+ * @brief Marks kernel broadcasted.
+ */
     static bool markKernelBroadcasted(QJsonObject *document, const QString &workflowId);
+/**
+ * @brief Marks broadcast succeeded.
+ */
     static bool markBroadcastSucceeded(QJsonObject *document, const QString &workflowId);
 
 private:

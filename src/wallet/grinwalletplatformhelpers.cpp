@@ -1,4 +1,4 @@
-#include "grinwalletplatformhelpers.h"
+﻿#include "grinwalletplatformhelpers.h"
 
 #include <QClipboard>
 #include <QDir>
@@ -12,7 +12,7 @@
 #include <emscripten/emscripten.h>
 
 /**
- * @brief EM_JS
+ * @brief Declares a JavaScript bridge function for WASM integration.
  * @param int
  * @param browserCopyToClipboard
  * @param value
@@ -41,7 +41,7 @@ EM_JS(int, browserCopyToClipboard, (const char *value), {
 });
 
 /**
- * @brief EM_JS
+ * @brief Declares a JavaScript bridge function for WASM integration.
  * @param char
  * @param browserReadClipboardText
  * @param (
@@ -75,7 +75,7 @@ EM_JS(char *, browserReadClipboardText, (), {
 });
 
 /**
- * @brief EM_JS
+ * @brief Declares a JavaScript bridge function for WASM integration.
  * @param char
  * @param browserConsumeCapturedPasteText
  * @param (
@@ -100,7 +100,7 @@ EM_JS(char *, browserConsumeCapturedPasteText, (), {
 });
 
 /**
- * @brief EM_JS
+ * @brief Declares a JavaScript bridge function for WASM integration.
  * @param int
  * @param browserDownloadTextFile
  * @param value
@@ -127,7 +127,7 @@ EM_JS(int, browserDownloadTextFile, (const char *suggestedName, const char *valu
 });
 
 /**
- * @brief EM_JS
+ * @brief Declares a JavaScript bridge function for WASM integration.
  * @param int
  * @param browserRequestPersistentStorage
  * @param (
@@ -143,7 +143,7 @@ EM_JS(int, browserRequestPersistentStorage, (), {
 });
 
 /**
- * @brief EM_JS
+ * @brief Declares a JavaScript bridge function for WASM integration.
  * @param char
  * @param browserStoragePersistenceState
  * @param (

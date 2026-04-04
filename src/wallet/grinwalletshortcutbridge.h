@@ -1,4 +1,4 @@
-#ifndef GRINWALLETSHORTCUTBRIDGE_H
+﻿#ifndef GRINWALLETSHORTCUTBRIDGE_H
 #define GRINWALLETSHORTCUTBRIDGE_H
 
 #include <QObject>
@@ -8,9 +8,18 @@ class GrinWalletShortcutBridge : public QObject
 {
     Q_OBJECT
 public:
+/**
+ * @brief Bridges browser keyboard shortcuts into wallet actions.
+ */
     explicit GrinWalletShortcutBridge(QObject *parent = nullptr);
 
+/**
+ * @brief Processes install.
+ */
     void install();
+/**
+ * @brief Processes handle shortcut key.
+ */
     bool handleShortcutKey(int key);
     void updateBrowserShortcutContext(const QString &text,
                                       const QString &selectedText,

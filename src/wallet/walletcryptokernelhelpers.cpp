@@ -1,4 +1,4 @@
-#include "walletcryptokernelhelpers.h"
+﻿#include "walletcryptokernelhelpers.h"
 
 #include "walletblake2b.h"
 #include "walletcryptoaggsighelpers.h"
@@ -16,7 +16,7 @@ namespace
 {
 
 /**
- * @brief inputSortKey
+ * @brief Processes input sort key.
  * @param input
  * @return
  */
@@ -26,7 +26,7 @@ QString inputSortKey(const Input &input)
 }
 
 /**
- * @brief outputSortKey
+ * @brief Processes output sort key.
  * @param output
  * @return
  */
@@ -36,7 +36,7 @@ QString outputSortKey(const Output &output)
 }
 
 /**
- * @brief kernelSortKey
+ * @brief Processes kernel sort key.
  * @param kernel
  * @return
  */
@@ -48,7 +48,7 @@ QString kernelSortKey(const TxKernel &kernel)
 template <typename Item>
 
 /**
- * @brief verifySortedAndUnique
+ * @brief Validates sorted and unique.
  * @param items
  * @param )
  * @param label
@@ -97,7 +97,7 @@ namespace WalletCryptoKernelHelpers
 {
 
 /**
- * @brief inputOrderHash
+ * @brief Processes input order hash.
  * @param input
  * @return
  */
@@ -113,7 +113,7 @@ QString inputOrderHash(const Input &input)
 }
 
 /**
- * @brief outputOrderHash
+ * @brief Processes output order hash.
  * @param output
  * @return
  */
@@ -131,7 +131,7 @@ QString outputOrderHash(const Output &output)
 }
 
 /**
- * @brief kernelOrderHash
+ * @brief Processes kernel order hash.
  * @param kernel
  * @return
  */
@@ -152,7 +152,7 @@ QString kernelOrderHash(const TxKernel &kernel)
 }
 
 /**
- * @brief validateTransactionKernelSums
+ * @brief Validates transaction kernel sums.
  * @param tx
  * @param errorOut
  * @return
@@ -359,7 +359,7 @@ bool validateTransactionKernelSums(const Transaction &tx, QString *errorOut)
 }
 
 /**
- * @brief validateTransactionBody
+ * @brief Validates transaction body.
  * @param tx
  * @param errorOut
  * @return
@@ -447,7 +447,7 @@ bool validateTransactionBody(const Transaction &tx, QString *errorOut)
 }
 
 /**
- * @brief validateTransactionKernelSignatures
+ * @brief Validates transaction kernel signatures.
  * @param tx
  * @param errorOut
  * @return

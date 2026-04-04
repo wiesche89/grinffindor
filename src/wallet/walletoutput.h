@@ -1,4 +1,4 @@
-#ifndef WALLETOUTPUT_H
+﻿#ifndef WALLETOUTPUT_H
 #define WALLETOUTPUT_H
 
 #include <QJsonObject>
@@ -22,7 +22,13 @@ public:
     bool pending = false;
     QString workflowId;
 
+/**
+ * @brief Returns to json.
+ */
     QJsonObject toJson() const;
+/**
+ * @brief Returns from json.
+ */
     static WalletOutput fromJson(const QJsonObject &json);
 };
 

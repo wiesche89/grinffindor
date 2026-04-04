@@ -26,8 +26,8 @@ namespace
 {
 
 /**
- * @brief testMnemonic
- * @return
+ * @brief Returns a deterministic mnemonic used across integration fixtures.
+ * @return Test mnemonic phrase.
  */
 QString testMnemonic()
 {
@@ -38,10 +38,10 @@ QString testMnemonic()
 }
 
 /**
- * @brief repeatedHex
- * @param nibble
- * @param bytes
- * @return
+ * @brief Creates a repeated hexadecimal string for deterministic fixture values.
+ * @param nibble Hex nibble character to repeat.
+ * @param bytes Number of bytes represented in the resulting string.
+ * @return Hex string with length bytes * 2.
  */
 QString repeatedHex(const char nibble, int bytes)
 {
@@ -49,8 +49,8 @@ QString repeatedHex(const char nibble, int bytes)
 }
 
 /**
- * @brief testKeychain
- * @return
+ * @brief Builds a deterministic keychain from the default test mnemonic.
+ * @return Test keychain instance.
  */
 WalletKeychain testKeychain()
 {
@@ -58,8 +58,8 @@ WalletKeychain testKeychain()
 }
 
 /**
- * @brief secondaryAuditKeychain
- * @return
+ * @brief Builds a second deterministic keychain for recipient/address tests.
+ * @return Secondary test keychain instance.
  */
 WalletKeychain secondaryAuditKeychain()
 {
@@ -71,8 +71,8 @@ WalletKeychain secondaryAuditKeychain()
 }
 
 /**
- * @brief buildBinarySlate
- * @return
+ * @brief Constructs a binary-slate fixture with participant data and metadata.
+ * @return Slate fixture for binary slatepack tests.
  */
 SlateV4 buildBinarySlate()
 {
@@ -95,15 +95,15 @@ SlateV4 buildBinarySlate()
 }
 
 /**
- * @brief buildOutput
- * @param commitment
- * @param amount
- * @param onChain
- * @param spent
- * @param locked
- * @param pending
- * @param workflowId
- * @return
+ * @brief Creates a wallet output fixture with explicit state flags.
+ * @param commitment Output commitment.
+ * @param amount Output amount as decimal string.
+ * @param onChain True when output is on-chain.
+ * @param spent True when output is marked spent.
+ * @param locked True when output is locked.
+ * @param pending True when output is pending.
+ * @param workflowId Optional workflow identifier.
+ * @return Configured wallet output fixture.
  */
 WalletOutput buildOutput(const QString &commitment,
                          const QString &amount,
@@ -125,10 +125,10 @@ WalletOutput buildOutput(const QString &commitment,
 }
 
 /**
- * @brief walletStateDocument
- * @param outputs
- * @param transactions
- * @return
+ * @brief Builds a wallet state JSON document from outputs and transactions.
+ * @param outputs Wallet output fixtures.
+ * @param transactions Optional transaction array.
+ * @return Document containing wallet_state payload.
  */
 QJsonObject walletStateDocument(const QList<WalletOutput> &outputs, const QJsonArray &transactions = QJsonArray())
 {
@@ -143,11 +143,11 @@ QJsonObject walletStateDocument(const QList<WalletOutput> &outputs, const QJsonA
 }
 
 /**
- * @brief encryptedWalletObject
- * @param name
- * @param mnemonic
- * @param password
- * @return
+ * @brief Creates an encrypted wallet object fixture.
+ * @param name Wallet display name.
+ * @param mnemonic Wallet mnemonic.
+ * @param password Encryption password.
+ * @return Wallet object containing encrypted seed metadata.
  */
 QJsonObject encryptedWalletObject(const QString &name, const QString &mnemonic, const QString &password)
 {
@@ -161,12 +161,12 @@ QJsonObject encryptedWalletObject(const QString &name, const QString &mnemonic, 
 }
 
 /**
- * @brief transactionEntry
- * @param workflowId
- * @param status
- * @param broadcasted
- * @param attempts
- * @return
+ * @brief Creates a transaction entry fixture for wallet state tests.
+ * @param workflowId Workflow identifier.
+ * @param status Transaction lifecycle status.
+ * @param broadcasted Broadcast state flag.
+ * @param attempts Number of broadcast attempts.
+ * @return Transaction entry JSON object.
  */
 QJsonObject transactionEntry(const QString &workflowId,
                             const QString &status,
@@ -182,8 +182,8 @@ QJsonObject transactionEntry(const QString &workflowId,
 }
 
 /**
- * @brief storageFilePathForTests
- * @return
+ * @brief Resolves the storage file path used by integration tests.
+ * @return Absolute test storage file path.
  */
 QString storageFilePathForTests()
 {
@@ -220,7 +220,7 @@ private slots:
 };
 
 /**
- * @brief WalletIntegrationTests::initTestCase
+ * @brief Initializes integration test environment and test resources.
  */
 void WalletIntegrationTests::initTestCase()
 {
@@ -231,7 +231,7 @@ void WalletIntegrationTests::initTestCase()
 }
 
 /**
- * @brief WalletIntegrationTests::binarySlatepackRoundTripPreservesCoreFields
+ * @brief Verifies binary slatepack round-trip preserves core slate fields.
  */
 void WalletIntegrationTests::binarySlatepackRoundTripPreservesCoreFields()
 {
@@ -271,7 +271,7 @@ void WalletIntegrationTests::binarySlatepackRoundTripPreservesCoreFields()
 }
 
 /**
- * @brief WalletIntegrationTests::binarySlatepackFallsBackToPlainSenderEnvelope
+ * @brief Verifies binary slatepack encoding falls back to a plain sender envelope when needed.
  */
 void WalletIntegrationTests::binarySlatepackFallsBackToPlainSenderEnvelope()
 {
@@ -313,7 +313,7 @@ void WalletIntegrationTests::binarySlatepackFallsBackToPlainSenderEnvelope()
 }
 
 /**
- * @brief WalletIntegrationTests::workflowFinalizeOutputsTracksInputsAndChange
+ * @brief Verifies workflow output finalization tracks input, change, and receiver outputs.
  */
 void WalletIntegrationTests::workflowFinalizeOutputsTracksInputsAndChange()
 {
@@ -369,7 +369,7 @@ void WalletIntegrationTests::workflowFinalizeOutputsTracksInputsAndChange()
 }
 
 /**
- * @brief WalletIntegrationTests::transactionStoreTracksBroadcastLifecycle
+ * @brief Verifies transaction store state transitions across the broadcast lifecycle.
  */
 void WalletIntegrationTests::transactionStoreTracksBroadcastLifecycle()
 {
@@ -432,7 +432,7 @@ void WalletIntegrationTests::transactionStoreTracksBroadcastLifecycle()
 }
 
 /**
- * @brief WalletIntegrationTests::nodeSyncHelpersRecognizeRecoverableAndRefreshableStates
+ * @brief Verifies node sync helpers detect recoverable and refreshable transaction states.
  */
 void WalletIntegrationTests::nodeSyncHelpersRecognizeRecoverableAndRefreshableStates()
 {
@@ -458,7 +458,7 @@ void WalletIntegrationTests::nodeSyncHelpersRecognizeRecoverableAndRefreshableSt
 }
 
 /**
- * @brief WalletIntegrationTests::storageRoundTripPreservesPerNetworkViews
+ * @brief Verifies storage round-trip preserves network-specific wallet views.
  */
 void WalletIntegrationTests::storageRoundTripPreservesPerNetworkViews()
 {
@@ -510,7 +510,7 @@ void WalletIntegrationTests::storageRoundTripPreservesPerNetworkViews()
 }
 
 /**
- * @brief WalletIntegrationTests::storageRefreshTransactionConfirmationsPromotesConfirmedEntries
+ * @brief Verifies confirmation refresh promotes broadcasted transactions to confirmed state.
  */
 void WalletIntegrationTests::storageRefreshTransactionConfirmationsPromotesConfirmedEntries()
 {
@@ -530,7 +530,7 @@ void WalletIntegrationTests::storageRefreshTransactionConfirmationsPromotesConfi
 }
 
 /**
- * @brief WalletIntegrationTests::storageImportBackupNormalizesNetworkAndContexts
+ * @brief Verifies backup import normalizes network-scoped wallet state and workflow contexts.
  */
 void WalletIntegrationTests::storageImportBackupNormalizesNetworkAndContexts()
 {
@@ -591,7 +591,7 @@ void WalletIntegrationTests::storageImportBackupNormalizesNetworkAndContexts()
 }
 
 /**
- * @brief WalletIntegrationTests::controllerImportBackupLoadsWalletState
+ * @brief Verifies controller backup import loads wallet metadata and selected network state.
  */
 void WalletIntegrationTests::controllerImportBackupLoadsWalletState()
 {
@@ -632,7 +632,7 @@ void WalletIntegrationTests::controllerImportBackupLoadsWalletState()
 }
 
 /**
- * @brief WalletIntegrationTests::controllerRejectsSlatepackForWrongNetwork
+ * @brief Verifies controller rejects slatepacks targeting a different network.
  */
 void WalletIntegrationTests::controllerRejectsSlatepackForWrongNetwork()
 {
@@ -654,7 +654,7 @@ void WalletIntegrationTests::controllerRejectsSlatepackForWrongNetwork()
 }
 
 /**
- * @brief WalletIntegrationTests::controllerBroadcastTransactionRequiresSkeleton
+ * @brief Verifies broadcast fails gracefully when no transaction skeleton is present.
  */
 void WalletIntegrationTests::controllerBroadcastTransactionRequiresSkeleton()
 {
@@ -683,7 +683,7 @@ void WalletIntegrationTests::controllerBroadcastTransactionRequiresSkeleton()
 }
 
 /**
- * @brief WalletIntegrationTests::controllerCancelTransactionCleansOutputsAndContext
+ * @brief Verifies transaction cancellation unlocks outputs and removes workflow context.
  */
 void WalletIntegrationTests::controllerCancelTransactionCleansOutputsAndContext()
 {
@@ -729,7 +729,7 @@ void WalletIntegrationTests::controllerCancelTransactionCleansOutputsAndContext(
 }
 
 /**
- * @brief WalletIntegrationTests::controllerCleanupRemovesLocalOutputsAndCancelledTransactions
+ * @brief Verifies cleanup removes local outputs and cancelled transactions.
  */
 void WalletIntegrationTests::controllerCleanupRemovesLocalOutputsAndCancelledTransactions()
 {
@@ -771,7 +771,7 @@ void WalletIntegrationTests::controllerCleanupRemovesLocalOutputsAndCancelledTra
 }
 
 /**
- * @brief WalletIntegrationTests::controllerReloadPreservesStoredWorkflowState
+ * @brief Verifies controller reload restores persisted workflow state and metadata.
  */
 void WalletIntegrationTests::controllerReloadPreservesStoredWorkflowState()
 {
@@ -821,7 +821,7 @@ void WalletIntegrationTests::controllerReloadPreservesStoredWorkflowState()
 }
 
 /**
- * @brief WalletIntegrationTests::controllerReloadCanCancelInterruptedWorkflow
+ * @brief Verifies a reloaded controller can cancel an interrupted workflow.
  */
 void WalletIntegrationTests::controllerReloadCanCancelInterruptedWorkflow()
 {
@@ -868,7 +868,7 @@ void WalletIntegrationTests::controllerReloadCanCancelInterruptedWorkflow()
 }
 
 /**
- * @brief WalletIntegrationTests::nodeSyncRefreshBroadcastStatusesMarksMempoolTransactions
+ * @brief Verifies node sync marks broadcasted transactions as in-mempool when observed.
  */
 void WalletIntegrationTests::nodeSyncRefreshBroadcastStatusesMarksMempoolTransactions()
 {
@@ -911,7 +911,7 @@ void WalletIntegrationTests::nodeSyncRefreshBroadcastStatusesMarksMempoolTransac
 }
 
 /**
- * @brief WalletIntegrationTests::nodeSyncKernelConfirmationFinalizesTrackedWorkflow
+ * @brief Verifies kernel confirmation finalizes the tracked workflow and updates outputs.
  */
 void WalletIntegrationTests::nodeSyncKernelConfirmationFinalizesTrackedWorkflow()
 {
@@ -972,7 +972,7 @@ void WalletIntegrationTests::nodeSyncKernelConfirmationFinalizesTrackedWorkflow(
 }
 
 /**
- * @brief WalletIntegrationTests::nodeSyncPreflightRejectsMissingInputCommitment
+ * @brief Verifies broadcast preflight rejects transactions with missing input commitments.
  */
 void WalletIntegrationTests::nodeSyncPreflightRejectsMissingInputCommitment()
 {
@@ -1028,8 +1028,8 @@ void WalletIntegrationTests::nodeSyncPreflightRejectsMissingInputCommitment()
 }
 
 /**
- * @brief createWalletIntegrationTests
- * @return
+ * @brief Creates the wallet integration test object for the shared test runner.
+ * @return Newly allocated Qt test object instance.
  */
 QObject *createWalletIntegrationTests()
 {

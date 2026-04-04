@@ -63,8 +63,8 @@ static const secp256k1_pubkey kGeneratorJPub = {{
 }};
 
 /**
- * @brief walletKeychainSecp
- * @return
+ * @brief Returns shared secp256k1 context holder for keychain operations.
+ * @return Singleton secp holder.
  */
 KeychainSecpHolder &walletKeychainSecp()
 {
@@ -73,9 +73,9 @@ KeychainSecpHolder &walletKeychainSecp()
 }
 
 /**
- * @brief hash256
- * @param input
- * @return
+ * @brief Computes BLAKE2b-256 hash of input bytes.
+ * @param input Input bytes.
+ * @return 32-byte hash.
  */
 QByteArray hash256(const QByteArray &input)
 {
@@ -83,9 +83,9 @@ QByteArray hash256(const QByteArray &input)
 }
 
 /**
- * @brief normalizeMnemonic
- * @param mnemonic
- * @return
+ * @brief Normalizes mnemonic text for deterministic parsing.
+ * @param mnemonic Raw mnemonic text.
+ * @return Lowercased mnemonic with collapsed whitespace.
  */
 QString normalizeMnemonic(const QString &mnemonic)
 {
@@ -95,8 +95,8 @@ QString normalizeMnemonic(const QString &mnemonic)
 }
 
 /**
- * @brief mnemonicWords
- * @return
+ * @brief Loads BIP39 English wordlist from resources.
+ * @return Word list entries.
  */
 QStringList mnemonicWords()
 {
@@ -117,9 +117,9 @@ QStringList mnemonicWords()
 }
 
 /**
- * @brief bitsFromBytes
- * @param bytes
- * @return
+ * @brief Expands bytes into bit-vector bytes containing 0/1 values.
+ * @param bytes Input bytes.
+ * @return Bit-vector buffer.
  */
 QByteArray bitsFromBytes(const QByteArray &bytes)
 {
@@ -135,9 +135,9 @@ QByteArray bitsFromBytes(const QByteArray &bytes)
 }
 
 /**
- * @brief bytesFromBits
- * @param bits
- * @return
+ * @brief Packs 0/1 bit-vector bytes into raw bytes.
+ * @param bits Bit-vector buffer.
+ * @return Packed bytes.
  */
 QByteArray bytesFromBits(const QByteArray &bits)
 {
@@ -154,9 +154,9 @@ QByteArray bytesFromBits(const QByteArray &bits)
 }
 
 /**
- * @brief entropyFromMnemonic
- * @param mnemonic
- * @return
+ * @brief Validates a 24-word mnemonic and extracts entropy bytes.
+ * @param mnemonic Mnemonic phrase.
+ * @return 32-byte entropy on success.
  */
 QByteArray entropyFromMnemonic(const QString &mnemonic)
 {
@@ -193,9 +193,9 @@ QByteArray entropyFromMnemonic(const QString &mnemonic)
 }
 
 /**
- * @brief createCompressedPubkey
- * @param secretKey
- * @return
+ * @brief Computes compressed secp256k1 public key from secret key.
+ * @param secretKey 32-byte private key.
+ * @return 33-byte compressed public key.
  */
 QByteArray createCompressedPubkey(const QByteArray &secretKey)
 {
@@ -225,10 +225,10 @@ QByteArray createCompressedPubkey(const QByteArray &secretKey)
 }
 
 /**
- * @brief createNonce
- * @param commitment
- * @param nonceHash
- * @return
+ * @brief Derives proof nonce from commitment and nonce hash.
+ * @param commitment Commitment bytes.
+ * @param nonceHash Nonce hash seed.
+ * @return Derived nonce bytes.
  */
 QByteArray createNonce(const QByteArray &commitment, const QByteArray &nonceHash)
 {
@@ -236,10 +236,10 @@ QByteArray createNonce(const QByteArray &commitment, const QByteArray &nonceHash
 }
 
 /**
- * @brief blindSwitch
- * @param blind
- * @param amount
- * @return
+ * @brief Applies Grin blind-switch transformation for a given amount.
+ * @param blind Input blinding factor.
+ * @param amount Output amount.
+ * @return Switched blinding factor.
  */
 QByteArray blindSwitch(const QByteArray &blind, quint64 amount)
 {
@@ -266,9 +266,9 @@ QByteArray blindSwitch(const QByteArray &blind, quint64 amount)
 }
 
 /**
- * @brief appendU32
- * @param buffer
- * @param value
+ * @brief Appends a 32-bit big-endian integer to a byte buffer.
+ * @param buffer Target buffer.
+ * @param value Value to append.
  */
 void appendU32(QByteArray &buffer, quint32 value)
 {
@@ -279,9 +279,9 @@ void appendU32(QByteArray &buffer, quint32 value)
 }
 
 /**
- * @brief readU32
- * @param data
- * @return
+ * @brief Reads a 32-bit big-endian integer from raw bytes.
+ * @param data Pointer to first byte.
+ * @return Parsed integer value.
  */
 quint32 readU32(const unsigned char *data)
 {
@@ -292,9 +292,9 @@ quint32 readU32(const unsigned char *data)
 }
 
 /**
- * @brief formatKeyPath
- * @param path
- * @return
+ * @brief Formats derivation path indices as a path string.
+ * @param path Derivation indices.
+ * @return Key path string.
  */
 QString formatKeyPath(const QVector<quint32> &path)
 {
@@ -306,13 +306,13 @@ QString formatKeyPath(const QVector<quint32> &path)
 }
 
 /**
- * @brief deriveChildPrivateKey
- * @param parentSecret
- * @param parentChainCode
- * @param childIndex
- * @param childSecretOut
- * @param childChainCodeOut
- * @return
+ * @brief Derives child private key material using HMAC-SHA512 and secp tweak-add.
+ * @param parentSecret Parent private key.
+ * @param parentChainCode Parent chain code.
+ * @param childIndex Child index.
+ * @param childSecretOut Output child private key.
+ * @param childChainCodeOut Output child chain code.
+ * @return True when child derivation succeeds.
  */
 bool deriveChildPrivateKey(const QByteArray &parentSecret,
                            const QByteArray &parentChainCode,
@@ -362,9 +362,9 @@ bool deriveChildPrivateKey(const QByteArray &parentSecret,
 }
 
 /**
- * @brief buildEnhancedProofMessage
- * @param path
- * @return
+ * @brief Builds enhanced bulletproof message embedding key-path metadata.
+ * @param path Derivation path indices.
+ * @return 20-byte proof message payload.
  */
 QByteArray buildEnhancedProofMessage(const QVector<quint32> &path)
 {
@@ -384,8 +384,8 @@ QByteArray buildEnhancedProofMessage(const QVector<quint32> &path)
 }
 
 /**
- * @brief WalletKeychain::WalletKeychain
- * @param mnemonic
+ * @brief Constructs keychain state from a wallet mnemonic.
+ * @param mnemonic Mnemonic phrase.
  */
 WalletKeychain::WalletKeychain(const QString &mnemonic)
     : m_mnemonic(mnemonic.trimmed())
@@ -394,6 +394,9 @@ WalletKeychain::WalletKeychain(const QString &mnemonic)
         return;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Validating Mnemonic And Deriving Master Secret Material
+    // -------------------------------------------------------------------------------------------------------
     const QByteArray entropy = entropyFromMnemonic(m_mnemonic);
     if (entropy.size() != 32) {
         return;
@@ -410,6 +413,9 @@ WalletKeychain::WalletKeychain(const QString &mnemonic)
     m_masterSecret = hmac.left(32);
     m_masterChainCode = hmac.mid(32, 32);
 
+    // -------------------------------------------------------------------------------------------------------
+    // Preparing Derived Public Data And Rewind Nonces
+    // -------------------------------------------------------------------------------------------------------
     m_masterPublicKey = createCompressedPubkey(m_masterSecret);
     if (!m_masterPublicKey.isEmpty()) {
         m_rewindNonceHash = hash256(m_masterPublicKey);
@@ -418,8 +424,8 @@ WalletKeychain::WalletKeychain(const QString &mnemonic)
 }
 
 /**
- * @brief WalletKeychain::isValid
- * @return
+ * @brief Returns whether keychain master material is valid.
+ * @return True when keychain has complete derived state.
  */
 bool WalletKeychain::isValid() const
 {
@@ -430,8 +436,8 @@ bool WalletKeychain::isValid() const
 }
 
 /**
- * @brief WalletKeychain::masterPublicKey
- * @return
+ * @brief Returns master public key as hex.
+ * @return Master public key hex string.
  */
 QString WalletKeychain::masterPublicKey() const
 {
@@ -439,8 +445,8 @@ QString WalletKeychain::masterPublicKey() const
 }
 
 /**
- * @brief WalletKeychain::slatepackSecretKey
- * @return
+ * @brief Returns master secret key bytes for slatepack crypto operations.
+ * @return 32-byte secret key.
  */
 QByteArray WalletKeychain::slatepackSecretKey() const
 {
@@ -448,10 +454,10 @@ QByteArray WalletKeychain::slatepackSecretKey() const
 }
 
 /**
- * @brief WalletKeychain::rewindOutputProof
- * @param commitment
- * @param proof
- * @return
+ * @brief Rewinds a bulletproof to recover amount and ownership metadata.
+ * @param commitment Output commitment hex.
+ * @param proof Bulletproof hex.
+ * @return Rewind result with amount, blinding factor, and key-path hints.
  */
 WalletKeychain::RewindResult WalletKeychain::rewindOutputProof(const QString &commitment, const QString &proof) const
 {
@@ -482,6 +488,9 @@ WalletKeychain::RewindResult WalletKeychain::rewindOutputProof(const QString &co
     unsigned char blind[32];
     unsigned char message[20];
 
+    // -------------------------------------------------------------------------------------------------------
+    // Rewinding Proof With Primary And Legacy Nonce Strategies
+    // -------------------------------------------------------------------------------------------------------
     int rewound = secp256k1_bulletproof_rangeproof_rewind(
         context,
         &value,
@@ -540,10 +549,10 @@ WalletKeychain::RewindResult WalletKeychain::rewindOutputProof(const QString &co
 }
 
 /**
- * @brief WalletKeychain::deriveOutputSecrets
- * @param childIndex
- * @param amount
- * @return
+ * @brief Derives per-output secrets for a child index and amount.
+ * @param childIndex Child derivation index.
+ * @param amount Output amount.
+ * @return Derived output secrets bundle.
  */
 WalletKeychain::OutputSecrets WalletKeychain::deriveOutputSecrets(quint32 childIndex, quint64 amount) const
 {

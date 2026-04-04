@@ -7,17 +7,23 @@ QObject *createWalletCoreTests();
 QObject *createWalletIntegrationTests();
 
 /**
- * @brief main
- * @param argc
- * @param argv
- * @return
+ * @brief Runs wallet core and integration Qt test suites.
+ * @param argc Number of command-line arguments.
+ * @param argv Command-line argument array.
+ * @return Combined test process exit status.
  */
 int main(int argc, char *argv[])
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Initializing Test Application Context
+    // -------------------------------------------------------------------------------------------------------
     QCoreApplication app(argc, argv);
 
     int status = 0;
 
+    // -------------------------------------------------------------------------------------------------------
+    // Running Wallet Core Test Suite
+    // -------------------------------------------------------------------------------------------------------
     QObject *coreTests = createWalletCoreTests();
     std::fprintf(stderr, "running WalletCoreTests\n");
     char coreArg0[] = "wallettests";
@@ -27,6 +33,9 @@ int main(int argc, char *argv[])
     std::fprintf(stderr, "WalletCoreTests status=%d\n", status);
     delete coreTests;
 
+    // -------------------------------------------------------------------------------------------------------
+    // Running Wallet Integration Test Functions Individually
+    // -------------------------------------------------------------------------------------------------------
     const char *integrationFunctions[] = {
         "binarySlatepackRoundTripPreservesCoreFields",
         "binarySlatepackFallsBackToPlainSenderEnvelope",
@@ -61,5 +70,8 @@ int main(int argc, char *argv[])
         delete integrationTests;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Returning Combined Test Status
+    // -------------------------------------------------------------------------------------------------------
     return status;
 }

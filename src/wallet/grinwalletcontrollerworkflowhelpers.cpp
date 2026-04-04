@@ -1,4 +1,4 @@
-#include "grinwalletcontroller.h"
+﻿#include "grinwalletcontroller.h"
 
 #include "grinwalletcontrollerhelpers.h"
 #include "grinwalletstorage.h"
@@ -8,8 +8,12 @@
 #include "walletscanner.h"
 #include "walletselection.h"
 
+// -------------------------------------------------------------------------------------------------------
+// Active Session Identity Helpers
+// -------------------------------------------------------------------------------------------------------
+
 /**
- * @brief GrinWalletController::currentSlatepackAddress
+ * @brief Returns the slatepack address derived from the active unlocked session.
  * @return
  */
 QString GrinWalletController::currentSlatepackAddress() const
@@ -23,7 +27,7 @@ QString GrinWalletController::currentSlatepackAddress() const
 }
 
 /**
- * @brief GrinWalletController::currentPaymentProofAddress
+ * @brief Returns the payment-proof address for the active unlocked session.
  * @return
  */
 QString GrinWalletController::currentPaymentProofAddress() const
@@ -37,7 +41,7 @@ QString GrinWalletController::currentPaymentProofAddress() const
 }
 
 /**
- * @brief GrinWalletController::currentSlatepackSecret
+ * @brief Returns the slatepack secret key for the active unlocked session.
  * @return
  */
 QByteArray GrinWalletController::currentSlatepackSecret() const
@@ -51,7 +55,7 @@ QByteArray GrinWalletController::currentSlatepackSecret() const
 }
 
 /**
- * @brief GrinWalletController::alignSlateVersionWithNode
+ * @brief Aligns slate version metadata with current node capabilities.
  * @param slate
  */
 void GrinWalletController::alignSlateVersionWithNode(SlateV4 *slate) const
@@ -78,7 +82,7 @@ void GrinWalletController::alignSlateVersionWithNode(SlateV4 *slate) const
 }
 
 /**
- * @brief GrinWalletController::resolveWorkflowIdBySlateId
+ * @brief Resolves a stored workflow ID from the provided slate ID.
  * @param slate
  * @return
  */
@@ -109,7 +113,7 @@ QString GrinWalletController::resolveWorkflowIdBySlateId(const SlateV4 &slate) c
 }
 
 /**
- * @brief GrinWalletController::resolveWorkflowAmountNano
+ * @brief Resolves the workflow amount in nanogrin from context or transaction history.
  * @param workflowId
  * @param localContext
  * @param amount
@@ -145,7 +149,7 @@ quint64 GrinWalletController::resolveWorkflowAmountNano(const QString &workflowI
 }
 
 /**
- * @brief GrinWalletController::legacyInvoiceParticipantFromContext
+ * @brief Builds legacy invoice participant data from persisted workflow context.
  * @param localContext
  * @return
  */
@@ -169,7 +173,7 @@ QJsonObject GrinWalletController::legacyInvoiceParticipantFromContext(const QJso
 }
 
 /**
- * @brief GrinWalletController::ensureWorkflowSelectionContext
+ * @brief Ensures workflow selection context.
  * @param workflowId
  * @param amount
  * @param feeOut
@@ -181,6 +185,9 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
                                                           QString *feeOut,
                                                           QString *errorOut)
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Reusing Or Rebuilding Existing Workflow Selection Context
+    // -------------------------------------------------------------------------------------------------------
     if (workflowId.trimmed().isEmpty()) {
         if (errorOut) {
             *errorOut = QStringLiteral("Workflow id is missing.");
@@ -357,6 +364,9 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
         }
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Performing Fresh Spendable Output Selection
+    // -------------------------------------------------------------------------------------------------------
     quint64 requestedAmount = resolveWorkflowAmountNano(workflowId, localContext, amount);
     if (requestedAmount == 0) {
         if (errorOut) {
@@ -454,7 +464,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
 }
 
 /**
- * @brief GrinWalletController::prepareInvoiceSenderContext
+ * @brief Prepares invoice sender context.
  * @param workflowId
  * @param slate
  * @param signatureOverrideOut
@@ -467,6 +477,9 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     WalletCryptoBackend::ParticipantContext *signatureOverrideOut,
     QString *errorOut)
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Preparing Sender Participant Context For Invoice Workflow
+    // -------------------------------------------------------------------------------------------------------
     if (!slate || !signatureOverrideOut) {
         if (errorOut) {
             *errorOut = QStringLiteral("Invoice sender context target is missing.");
@@ -599,7 +612,7 @@ bool GrinWalletController::prepareInvoiceSenderContext(
 }
 
 /**
- * @brief GrinWalletController::prepareStandardSenderContext
+ * @brief Prepares standard sender context.
  * @param workflowId
  * @param slate
  * @param signatureOverrideOut
@@ -732,7 +745,7 @@ bool GrinWalletController::prepareStandardSenderContext(
 }
 
 /**
- * @brief GrinWalletController::compactInvoiceSlateForReturn
+ * @brief Compacts invoice slate for return.
  * @param workflowId
  * @param slate
  */
@@ -773,7 +786,7 @@ void GrinWalletController::compactInvoiceSlateForReturn(const QString &workflowI
 }
 
 /**
- * @brief GrinWalletController::compactStandardSlateForReturn
+ * @brief Compacts standard slate for return.
  * @param workflowId
  * @param slate
  */
@@ -832,7 +845,7 @@ void GrinWalletController::compactStandardSlateForReturn(const QString &workflow
 }
 
 /**
- * @brief GrinWalletController::ensureReceiverOutputContext
+ * @brief Ensures receiver output context.
  * @param workflowId
  * @param amount
  * @param source
@@ -912,7 +925,7 @@ bool GrinWalletController::ensureReceiverOutputContext(const QString &workflowId
 }
 
 /**
- * @brief GrinWalletController::persistWorkflowTransaction
+ * @brief Persists workflow transaction.
  * @param slate
  * @param broadcasted
  */
@@ -929,7 +942,7 @@ void GrinWalletController::persistWorkflowTransaction(const SlateV4 &slate, bool
 }
 
 /**
- * @brief GrinWalletController::finalizeWorkflowOutputs
+ * @brief Finalizes workflow outputs.
  * @param slate
  * @param broadcasted
  */
@@ -949,7 +962,7 @@ void GrinWalletController::finalizeWorkflowOutputs(const SlateV4 &slate, bool br
 }
 
 /**
- * @brief GrinWalletController::finalizeBroadcastedWorkflow
+ * @brief Finalizes broadcasted workflow.
  * @param workflowId
  */
 void GrinWalletController::finalizeBroadcastedWorkflow(const QString &workflowId)
@@ -968,7 +981,7 @@ void GrinWalletController::finalizeBroadcastedWorkflow(const QString &workflowId
 }
 
 /**
- * @brief GrinWalletController::storeWorkflowContext
+ * @brief Stores workflow context.
  * @param workflowId
  * @param context
  */
@@ -985,7 +998,7 @@ void GrinWalletController::storeWorkflowContext(const QString &workflowId, const
 }
 
 /**
- * @brief GrinWalletController::workflowContext
+ * @brief Returns the stored context object for the specified workflow ID.
  * @param workflowId
  * @return
  */

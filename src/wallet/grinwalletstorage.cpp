@@ -20,9 +20,9 @@
 #ifdef Q_OS_WASM
 
 /**
- * @brief EM_JS
- * @param browserLocalStorageSet
- * @param value
+ * @brief Writes a JSON blob to browser localStorage under the provided key.
+ * @param key Storage key.
+ * @param value JSON payload string.
  */
 EM_JS(void, browserLocalStorageSet, (const char *key, const char *value), {
     if (typeof localStorage === 'undefined' || !key || !value) {
@@ -32,10 +32,9 @@ EM_JS(void, browserLocalStorageSet, (const char *key, const char *value), {
 });
 
 /**
- * @brief EM_JS
- * @param char
- * @param browserLocalStorageGet
- * @param key
+ * @brief Reads a JSON blob from browser localStorage for the provided key.
+ * @param key Storage key.
+ * @return Newly allocated UTF-8 string or null.
  */
 EM_JS(char *, browserLocalStorageGet, (const char *key), {
     if (typeof localStorage === 'undefined' || !key) {
@@ -62,8 +61,8 @@ const char *kMainnetNodeUrl = "https://mainnet.grinffindor.org/v2/foreign";
 const char *kTestnetNodeUrl = "https://testnet.grinffindor.org/v2/foreign";
 
 /**
- * @brief defaultNetworkName
- * @return
+ * @brief Returns the default wallet network name.
+ * @return Default network identifier.
  */
 QString defaultNetworkName()
 {
@@ -71,9 +70,9 @@ QString defaultNetworkName()
 }
 
 /**
- * @brief isAcceptedNetworkName
- * @param networkName
- * @return
+ * @brief Checks whether a network name is supported.
+ * @param networkName Candidate network name.
+ * @return True when network is mainnet or testnet.
  */
 bool isAcceptedNetworkName(const QString &networkName)
 {
@@ -82,9 +81,9 @@ bool isAcceptedNetworkName(const QString &networkName)
 }
 
 /**
- * @brief defaultNodeUrlForNetwork
- * @param networkName
- * @return
+ * @brief Resolves default node URL for the given network.
+ * @param networkName Network identifier.
+ * @return Default node foreign API URL.
  */
 QString defaultNodeUrlForNetwork(const QString &networkName)
 {
@@ -94,10 +93,10 @@ QString defaultNodeUrlForNetwork(const QString &networkName)
 }
 
 /**
- * @brief inferNetworkName
- * @param networkName
- * @param nodeUrl
- * @return
+ * @brief Infers network name from explicit name or node URL.
+ * @param networkName Optional explicit network value.
+ * @param nodeUrl Optional node URL used as fallback hint.
+ * @return Normalized network identifier.
  */
 QString inferNetworkName(const QString &networkName, const QString &nodeUrl)
 {
@@ -115,10 +114,10 @@ QString inferNetworkName(const QString &networkName, const QString &nodeUrl)
 }
 
 /**
- * @brief amountStringFromJson
- * @param balances
- * @param key
- * @return
+ * @brief Reads an amount string from balances object with a default fallback.
+ * @param balances Balance object.
+ * @param key Balance field key.
+ * @return Amount string.
  */
 QString amountStringFromJson(const QJsonObject &balances, const QString &key)
 {
@@ -126,9 +125,9 @@ QString amountStringFromJson(const QJsonObject &balances, const QString &key)
 }
 
 /**
- * @brief isNodeUrlAccepted
- * @param nodeUrl
- * @return
+ * @brief Validates whether a node URL has acceptable scheme and host.
+ * @param nodeUrl Candidate node URL.
+ * @return True when URL is valid HTTP/HTTPS endpoint.
  */
 bool isNodeUrlAccepted(const QString &nodeUrl)
 {
@@ -140,8 +139,8 @@ bool isNodeUrlAccepted(const QString &nodeUrl)
 }
 
 /**
- * @brief storageRootPath
- * @return
+ * @brief Resolves the root path for wallet storage.
+ * @return Storage root directory path.
  */
 QString storageRootPath()
 {
@@ -154,8 +153,8 @@ QString storageRootPath()
 }
 
 /**
- * @brief storageFilePath
- * @return
+ * @brief Resolves the full wallet storage file path.
+ * @return Absolute storage file path.
  */
 QString storageFilePath()
 {
@@ -163,7 +162,7 @@ QString storageFilePath()
 }
 
 /**
- * @brief ensureStorageReady
+ * @brief Creates storage directories and mounts persistent filesystem on WASM.
  */
 void ensureStorageReady()
 {
@@ -186,7 +185,7 @@ void ensureStorageReady()
 }
 
 /**
- * @brief flushStorage
+ * @brief Flushes pending WASM filesystem changes to persistent backing store.
  */
 void flushStorage()
 {
@@ -200,10 +199,10 @@ void flushStorage()
 }
 
 /**
- * @brief validateEncryptedSeedObject
- * @param encryptedSeed
- * @param errorOut
- * @return
+ * @brief Validates required fields of an encrypted seed backup object.
+ * @param encryptedSeed Encrypted seed object.
+ * @param errorOut Optional validation error output.
+ * @return True when backup seed object is valid.
  */
 bool validateEncryptedSeedObject(const QJsonObject &encryptedSeed, QString *errorOut)
 {
@@ -235,11 +234,11 @@ bool validateEncryptedSeedObject(const QJsonObject &encryptedSeed, QString *erro
 }
 
 /**
- * @brief normalizeImportedDocument
- * @param candidate
- * @param documentOut
- * @param errorOut
- * @return
+ * @brief Normalizes an imported backup candidate into current storage schema.
+ * @param candidate Raw imported backup object.
+ * @param documentOut Output normalized document.
+ * @param errorOut Optional normalization error output.
+ * @return True when normalization succeeds.
  */
 bool normalizeImportedDocument(const QJsonObject &candidate, QJsonObject *documentOut, QString *errorOut)
 {
@@ -247,6 +246,9 @@ bool normalizeImportedDocument(const QJsonObject &candidate, QJsonObject *docume
         return false;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Validating Wallet Metadata And Seed Payload
+    // -------------------------------------------------------------------------------------------------------
     QJsonObject document = GrinWalletStorage::defaultDocument();
     QJsonObject wallet = candidate.value(QStringLiteral("wallet")).toObject();
     if (wallet.isEmpty()) {
@@ -269,6 +271,9 @@ bool normalizeImportedDocument(const QJsonObject &candidate, QJsonObject *docume
         return false;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Normalizing Network And Node Configuration
+    // -------------------------------------------------------------------------------------------------------
     QJsonObject node = candidate.value(QStringLiteral("node")).toObject();
     const QString importedNodeUrl = node.value(QStringLiteral("url")).toString().trimmed();
     QJsonObject normalizedNode = document.value(QStringLiteral("node")).toObject();
@@ -286,6 +291,9 @@ bool normalizeImportedDocument(const QJsonObject &candidate, QJsonObject *docume
     GrinWalletStorage::setWalletForNetwork(&document, importedNetwork, normalizedWallet);
     document.insert(QStringLiteral("wallet"), normalizedWallet);
 
+    // -------------------------------------------------------------------------------------------------------
+    // Normalizing Wallet State And Workflow Contexts
+    // -------------------------------------------------------------------------------------------------------
     QJsonObject walletState = candidate.value(QStringLiteral("wallet_state")).toObject();
     QJsonObject normalizedState = document.value(QStringLiteral("wallet_state")).toObject();
     if (!walletState.isEmpty()) {
@@ -337,8 +345,8 @@ bool normalizeImportedDocument(const QJsonObject &candidate, QJsonObject *docume
 } // namespace
 
 /**
- * @brief GrinWalletStorage::defaultWalletState
- * @return
+ * @brief Builds an empty default wallet_state object.
+ * @return Default wallet_state JSON object.
  */
 QJsonObject GrinWalletStorage::defaultWalletState()
 {
@@ -361,8 +369,8 @@ QJsonObject GrinWalletStorage::defaultWalletState()
 }
 
 /**
- * @brief GrinWalletStorage::defaultWalletMetadata
- * @return
+ * @brief Builds default wallet metadata for a network slot.
+ * @return Default wallet metadata object.
  */
 QJsonObject GrinWalletStorage::defaultWalletMetadata()
 {
@@ -370,8 +378,8 @@ QJsonObject GrinWalletStorage::defaultWalletMetadata()
 }
 
 /**
- * @brief GrinWalletStorage::defaultDocument
- * @return
+ * @brief Builds a default storage document with per-network sections.
+ * @return Default storage document object.
  */
 QJsonObject GrinWalletStorage::defaultDocument()
 {
@@ -403,10 +411,10 @@ QJsonObject GrinWalletStorage::defaultDocument()
 }
 
 /**
- * @brief GrinWalletStorage::walletForNetwork
- * @param document
- * @param networkName
- * @return
+ * @brief Retrieves wallet metadata for a specific network.
+ * @param document Storage document.
+ * @param networkName Network identifier.
+ * @return Network-scoped wallet metadata.
  */
 QJsonObject GrinWalletStorage::walletForNetwork(const QJsonObject &document, const QString &networkName)
 {
@@ -415,10 +423,10 @@ QJsonObject GrinWalletStorage::walletForNetwork(const QJsonObject &document, con
 }
 
 /**
- * @brief GrinWalletStorage::walletStateForNetwork
- * @param document
- * @param networkName
- * @return
+ * @brief Retrieves wallet_state for a specific network.
+ * @param document Storage document.
+ * @param networkName Network identifier.
+ * @return Network-scoped wallet_state object.
  */
 QJsonObject GrinWalletStorage::walletStateForNetwork(const QJsonObject &document, const QString &networkName)
 {
@@ -428,10 +436,10 @@ QJsonObject GrinWalletStorage::walletStateForNetwork(const QJsonObject &document
 }
 
 /**
- * @brief GrinWalletStorage::workflowContextsForNetwork
- * @param document
- * @param networkName
- * @return
+ * @brief Retrieves workflow contexts for a specific network.
+ * @param document Storage document.
+ * @param networkName Network identifier.
+ * @return Network-scoped workflow contexts.
  */
 QJsonObject GrinWalletStorage::workflowContextsForNetwork(const QJsonObject &document, const QString &networkName)
 {
@@ -440,10 +448,10 @@ QJsonObject GrinWalletStorage::workflowContextsForNetwork(const QJsonObject &doc
 }
 
 /**
- * @brief GrinWalletStorage::setWalletForNetwork
- * @param document
- * @param networkName
- * @param wallet
+ * @brief Sets wallet metadata for a specific network.
+ * @param document In/out storage document.
+ * @param networkName Network identifier.
+ * @param wallet Network-scoped wallet metadata.
  */
 void GrinWalletStorage::setWalletForNetwork(QJsonObject *document,
                                             const QString &networkName,
@@ -459,10 +467,10 @@ void GrinWalletStorage::setWalletForNetwork(QJsonObject *document,
 }
 
 /**
- * @brief GrinWalletStorage::setWalletStateForNetwork
- * @param document
- * @param networkName
- * @param walletState
+ * @brief Sets wallet_state for a specific network.
+ * @param document In/out storage document.
+ * @param networkName Network identifier.
+ * @param walletState Network-scoped wallet_state.
  */
 void GrinWalletStorage::setWalletStateForNetwork(QJsonObject *document,
                                                  const QString &networkName,
@@ -478,10 +486,10 @@ void GrinWalletStorage::setWalletStateForNetwork(QJsonObject *document,
 }
 
 /**
- * @brief GrinWalletStorage::setWorkflowContextsForNetwork
- * @param document
- * @param networkName
- * @param contexts
+ * @brief Sets workflow contexts for a specific network.
+ * @param document In/out storage document.
+ * @param networkName Network identifier.
+ * @param contexts Network-scoped workflow contexts.
  */
 void GrinWalletStorage::setWorkflowContextsForNetwork(QJsonObject *document,
                                                       const QString &networkName,
@@ -497,9 +505,9 @@ void GrinWalletStorage::setWorkflowContextsForNetwork(QJsonObject *document,
 }
 
 /**
- * @brief GrinWalletStorage::syncActiveNetworkView
- * @param document
- * @param networkName
+ * @brief Syncs top-level active view fields from network-scoped sections.
+ * @param document In/out storage document.
+ * @param networkName Active network identifier.
  */
 void GrinWalletStorage::syncActiveNetworkView(QJsonObject *document, const QString &networkName)
 {
@@ -513,9 +521,9 @@ void GrinWalletStorage::syncActiveNetworkView(QJsonObject *document, const QStri
 }
 
 /**
- * @brief GrinWalletStorage::persistActiveNetworkView
- * @param document
- * @param networkName
+ * @brief Persists top-level active view fields into network-scoped sections.
+ * @param document In/out storage document.
+ * @param networkName Active network identifier.
  */
 void GrinWalletStorage::persistActiveNetworkView(QJsonObject *document, const QString &networkName)
 {
@@ -531,12 +539,15 @@ void GrinWalletStorage::persistActiveNetworkView(QJsonObject *document, const QS
 }
 
 /**
- * @brief GrinWalletStorage::ensureDocumentSchema
- * @param rawDocument
- * @return
+ * @brief Ensures required schema sections exist and are normalized.
+ * @param rawDocument Raw storage document.
+ * @return Schema-complete document.
  */
 QJsonObject GrinWalletStorage::ensureDocumentSchema(const QJsonObject &rawDocument)
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Ensuring Network-Scoped Document Sections
+    // -------------------------------------------------------------------------------------------------------
     QJsonObject document = rawDocument.isEmpty() ? defaultDocument() : rawDocument;
     const QString networkName =
         inferNetworkName(document.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
@@ -602,9 +613,9 @@ QJsonObject GrinWalletStorage::ensureDocumentSchema(const QJsonObject &rawDocume
 }
 
 /**
- * @brief GrinWalletStorage::normalizeDocumentSchema
- * @param rawDocument
- * @return
+ * @brief Normalizes schema and synchronizes active network view.
+ * @param rawDocument Raw storage document.
+ * @return Normalized document.
  */
 QJsonObject GrinWalletStorage::normalizeDocumentSchema(const QJsonObject &rawDocument)
 {
@@ -617,10 +628,10 @@ QJsonObject GrinWalletStorage::normalizeDocumentSchema(const QJsonObject &rawDoc
 }
 
 /**
- * @brief GrinWalletStorage::extractImportedBackupDocument
- * @param json
- * @param errorOut
- * @return
+ * @brief Extracts and normalizes backup JSON into current storage schema.
+ * @param json Backup JSON bytes.
+ * @param errorOut Optional parse/normalization error output.
+ * @return Normalized backup document, or empty object on failure.
  */
 QJsonObject GrinWalletStorage::extractImportedBackupDocument(const QByteArray &json, QString *errorOut)
 {
@@ -652,8 +663,8 @@ QJsonObject GrinWalletStorage::extractImportedBackupDocument(const QByteArray &j
 }
 
 /**
- * @brief GrinWalletStorage::loadDocument
- * @return
+ * @brief Loads wallet document from persistent storage.
+ * @return Loaded and normalized document.
  */
 QJsonObject GrinWalletStorage::loadDocument()
 {
@@ -683,13 +694,16 @@ QJsonObject GrinWalletStorage::loadDocument()
 }
 
 /**
- * @brief GrinWalletStorage::saveDocument
- * @param document
- * @return
+ * @brief Saves wallet document to persistent storage.
+ * @param document Storage document to persist.
+ * @return True on successful write.
  */
 bool GrinWalletStorage::saveDocument(const QJsonObject &document)
 {
     ensureStorageReady();
+    // -------------------------------------------------------------------------------------------------------
+    // Normalizing And Persisting Active Network View
+    // -------------------------------------------------------------------------------------------------------
     QJsonObject normalized = ensureDocumentSchema(document);
     const QString networkName =
         inferNetworkName(normalized.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
@@ -714,9 +728,9 @@ bool GrinWalletStorage::saveDocument(const QJsonObject &document)
 }
 
 /**
- * @brief GrinWalletStorage::loadState
- * @param document
- * @return
+ * @brief Builds controller-facing state summary from storage document.
+ * @param document Storage document.
+ * @return Loaded controller state snapshot.
  */
 GrinWalletStorage::LoadedState GrinWalletStorage::loadState(const QJsonObject &document)
 {
@@ -745,10 +759,10 @@ GrinWalletStorage::LoadedState GrinWalletStorage::loadState(const QJsonObject &d
 }
 
 /**
- * @brief GrinWalletStorage::refreshState
- * @param document
- * @param chainHeight
- * @return
+ * @brief Recomputes balances and summary fields from stored outputs.
+ * @param document Storage document copy.
+ * @param chainHeight Current chain height.
+ * @return Refreshed state with optional updated document.
  */
 GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject document, qulonglong chainHeight)
 {
@@ -783,10 +797,10 @@ GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject do
 }
 
 /**
- * @brief GrinWalletStorage::refreshTransactionConfirmations
- * @param document
- * @param chainHeight
- * @return
+ * @brief Updates transaction confirmation counts and confirmation status.
+ * @param document In/out storage document.
+ * @param chainHeight Current chain height.
+ * @return True when transaction entries were changed.
  */
 bool GrinWalletStorage::refreshTransactionConfirmations(QJsonObject *document, qulonglong chainHeight)
 {
@@ -830,11 +844,11 @@ bool GrinWalletStorage::refreshTransactionConfirmations(QJsonObject *document, q
 }
 
 /**
- * @brief GrinWalletStorage::storeWorkflowContext
- * @param document
- * @param workflowId
- * @param context
- * @return
+ * @brief Stores workflow context object by workflow id.
+ * @param document In/out storage document.
+ * @param workflowId Workflow identifier.
+ * @param context Workflow context object.
+ * @return True when context was stored.
  */
 bool GrinWalletStorage::storeWorkflowContext(QJsonObject *document,
                                              const QString &workflowId,
@@ -851,10 +865,10 @@ bool GrinWalletStorage::storeWorkflowContext(QJsonObject *document,
 }
 
 /**
- * @brief GrinWalletStorage::workflowContext
- * @param document
- * @param workflowId
- * @return
+ * @brief Retrieves workflow context for a workflow id.
+ * @param document Storage document.
+ * @param workflowId Workflow identifier.
+ * @return Stored workflow context object.
  */
 QJsonObject GrinWalletStorage::workflowContext(const QJsonObject &document, const QString &workflowId)
 {

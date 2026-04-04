@@ -1,4 +1,4 @@
-#include "grinwalletshortcutbridge.h"
+﻿#include "grinwalletshortcutbridge.h"
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -15,7 +15,7 @@
 namespace {
 
 /**
- * @brief invokeNoArgMethod
+ * @brief Returns whether invoke no arg method.
  * @param object
  * @param methodName
  * @return
@@ -26,7 +26,7 @@ bool invokeNoArgMethod(QObject *object, const char *methodName)
 }
 
 /**
- * @brief replaceFocusedObjectSelection
+ * @brief Returns whether replace focused object selection.
  * @param object
  * @param text
  * @return
@@ -77,7 +77,7 @@ bool replaceFocusedObjectSelection(QObject *object, const QString &text)
 }
 
 /**
- * @brief focusedObjectText
+ * @brief Processes focused object text.
  * @param object
  * @return
  */
@@ -111,7 +111,7 @@ EMSCRIPTEN_KEEPALIVE int grinffindorHandleShortcut(int key);
 }
 
 /**
- * @brief browserInstallWalletShortcutBridge
+ * @brief Processes browser install wallet shortcut bridge.
  */
 EM_JS(void, browserInstallWalletShortcutBridge, (), {
     try {
@@ -368,7 +368,7 @@ EM_JS(void, browserInstallWalletShortcutBridge, (), {
 });
 
 /**
- * @brief browserUpdateShortcutContext
+ * @brief Processes browser update shortcut context.
  * @param text
  * @param selectedText
  * @param focused
@@ -388,7 +388,7 @@ EM_JS(void, browserUpdateShortcutContext, (const char *text, const char *selecte
 });
 
 /**
- * @brief grinffindorHandleShortcut
+ * @brief Processes grinffindor handle shortcut.
  * @param key
  * @return
  */

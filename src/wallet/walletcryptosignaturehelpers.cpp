@@ -1,4 +1,4 @@
-#include "walletcryptosignaturehelpers.h"
+﻿#include "walletcryptosignaturehelpers.h"
 
 #include "walletcryptoaggsighelpers.h"
 #include "walletcryptobasehelpers.h"
@@ -9,7 +9,7 @@ namespace WalletCryptoSignatureHelpers
 {
 
 /**
- * @brief applyRound2Signature
+ * @brief Returns whether apply round2 signature.
  * @param slate
  * @param walletFingerprint
  * @param roleTag
@@ -114,7 +114,7 @@ bool applyRound2Signature(SlateV4 *slate,
 }
 
 /**
- * @brief verifyPartialSignatures
+ * @brief Validates partial signatures.
  * @param slate
  * @param errorOut
  * @return
@@ -207,7 +207,7 @@ bool verifyPartialSignatures(const SlateV4 &slate, QString *errorOut)
 }
 
 /**
- * @brief calculateExcessCommitment
+ * @brief Builds excess commitment.
  * @param slate
  * @param errorOut
  * @return
@@ -250,7 +250,7 @@ QString calculateExcessCommitment(const SlateV4 &slate, QString *errorOut)
 }
 
 /**
- * @brief kernelSignatureMessageHex
+ * @brief Processes kernel signature message hex.
  * @param slate
  * @return
  */
@@ -260,7 +260,7 @@ QString kernelSignatureMessageHex(const SlateV4 &slate)
 }
 
 /**
- * @brief combinedBlindPublicKeyHex
+ * @brief Processes combined blind public key hex.
  * @param slate
  * @param errorOut
  * @return
@@ -286,7 +286,7 @@ QString combinedBlindPublicKeyHex(const SlateV4 &slate, QString *errorOut)
 }
 
 /**
- * @brief combinedNoncePublicKeyHex
+ * @brief Processes combined nonce public key hex.
  * @param slate
  * @param errorOut
  * @return
@@ -312,7 +312,7 @@ QString combinedNoncePublicKeyHex(const SlateV4 &slate, QString *errorOut)
 }
 
 /**
- * @brief buildFinalSignature
+ * @brief Builds final signature.
  * @param slate
  * @param finalSignatureOut
  * @param errorOut
@@ -421,7 +421,7 @@ bool buildFinalSignature(const SlateV4 &slate, QString *finalSignatureOut, QStri
 }
 
 /**
- * @brief finalizeSlate
+ * @brief Returns whether finalize slate.
  * @param slate
  * @param errorOut
  * @return

@@ -1,4 +1,4 @@
-#include "walletcryptohelpers.h"
+﻿#include "walletcryptohelpers.h"
 
 #include <QRandomGenerator>
 #include <QStringList>
@@ -54,7 +54,7 @@ private:
 };
 
 /**
- * @brief walletSecpHolder
+ * @brief Processes wallet secp holder.
  * @return
  */
 SecpContextHolder &walletSecpHolder()
@@ -69,7 +69,7 @@ namespace WalletCryptoHelpers
 {
 
 /**
- * @brief walletSecpContext
+ * @brief Processes wallet secp context.
  * @return
  */
 secp256k1_context *walletSecpContext()
@@ -78,7 +78,7 @@ secp256k1_context *walletSecpContext()
 }
 
 /**
- * @brief walletBulletproofGenerators
+ * @brief Processes wallet bulletproof generators.
  * @return
  */
 secp256k1_bulletproof_generators *walletBulletproofGenerators()
@@ -87,7 +87,7 @@ secp256k1_bulletproof_generators *walletBulletproofGenerators()
 }
 
 /**
- * @brief deriveValidSecretBytes
+ * @brief Builds valid secret bytes.
  * @param domain
  * @param left
  * @param right
@@ -118,7 +118,7 @@ QByteArray deriveValidSecretBytes(const QString &domain, const QString &left, co
 }
 
 /**
- * @brief deriveSigningBaseSecret
+ * @brief Builds signing base secret.
  * @param walletFingerprint
  * @param workflowId
  * @param roleTag
@@ -134,7 +134,7 @@ QByteArray deriveSigningBaseSecret(const QString &walletFingerprint,
 }
 
 /**
- * @brief deriveAggsigSecnonce
+ * @brief Builds aggsig secnonce.
  * @param walletFingerprint
  * @param workflowId
  * @param roleTag
@@ -163,7 +163,7 @@ QByteArray deriveAggsigSecnonce(const QString &walletFingerprint,
 }
 
 /**
- * @brief createCompressedPubkeyHex
+ * @brief Builds compressed pubkey hex.
  * @param secretKey
  * @return
  */
@@ -190,7 +190,7 @@ QString createCompressedPubkeyHex(const QByteArray &secretKey)
 }
 
 /**
- * @brief parsePubkey
+ * @brief Parses pubkey.
  * @param hex
  * @param pubkey
  * @return
@@ -208,7 +208,7 @@ bool parsePubkey(const QString &hex, secp256k1_pubkey *pubkey)
 }
 
 /**
- * @brief serializePubkey
+ * @brief Builds pubkey.
  * @param pubkey
  * @return
  */
@@ -227,7 +227,7 @@ QString serializePubkey(const secp256k1_pubkey &pubkey)
 }
 
 /**
- * @brief combinePubkeys
+ * @brief Returns whether combine pubkeys.
  * @param hexPubkeys
  * @param combined
  * @return
@@ -254,7 +254,7 @@ bool combinePubkeys(const QList<QString> &hexPubkeys, secp256k1_pubkey *combined
 }
 
 /**
- * @brief amountToNanogrin
+ * @brief Processes amount to nanogrin.
  * @param amount
  * @return
  */
@@ -294,7 +294,7 @@ quint64 amountToNanogrin(const QString &amount)
 }
 
 /**
- * @brief addScalars
+ * @brief Returns whether add scalars.
  * @param left
  * @param right
  * @param sumOut
@@ -316,7 +316,7 @@ bool addScalars(const QByteArray &left, const QByteArray &right, QByteArray *sum
 }
 
 /**
- * @brief subtractScalars
+ * @brief Returns whether subtract scalars.
  * @param left
  * @param right
  * @param differenceOut

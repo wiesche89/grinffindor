@@ -1,4 +1,4 @@
-#include "walletcryptohelpers.h"
+﻿#include "walletcryptohelpers.h"
 
 #include <QCryptographicHash>
 #include <QRandomGenerator>
@@ -8,7 +8,7 @@ namespace WalletCryptoHelpers
 {
 
 /**
- * @brief buildKernelSignatureMessageForFeature
+ * @brief Builds kernel signature message for feature.
  * @param feature
  * @param fee
  * @param lockHeight
@@ -41,7 +41,7 @@ QByteArray buildKernelSignatureMessageForFeature(const QString &feature,
 }
 
 /**
- * @brief buildKernelSignatureMessage
+ * @brief Builds kernel signature message.
  * @param slate
  * @return
  */
@@ -65,7 +65,7 @@ QByteArray buildKernelSignatureMessage(const SlateV4 &slate)
 }
 
 /**
- * @brief findParticipantIndex
+ * @brief Resolves participant index.
  * @param slate
  * @param publicBlind
  * @return
@@ -81,7 +81,7 @@ int findParticipantIndex(const SlateV4 &slate, const QString &publicBlind)
 }
 
 /**
- * @brief createPartialSignature
+ * @brief Builds partial signature.
  * @param messageHash
  * @param seckey
  * @param secnonce
@@ -128,7 +128,7 @@ bool createPartialSignature(const QByteArray &messageHash,
 }
 
 /**
- * @brief aggsigRawToCompact
+ * @brief Returns whether aggsig raw to compact.
  * @param rawSignature
  * @param compactOut
  * @return
@@ -144,7 +144,7 @@ bool aggsigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut)
 }
 
 /**
- * @brief aggsigCompactToRaw
+ * @brief Returns whether aggsig compact to raw.
  * @param compactSignature
  * @param rawOut
  * @return
@@ -160,7 +160,7 @@ bool aggsigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut)
 }
 
 /**
- * @brief kernelSigRawToCompact
+ * @brief Returns whether kernel sig raw to compact.
  * @param rawSignature
  * @param compactOut
  * @return
@@ -184,7 +184,7 @@ bool kernelSigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOu
 }
 
 /**
- * @brief kernelSigCompactToRaw
+ * @brief Returns whether kernel sig compact to raw.
  * @param compactSignature
  * @param rawOut
  * @return
@@ -208,7 +208,7 @@ bool kernelSigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOu
 }
 
 /**
- * @brief verifyPartialSignature
+ * @brief Validates partial signature.
  * @param signature
  * @param messageHash
  * @param pubnonceTotal

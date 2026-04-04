@@ -1,4 +1,4 @@
-#ifndef GRINWALLETWORKFLOWTXHELPERS_H
+﻿#ifndef GRINWALLETWORKFLOWTXHELPERS_H
 #define GRINWALLETWORKFLOWTXHELPERS_H
 
 #include <QJsonObject>
@@ -13,6 +13,9 @@ class GrinWalletWorkflowTxHelpers
 public:
     static QList<WalletOutput> collectSelectedInputs(const QJsonObject &localContext,
                                                      const QList<WalletOutput> &trackedOutputs);
+/**
+ * @brief Returns resolve receiver output.
+ */
     static WalletOutput resolveReceiverOutput(const SlateV4 &slate, const QString &knownChangeCommit);
     static WalletOutput resolveChangeOutput(const QJsonObject &localContext,
                                            const QList<WalletOutput> &trackedOutputs);

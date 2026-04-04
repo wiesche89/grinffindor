@@ -1,4 +1,4 @@
-#include "walletcryptohelpers.h"
+﻿#include "walletcryptohelpers.h"
 
 #include <QCryptographicHash>
 #include <QRandomGenerator>
@@ -9,7 +9,7 @@ namespace
 const char kBech32Charset[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 /**
- * @brief convertBits
+ * @brief Returns whether convert bits.
  * @param data
  * @param fromBits
  * @param toBits
@@ -49,7 +49,7 @@ QVector<int> convertBits(const QByteArray &data, int fromBits, int toBits, bool 
 }
 
 /**
- * @brief hrpExpand
+ * @brief Processes hrp expand.
  * @param hrp
  * @return
  */
@@ -68,7 +68,7 @@ QVector<int> hrpExpand(const QString &hrp)
 }
 
 /**
- * @brief bech32Polymod
+ * @brief Processes bech32 polymod.
  * @param values
  * @return
  */
@@ -92,7 +92,7 @@ quint32 bech32Polymod(const QVector<int> &values)
 }
 
 /**
- * @brief bech32CreateChecksum
+ * @brief Processes bech32 create checksum.
  * @param hrp
  * @param data
  * @return
@@ -118,7 +118,7 @@ namespace WalletCryptoHelpers
 {
 
 /**
- * @brief hashBytes
+ * @brief Returns whether h bytes.
  * @param input
  * @return
  */
@@ -128,7 +128,7 @@ QByteArray hashBytes(const QByteArray &input)
 }
 
 /**
- * @brief toHex
+ * @brief Processes to hex.
  * @param data
  * @param size
  * @return
@@ -139,7 +139,7 @@ QString toHex(const unsigned char *data, int size)
 }
 
 /**
- * @brief bech32Encode
+ * @brief Processes bech32 encode.
  * @param hrp
  * @param payload
  * @return
@@ -164,7 +164,7 @@ QString bech32Encode(const QString &hrp, const QByteArray &payload)
 }
 
 /**
- * @brief appendU8
+ * @brief Appends u8 to the target buffer.
  * @param out
  * @param value
  */
@@ -174,7 +174,7 @@ void appendU8(QByteArray &out, quint8 value)
 }
 
 /**
- * @brief appendU16
+ * @brief Appends u16 to the target buffer.
  * @param out
  * @param value
  */
@@ -185,7 +185,7 @@ void appendU16(QByteArray &out, quint16 value)
 }
 
 /**
- * @brief appendU64
+ * @brief Appends u64 to the target buffer.
  * @param out
  * @param value
  */
@@ -197,7 +197,7 @@ void appendU64(QByteArray &out, quint64 value)
 }
 
 /**
- * @brief fromHex
+ * @brief Parses hex.
  * @param hex
  * @return
  */
@@ -207,7 +207,7 @@ QByteArray fromHex(const QString &hex)
 }
 
 /**
- * @brief paymentProofMessage
+ * @brief Processes payment proof message.
  * @param slate
  * @return
  */

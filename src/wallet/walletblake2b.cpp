@@ -1,4 +1,4 @@
-#include "walletblake2b.h"
+﻿#include "walletblake2b.h"
 
 #include <QtGlobal>
 #include <cstring>
@@ -38,7 +38,7 @@ static const unsigned char kSigma[12][16] = {
 };
 
 /**
- * @brief rotr64
+ * @brief Rotates a 64-bit value to the right by the provided shift.
  * @param x
  * @param c
  * @return
@@ -49,7 +49,7 @@ quint64 rotr64(const quint64 x, const unsigned int c)
 }
 
 /**
- * @brief load64
+ * @brief Loads a little-endian 64-bit value from a byte pointer.
  * @param src
  * @return
  */
@@ -63,7 +63,7 @@ quint64 load64(const unsigned char *src)
 }
 
 /**
- * @brief store64
+ * @brief Stores a 64-bit value as little-endian bytes.
  * @param dst
  * @param value
  */
@@ -75,7 +75,7 @@ void store64(unsigned char *dst, quint64 value)
 }
 
 /**
- * @brief g
+ * @brief Applies one Blake2b G mixing round to the working state.
  * @param a
  * @param b
  * @param c
@@ -96,7 +96,7 @@ void g(quint64 &a, quint64 &b, quint64 &c, quint64 &d, quint64 x, quint64 y)
 }
 
 /**
- * @brief compress
+ * @brief Compresses a Blake2b message block into the running hash state.
  * @param state
  * @param block[128
  */
@@ -136,7 +136,7 @@ void compress(Blake2bState *state, const unsigned char block[128])
 }
 
 /**
- * @brief incrementCounter
+ * @brief Processes increment counter.
  * @param state
  * @param inc
  */
@@ -149,7 +149,7 @@ void incrementCounter(Blake2bState *state, quint64 inc)
 }
 
 /**
- * @brief init
+ * @brief Initializes Blake2b hashing state with the requested output length.
  * @param state
  * @param outlen
  * @param key
@@ -182,7 +182,7 @@ bool init(Blake2bState *state, size_t outlen, const unsigned char *key, size_t k
 }
 
 /**
- * @brief update
+ * @brief Updates Blake2b state with additional message bytes.
  * @param state
  * @param data
  * @param len
@@ -217,7 +217,7 @@ void update(Blake2bState *state, const unsigned char *data, size_t len)
 }
 
 /**
- * @brief finalize
+ * @brief Finalizes Blake2b state and writes the output digest.
  * @param state
  * @return
  */

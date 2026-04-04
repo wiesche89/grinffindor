@@ -16,10 +16,14 @@ const char *kAutoLockOnDeactivateKey = "auto_lock_on_app_deactivate";
 
 } // namespace
 
+// -------------------------------------------------------------------------------------------------------
+// Wallet Creation, Import, And Restore
+// -------------------------------------------------------------------------------------------------------
+
 /**
- * @brief GrinWalletController::createWallet
- * @param walletName
- * @param password
+ * @brief Creates a new wallet, encrypts its seed, and persists it to local storage.
+ * @param walletName User-facing wallet name.
+ * @param password Password used to encrypt the mnemonic.
  */
 void GrinWalletController::createWallet(const QString &walletName, const QString &password)
 {
@@ -77,10 +81,10 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
 }
 
 /**
- * @brief GrinWalletController::importWallet
- * @param walletName
- * @param mnemonic
- * @param password
+ * @brief Imports a wallet from mnemonic by delegating to restore flow.
+ * @param walletName User-facing wallet name.
+ * @param mnemonic Mnemonic phrase to import.
+ * @param password Password used to encrypt the mnemonic.
  */
 void GrinWalletController::importWallet(const QString &walletName, const QString &mnemonic, const QString &password)
 {
@@ -88,10 +92,10 @@ void GrinWalletController::importWallet(const QString &walletName, const QString
 }
 
 /**
- * @brief GrinWalletController::restoreWallet
- * @param walletName
- * @param mnemonic
- * @param password
+ * @brief Restores a wallet from mnemonic, resets network state, and persists it.
+ * @param walletName User-facing wallet name.
+ * @param mnemonic Mnemonic phrase to restore.
+ * @param password Password used to encrypt the mnemonic.
  */
 void GrinWalletController::restoreWallet(const QString &walletName, const QString &mnemonic, const QString &password)
 {
@@ -148,9 +152,13 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
     }
 }
 
+// -------------------------------------------------------------------------------------------------------
+// Wallet Session Lock And Seed Visibility
+// -------------------------------------------------------------------------------------------------------
+
 /**
- * @brief GrinWalletController::unlockWallet
- * @param password
+ * @brief Unlocks the active wallet using the provided password.
+ * @param password Password used to decrypt the stored mnemonic.
  */
 void GrinWalletController::unlockWallet(const QString &password)
 {
@@ -192,7 +200,7 @@ void GrinWalletController::unlockWallet(const QString &password)
 }
 
 /**
- * @brief GrinWalletController::lockWallet
+ * @brief Locks the active wallet and clears in-memory seed material.
  */
 void GrinWalletController::lockWallet()
 {
@@ -208,7 +216,7 @@ void GrinWalletController::lockWallet()
 }
 
 /**
- * @brief GrinWalletController::dismissMnemonicPreview
+ * @brief Hides mnemonic preview from UI state.
  */
 void GrinWalletController::dismissMnemonicPreview()
 {
@@ -222,9 +230,9 @@ void GrinWalletController::dismissMnemonicPreview()
 }
 
 /**
- * @brief GrinWalletController::revealSeedPhrase
- * @param password
- * @return
+ * @brief Reveals the seed phrase after password verification.
+ * @param password Password used to decrypt the stored mnemonic.
+ * @return True when seed phrase was successfully revealed.
  */
 bool GrinWalletController::revealSeedPhrase(const QString &password)
 {
@@ -251,8 +259,12 @@ bool GrinWalletController::revealSeedPhrase(const QString &password)
     return true;
 }
 
+// -------------------------------------------------------------------------------------------------------
+// Wallet Backup, Deletion, And Storage Load
+// -------------------------------------------------------------------------------------------------------
+
 /**
- * @brief GrinWalletController::deleteWallet
+ * @brief Deletes active-network wallet data and resets controller state.
  */
 void GrinWalletController::deleteWallet()
 {
@@ -276,8 +288,8 @@ void GrinWalletController::deleteWallet()
 }
 
 /**
- * @brief GrinWalletController::exportEncryptedWalletBackup
- * @return
+ * @brief Exports a full encrypted wallet backup document as formatted JSON.
+ * @return Backup JSON text or empty string if no wallet exists.
  */
 QString GrinWalletController::exportEncryptedWalletBackup() const
 {
@@ -299,9 +311,9 @@ QString GrinWalletController::exportEncryptedWalletBackup() const
 }
 
 /**
- * @brief GrinWalletController::importEncryptedWalletBackup
- * @param backupJson
- * @return
+ * @brief Imports an encrypted wallet backup document into local storage.
+ * @param backupJson Backup JSON text.
+ * @return True when backup import succeeds.
  */
 bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson)
 {
@@ -339,7 +351,7 @@ bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson
 }
 
 /**
- * @brief GrinWalletController::loadFromStorage
+ * @brief Loads wallet and node configuration from persistent storage.
  */
 void GrinWalletController::loadFromStorage()
 {
@@ -361,9 +373,13 @@ void GrinWalletController::loadFromStorage()
     refreshStateFromStorage();
 }
 
+// -------------------------------------------------------------------------------------------------------
+// Runtime Settings And Node Configuration
+// -------------------------------------------------------------------------------------------------------
+
 /**
- * @brief GrinWalletController::setAutoLockOnAppDeactivate
- * @param enabled
+ * @brief Enables or disables automatic wallet locking on app deactivation.
+ * @param enabled True to enable app-deactivation auto-lock.
  */
 void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
 {
@@ -390,9 +406,9 @@ void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
 }
 
 /**
- * @brief GrinWalletController::setNodeUrl
- * @param nodeUrl
- * @return
+ * @brief Updates external node URL and reconnects the node client.
+ * @param nodeUrl Node endpoint URL.
+ * @return True when node URL update succeeds.
  */
 bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
 {
@@ -426,9 +442,9 @@ bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
 }
 
 /**
- * @brief GrinWalletController::setSelectedNetwork
- * @param networkName
- * @return
+ * @brief Switches active wallet network and reloads network-scoped storage view.
+ * @param networkName Target network name.
+ * @return True when network switch succeeds.
  */
 bool GrinWalletController::setSelectedNetwork(const QString &networkName)
 {
@@ -462,7 +478,7 @@ bool GrinWalletController::setSelectedNetwork(const QString &networkName)
 }
 
 /**
- * @brief GrinWalletController::resetNodeUrl
+ * @brief Resets node URL to the default URL of the active network.
  */
 void GrinWalletController::resetNodeUrl()
 {

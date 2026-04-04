@@ -1,4 +1,4 @@
-#ifndef SLATEV4_H
+﻿#ifndef SLATEV4_H
 #define SLATEV4_H
 
 #include <QJsonArray>
@@ -18,7 +18,13 @@ public:
         QString nonce;
         QString part;
 
+/**
+ * @brief Returns to json.
+ */
         QJsonObject toJson() const;
+/**
+ * @brief Returns from json.
+ */
         static ParticipantData fromJson(const QJsonObject &json);
     };
 
@@ -27,7 +33,13 @@ public:
         QString receiverAddress;
         QString receiverSignature;
 
+/**
+ * @brief Returns to json.
+ */
         QJsonObject toJson() const;
+/**
+ * @brief Returns from json.
+ */
         static PaymentProof fromJson(const QJsonObject &json);
     };
 
@@ -36,7 +48,13 @@ public:
         QString commitment;
         QString proof;
 
+/**
+ * @brief Returns to json.
+ */
         QJsonObject toJson() const;
+/**
+ * @brief Returns from json.
+ */
         static Commit fromJson(const QJsonObject &json);
     };
 
@@ -50,6 +68,9 @@ public:
         Invoice3
     };
 
+/**
+ * @brief Processes slate v4.
+ */
     SlateV4();
 
     QString id;
@@ -67,22 +88,61 @@ public:
     PaymentProof paymentProof;
     QJsonObject metadata;
 
+/**
+ * @brief Returns state code.
+ */
     QString stateCode() const;
+/**
+ * @brief Returns version code.
+ */
     QString versionCode() const;
+/**
+ * @brief Returns mode code.
+ */
     QString modeCode() const;
+/**
+ * @brief Returns whether final state.
+ */
     bool isFinalState() const;
+/**
+ * @brief Returns workflow id.
+ */
     QString workflowId() const;
+/**
+ * @brief Returns note.
+ */
     QString note() const;
+/**
+ * @brief Returns network.
+ */
     QString network() const;
 
+/**
+ * @brief Sets state from code.
+ */
     void setStateFromCode(const QString &code);
+/**
+ * @brief Advances state.
+ */
     void advanceState();
 
+/**
+ * @brief Returns to json.
+ */
     QJsonObject toJson() const;
+/**
+ * @brief Returns from json.
+ */
     static SlateV4 fromJson(const QJsonObject &json);
+/**
+ * @brief Returns from json string.
+ */
     static SlateV4 fromJsonString(const QString &json);
 
 private:
+/**
+ * @brief Returns state from code.
+ */
     static State stateFromCode(const QString &code);
 };
 

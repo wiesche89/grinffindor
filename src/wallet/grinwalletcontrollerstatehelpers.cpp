@@ -1,4 +1,4 @@
-#include "grinwalletcontroller.h"
+﻿#include "grinwalletcontroller.h"
 
 #include <QGuiApplication>
 #include <QTimer>
@@ -20,8 +20,8 @@ const int kSessionAutoLockIntervalMs = 15 * 60 * 1000;
 } // namespace
 
 /**
- * @brief GrinWalletController::resolvedNetworkName
- * @return
+ * @brief Returns the active network name or a default when invalid.
+ * @return Normalized network identifier.
  */
 QString GrinWalletController::resolvedNetworkName() const
 {
@@ -29,8 +29,8 @@ QString GrinWalletController::resolvedNetworkName() const
 }
 
 /**
- * @brief GrinWalletController::setLastError
- * @param error
+ * @brief Updates the last error message and notifies observers.
+ * @param error Error message text.
  */
 void GrinWalletController::setLastError(const QString &error)
 {
@@ -39,8 +39,8 @@ void GrinWalletController::setLastError(const QString &error)
 }
 
 /**
- * @brief GrinWalletController::setLastInfo
- * @param info
+ * @brief Updates the last informational message and notifies observers.
+ * @param info Informational message text.
  */
 void GrinWalletController::setLastInfo(const QString &info)
 {
@@ -49,12 +49,12 @@ void GrinWalletController::setLastInfo(const QString &info)
 }
 
 /**
- * @brief GrinWalletController::setWorkflow
- * @param id
- * @param mode
- * @param state
- * @param slatepack
- * @param decoded
+ * @brief Stores the current workflow state snapshot and notifies observers.
+ * @param id Workflow identifier.
+ * @param mode Workflow mode string.
+ * @param state Workflow state string.
+ * @param slatepack Raw workflow slatepack text.
+ * @param decoded Decoded workflow payload text.
  */
 void GrinWalletController::setWorkflow(const QString &id, const QString &mode, const QString &state, const QString &slatepack, const QString &decoded)
 {
@@ -67,9 +67,9 @@ void GrinWalletController::setWorkflow(const QString &id, const QString &mode, c
 }
 
 /**
- * @brief GrinWalletController::finalizeTransactionStoreUpdate
- * @param document
- * @param changed
+ * @brief Persists transaction-store changes and reloads cached controller state.
+ * @param document Updated storage document.
+ * @param changed True when a transaction update was applied.
  */
 void GrinWalletController::finalizeTransactionStoreUpdate(const QJsonObject &document, bool changed)
 {
@@ -82,11 +82,11 @@ void GrinWalletController::finalizeTransactionStoreUpdate(const QJsonObject &doc
 }
 
 /**
- * @brief GrinWalletController::storeOutputsState
- * @param document
- * @param walletState
- * @param outputs
- * @param nextChildIndex
+ * @brief Writes output list and balance snapshot into wallet state.
+ * @param document In/out storage document.
+ * @param walletState In/out wallet_state object.
+ * @param outputs Output list to persist.
+ * @param nextChildIndex Next derivation index candidate.
  */
 void GrinWalletController::storeOutputsState(QJsonObject *document,
                                              QJsonObject *walletState,
@@ -97,6 +97,9 @@ void GrinWalletController::storeOutputsState(QJsonObject *document,
         return;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Persisting Outputs And Recomputed Balances
+    // -------------------------------------------------------------------------------------------------------
     walletState->insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
 
     walletState->insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
@@ -107,10 +110,10 @@ void GrinWalletController::storeOutputsState(QJsonObject *document,
 }
 
 /**
- * @brief GrinWalletController::transactionEntryLessThan
- * @param left
- * @param right
- * @return
+ * @brief Orders transaction entries for history display.
+ * @param left Left transaction entry.
+ * @param right Right transaction entry.
+ * @return True when left should be ordered before right.
  */
 bool GrinWalletController::transactionEntryLessThan(const QJsonObject &left, const QJsonObject &right)
 {
@@ -118,10 +121,10 @@ bool GrinWalletController::transactionEntryLessThan(const QJsonObject &left, con
 }
 
 /**
- * @brief GrinWalletController::walletOutputLessThan
- * @param left
- * @param right
- * @return
+ * @brief Orders wallet outputs by spend/lock/pending and recency priority.
+ * @param left Left wallet output.
+ * @param right Right wallet output.
+ * @return True when left should be ordered before right.
  */
 bool GrinWalletController::walletOutputLessThan(const WalletOutput &left, const WalletOutput &right)
 {
@@ -144,8 +147,8 @@ bool GrinWalletController::walletOutputLessThan(const WalletOutput &left, const 
 }
 
 /**
- * @brief GrinWalletController::markTransactionBroadcastPending
- * @param workflowId
+ * @brief Marks a workflow transaction as broadcast pending.
+ * @param workflowId Workflow identifier.
  */
 void GrinWalletController::markTransactionBroadcastPending(const QString &workflowId)
 {
@@ -154,9 +157,9 @@ void GrinWalletController::markTransactionBroadcastPending(const QString &workfl
 }
 
 /**
- * @brief GrinWalletController::markTransactionBroadcastFailed
- * @param workflowId
- * @param message
+ * @brief Marks a workflow transaction as broadcast failed.
+ * @param workflowId Workflow identifier.
+ * @param message Failure reason.
  */
 void GrinWalletController::markTransactionBroadcastFailed(const QString &workflowId, const QString &message)
 {
@@ -165,9 +168,9 @@ void GrinWalletController::markTransactionBroadcastFailed(const QString &workflo
 }
 
 /**
- * @brief GrinWalletController::markTransactionKernelConfirmed
- * @param workflowId
- * @param confirmedHeight
+ * @brief Marks a workflow transaction kernel as confirmed on-chain.
+ * @param workflowId Workflow identifier.
+ * @param confirmedHeight Confirmed block height.
  */
 void GrinWalletController::markTransactionKernelConfirmed(const QString &workflowId, qulonglong confirmedHeight)
 {
@@ -180,8 +183,8 @@ void GrinWalletController::markTransactionKernelConfirmed(const QString &workflo
 }
 
 /**
- * @brief GrinWalletController::markTransactionKernelBroadcasted
- * @param workflowId
+ * @brief Marks a workflow transaction kernel as observed in mempool.
+ * @param workflowId Workflow identifier.
  */
 void GrinWalletController::markTransactionKernelBroadcasted(const QString &workflowId)
 {
@@ -190,9 +193,9 @@ void GrinWalletController::markTransactionKernelBroadcasted(const QString &workf
 }
 
 /**
- * @brief GrinWalletController::markTransactionBroadcastRejected
- * @param workflowId
- * @param message
+ * @brief Marks a workflow transaction as broadcast rejected.
+ * @param workflowId Workflow identifier.
+ * @param message Rejection reason.
  */
 void GrinWalletController::markTransactionBroadcastRejected(const QString &workflowId, const QString &message)
 {
@@ -200,8 +203,8 @@ void GrinWalletController::markTransactionBroadcastRejected(const QString &workf
 }
 
 /**
- * @brief GrinWalletController::markTransactionBroadcastSucceeded
- * @param workflowId
+ * @brief Marks a workflow transaction as broadcast succeeded.
+ * @param workflowId Workflow identifier.
  */
 void GrinWalletController::markTransactionBroadcastSucceeded(const QString &workflowId)
 {
@@ -210,7 +213,7 @@ void GrinWalletController::markTransactionBroadcastSucceeded(const QString &work
 }
 
 /**
- * @brief GrinWalletController::connectNodeClient
+ * @brief Connects the node synchronization service to the current node endpoint.
  */
 void GrinWalletController::connectNodeClient()
 {
@@ -218,11 +221,13 @@ void GrinWalletController::connectNodeClient()
 }
 
 /**
- * @brief GrinWalletController::refreshStateFromStorage
+ * @brief Reloads balances and scan state from persistent storage.
  */
 void GrinWalletController::refreshStateFromStorage()
 {
-
+    // -------------------------------------------------------------------------------------------------------
+    // Refreshing Derived Wallet Status Fields
+    // -------------------------------------------------------------------------------------------------------
     GrinWalletStorage::RefreshedState state = GrinWalletStorage::refreshState(GrinWalletStorage::loadDocument(), m_chainHeight);
     if (state.balancesChanged) {
         GrinWalletStorage::saveDocument(state.document);
@@ -239,7 +244,7 @@ void GrinWalletController::refreshStateFromStorage()
 }
 
 /**
- * @brief GrinWalletController::startAutoRefresh
+ * @brief Starts periodic refresh and auto-lock timers.
  */
 void GrinWalletController::startAutoRefresh()
 {
@@ -247,6 +252,9 @@ void GrinWalletController::startAutoRefresh()
         return;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Configuring Periodic Node Refresh
+    // -------------------------------------------------------------------------------------------------------
     m_autoRefreshTimer = new QTimer(this);
     m_autoRefreshTimer->setInterval(30000);
     m_autoRefreshTimer->setSingleShot(false);
@@ -254,6 +262,9 @@ void GrinWalletController::startAutoRefresh()
 
     m_autoRefreshTimer->start();
 
+    // -------------------------------------------------------------------------------------------------------
+    // Configuring Session Auto-Lock Timer
+    // -------------------------------------------------------------------------------------------------------
     if (!m_sessionLockTimer) {
         m_sessionLockTimer = new QTimer(this);
         m_sessionLockTimer->setInterval(kSessionAutoLockIntervalMs);
@@ -265,7 +276,7 @@ void GrinWalletController::startAutoRefresh()
 }
 
 /**
- * @brief GrinWalletController::onSessionLockTimeout
+ * @brief Processes on session lock timeout.
  */
 void GrinWalletController::onSessionLockTimeout()
 {
@@ -278,8 +289,8 @@ void GrinWalletController::onSessionLockTimeout()
 }
 
 /**
- * @brief GrinWalletController::onApplicationStateChanged
- * @param state
+ * @brief Locks the wallet when the app is deactivated and auto-lock is enabled.
+ * @param state New application state.
  */
 void GrinWalletController::onApplicationStateChanged(Qt::ApplicationState state)
 {
@@ -296,8 +307,8 @@ void GrinWalletController::onApplicationStateChanged(Qt::ApplicationState state)
 }
 
 /**
- * @brief GrinWalletController::loadDocumentForService
- * @return
+ * @brief Loads the storage document for service operations.
+ * @return Current storage document.
  */
 QJsonObject GrinWalletController::loadDocumentForService() const
 {
@@ -305,9 +316,9 @@ QJsonObject GrinWalletController::loadDocumentForService() const
 }
 
 /**
- * @brief GrinWalletController::saveDocumentForService
- * @param document
- * @return
+ * @brief Saves a storage document requested by a service component.
+ * @param document Storage document to persist.
+ * @return True on successful save.
  */
 bool GrinWalletController::saveDocumentForService(const QJsonObject &document) const
 {
@@ -315,9 +326,9 @@ bool GrinWalletController::saveDocumentForService(const QJsonObject &document) c
 }
 
 /**
- * @brief GrinWalletController::nextChildIndexFromStateForService
- * @param walletState
- * @return
+ * @brief Reads the next child index from wallet state.
+ * @param walletState Wallet state object.
+ * @return Next child derivation index.
  */
 quint32 GrinWalletController::nextChildIndexFromStateForService(const QJsonObject &walletState) const
 {
@@ -325,10 +336,10 @@ quint32 GrinWalletController::nextChildIndexFromStateForService(const QJsonObjec
 }
 
 /**
- * @brief GrinWalletController::filterWorkflowContextsForTransactionsForService
- * @param contexts
- * @param transactions
- * @return
+ * @brief Filters workflow contexts to the transaction set visible to services.
+ * @param contexts Full workflow context object.
+ * @param transactions Transaction array to keep.
+ * @return Filtered workflow contexts.
  */
 QJsonObject GrinWalletController::filterWorkflowContextsForTransactionsForService(const QJsonObject &contexts,
                                                                                   const QJsonArray &transactions) const
@@ -337,10 +348,10 @@ QJsonObject GrinWalletController::filterWorkflowContextsForTransactionsForServic
 }
 
 /**
- * @brief GrinWalletController::storeOwnedOutput
- * @param source
- * @param amount
- * @param commit
+ * @brief Stores or updates an owned output derived from a commit object.
+ * @param source Output source label.
+ * @param amount Output amount string.
+ * @param commit Derived commitment and proof.
  */
 void GrinWalletController::storeOwnedOutput(const QString &source, const QString &amount, const SlateV4::Commit &commit)
 {
@@ -370,8 +381,8 @@ void GrinWalletController::storeOwnedOutput(const QString &source, const QString
 }
 
 /**
- * @brief GrinWalletController::storeOwnedOutput
- * @param output
+ * @brief Stores or updates an owned wallet output in persistent state.
+ * @param output Output to persist.
  */
 void GrinWalletController::storeOwnedOutput(const WalletOutput &output)
 {
@@ -400,13 +411,13 @@ void GrinWalletController::storeOwnedOutput(const WalletOutput &output)
 }
 
 /**
- * @brief GrinWalletController::buildOwnedOutput
- * @param source
- * @param amount
- * @param outputOut
- * @param commitOut
- * @param errorOut
- * @return
+ * @brief Derives a new owned output and matching commit from the unlocked wallet.
+ * @param source Output source label.
+ * @param amount Output amount string.
+ * @param outputOut Output wallet output record.
+ * @param commitOut Output slate commit record.
+ * @param errorOut Optional derivation error message.
+ * @return True when output derivation succeeds.
  */
 bool GrinWalletController::buildOwnedOutput(const QString &source,
                                             const QString &amount,
@@ -439,7 +450,6 @@ bool GrinWalletController::buildOwnedOutput(const QString &source,
     }
 
     const WalletCryptoBackend::OwnedCommitment owned =
-
         WalletCryptoBackend::createOwnedCommitment(keychain, childIndex, amount);
     if (!owned.success) {
         if (errorOut) {
@@ -467,9 +477,9 @@ bool GrinWalletController::buildOwnedOutput(const QString &source,
 }
 
 /**
- * @brief GrinWalletController::updateTransactionEntry
- * @param workflowId
- * @param updater
+ * @brief Updates a transaction entry by workflow id using a mutation callback.
+ * @param workflowId Workflow identifier.
+ * @param updater Mutation callback applied to the matching entry.
  */
 void GrinWalletController::updateTransactionEntry(const QString &workflowId, const std::function<void (QJsonObject &)> &updater)
 {
@@ -504,13 +514,12 @@ void GrinWalletController::updateTransactionEntry(const QString &workflowId, con
 }
 
 /**
- * @brief GrinWalletController::kernelExcessFromEntry
- * @param entry
- * @return
+ * @brief Extracts kernel excess from a transaction entry or its skeleton.
+ * @param entry Transaction entry object.
+ * @return Kernel excess hex string, or empty when unavailable.
  */
 QString GrinWalletController::kernelExcessFromEntry(const QJsonObject &entry) const
 {
-
     const QString direct = entry.value(QStringLiteral("kernel_excess")).toString();
     if (!direct.isEmpty()) {
         return direct;
@@ -527,11 +536,10 @@ QString GrinWalletController::kernelExcessFromEntry(const QJsonObject &entry) co
 }
 
 /**
- * @brief GrinWalletController::refreshTransactionConfirmations
+ * @brief Recomputes transaction confirmations using current chain height.
  */
 void GrinWalletController::refreshTransactionConfirmations()
 {
-
     QJsonObject document = GrinWalletStorage::loadDocument();
     if (GrinWalletStorage::refreshTransactionConfirmations(&document, m_chainHeight)) {
         GrinWalletStorage::saveDocument(document);
@@ -539,7 +547,7 @@ void GrinWalletController::refreshTransactionConfirmations()
 }
 
 /**
- * @brief GrinWalletController::refreshStoragePersistenceState
+ * @brief Refreshes platform storage persistence status.
  */
 void GrinWalletController::refreshStoragePersistenceState()
 {
@@ -548,7 +556,7 @@ void GrinWalletController::refreshStoragePersistenceState()
 }
 
 /**
- * @brief GrinWalletController::touchWalletSession
+ * @brief Resets the wallet session inactivity timer when unlocked.
  */
 void GrinWalletController::touchWalletSession()
 {
@@ -565,7 +573,7 @@ void GrinWalletController::touchWalletSession()
 }
 
 /**
- * @brief GrinWalletController::recoverPendingBroadcasts
+ * @brief Requests recovery of pending broadcasts from node sync service.
  */
 void GrinWalletController::recoverPendingBroadcasts()
 {
@@ -573,10 +581,10 @@ void GrinWalletController::recoverPendingBroadcasts()
 }
 
 /**
- * @brief GrinWalletController::rebuildTransactionHistoryFromOutputs
- * @param outputs
- * @param existingTransactions
- * @return
+ * @brief Rebuilds transaction history from outputs while preserving existing entries.
+ * @param outputs Current wallet outputs.
+ * @param existingTransactions Existing transaction entries.
+ * @return Rebuilt transaction history array.
  */
 QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QList<WalletOutput> &outputs,
                                                                      const QJsonArray &existingTransactions) const
@@ -586,7 +594,7 @@ QJsonArray GrinWalletController::rebuildTransactionHistoryFromOutputs(const QLis
 }
 
 /**
- * @brief GrinWalletController::refreshBroadcastStatuses
+ * @brief Starts refresh of broadcast statuses through node sync service.
  */
 void GrinWalletController::refreshBroadcastStatuses()
 {
@@ -594,7 +602,7 @@ void GrinWalletController::refreshBroadcastStatuses()
 }
 
 /**
- * @brief GrinWalletController::startNextKernelStatusCheck
+ * @brief Starts processing the next queued kernel status check.
  */
 void GrinWalletController::startNextKernelStatusCheck()
 {
@@ -602,7 +610,7 @@ void GrinWalletController::startNextKernelStatusCheck()
 }
 
 /**
- * @brief GrinWalletController::startSeedScan
+ * @brief Starts wallet seed scan via node sync service.
  */
 void GrinWalletController::startSeedScan()
 {
@@ -610,8 +618,8 @@ void GrinWalletController::startSeedScan()
 }
 
 /**
- * @brief GrinWalletController::finishSeedScan
- * @param message
+ * @brief Finishes an active seed scan and publishes completion message.
+ * @param message Completion status message.
  */
 void GrinWalletController::finishSeedScan(const QString &message)
 {
@@ -619,7 +627,7 @@ void GrinWalletController::finishSeedScan(const QString &message)
 }
 
 /**
- * @brief GrinWalletController::requestWalletScan
+ * @brief Requests an output scan refresh from node sync service.
  */
 void GrinWalletController::requestWalletScan()
 {

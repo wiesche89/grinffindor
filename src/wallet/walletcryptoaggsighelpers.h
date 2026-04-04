@@ -1,4 +1,4 @@
-#ifndef WALLETCRYPTOAGGSIGHELPERS_H
+﻿#ifndef WALLETCRYPTOAGGSIGHELPERS_H
 #define WALLETCRYPTOAGGSIGHELPERS_H
 
 #include <QByteArray>
@@ -16,8 +16,14 @@ QByteArray buildKernelSignatureMessageForFeature(const QString &feature,
                                                  quint64 fee,
                                                  quint64 lockHeight,
                                                  QString *errorOut);
+/**
+ * @brief Builds kernel signature message.
+ */
 QByteArray buildKernelSignatureMessage(const SlateV4 &slate);
 
+/**
+ * @brief Returns find participant index.
+ */
 int findParticipantIndex(const SlateV4 &slate, const QString &publicBlind);
 bool createPartialSignature(const QByteArray &messageHash,
                             const QByteArray &seckey,
@@ -25,9 +31,21 @@ bool createPartialSignature(const QByteArray &messageHash,
                             const secp256k1_pubkey &pubnonceTotal,
                             const secp256k1_pubkey &pubkeyTotal,
                             QByteArray *signatureOut);
+/**
+ * @brief Returns aggsig raw to compact.
+ */
 bool aggsigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut);
+/**
+ * @brief Returns aggsig compact to raw.
+ */
 bool aggsigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut);
+/**
+ * @brief Returns kernel sig raw to compact.
+ */
 bool kernelSigRawToCompact(const QByteArray &rawSignature, QByteArray *compactOut);
+/**
+ * @brief Returns kernel sig compact to raw.
+ */
 bool kernelSigCompactToRaw(const QByteArray &compactSignature, QByteArray *rawOut);
 bool verifyPartialSignature(const QByteArray &signature,
                             const QByteArray &messageHash,

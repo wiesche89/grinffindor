@@ -1,4 +1,4 @@
-#include "grinwalletnodepushhelpers.h"
+﻿#include "grinwalletnodepushhelpers.h"
 
 #include <QJsonArray>
 #include <QUrlQuery>
@@ -12,7 +12,7 @@
 namespace {
 
 /**
- * @brief appendExactHexBytes
+ * @brief Appends exact hex bytes to the target buffer.
  * @param out
  * @param hex
  * @param expectedSize
@@ -34,7 +34,7 @@ bool appendExactHexBytes(QByteArray *out, const QString &hex, int expectedSize)
 }
 
 /**
- * @brief appendU64Network
+ * @brief Appends u64 network to the target buffer.
  * @param out
  * @param value
  */
@@ -50,7 +50,7 @@ void appendU64Network(QByteArray *out, quint64 value)
 }
 
 /**
- * @brief inputFeatureName
+ * @brief Processes input feature name.
  * @param feature
  * @return
  */
@@ -62,7 +62,7 @@ QString inputFeatureName(OutputFeatures::Feature feature)
 }
 
 /**
- * @brief serializeKernelFeatures
+ * @brief Builds kernel features.
  * @param kernel
  * @return
  */

@@ -1,4 +1,4 @@
-#ifndef GRINWALLETCONTROLLER_H
+﻿#ifndef GRINWALLETCONTROLLER_H
 #define GRINWALLETCONTROLLER_H
 
 #include <QObject>
@@ -56,34 +56,118 @@ class GrinWalletController : public QObject
     Q_PROPERTY(QVariantList transactionHistory READ transactionHistory NOTIFY statusChanged)
 
 public:
+/**
+ * @brief Coordinates wallet state, workflow orchestration, and UI-facing actions.
+ */
     explicit GrinWalletController(QObject *parent = nullptr);
 
+/**
+ * @brief Returns whether a wallet is configured for the active network.
+ */
     bool walletExists() const;
+/**
+ * @brief Returns whether the active wallet session is unlocked.
+ */
     bool walletUnlocked() const;
+/**
+ * @brief Returns the active wallet display name.
+ */
     QString walletName() const;
+/**
+ * @brief Returns the currently shown mnemonic preview text.
+ */
     QString mnemonicPreview() const;
+/**
+ * @brief Returns the fingerprint of the active wallet seed.
+ */
     QString seedFingerprint() const;
+/**
+ * @brief Returns the currently selected network name.
+ */
     QString selectedNetwork() const;
+/**
+ * @brief Returns the configured node URL.
+ */
     QString nodeUrl() const;
+/**
+ * @brief Returns storage persistence state.
+ */
     QString storagePersistenceState() const;
+/**
+ * @brief Returns chain height.
+ */
     qulonglong chainHeight() const;
+/**
+ * @brief Returns the current synchronization status text.
+ */
     QString syncStatus() const;
+/**
+ * @brief Returns total balance.
+ */
     QString totalBalance() const;
+/**
+ * @brief Returns spendable balance.
+ */
     QString spendableBalance() const;
+/**
+ * @brief Returns the currently locked wallet balance.
+ */
     QString lockedBalance() const;
+/**
+ * @brief Returns immature balance.
+ */
     QString immatureBalance() const;
+/**
+ * @brief Returns awaiting confirmation balance.
+ */
     QString awaitingConfirmationBalance() const;
+/**
+ * @brief Returns awaiting finalization balance.
+ */
     QString awaitingFinalizationBalance() const;
+/**
+ * @brief Returns scan height.
+ */
     qulonglong scanHeight() const;
+/**
+ * @brief Returns last error.
+ */
     QString lastError() const;
+/**
+ * @brief Returns last info.
+ */
     QString lastInfo() const;
+/**
+ * @brief Returns workflow id.
+ */
     QString workflowId() const;
+/**
+ * @brief Returns workflow state.
+ */
     QString workflowState() const;
+/**
+ * @brief Returns workflow mode.
+ */
     QString workflowMode() const;
+/**
+ * @brief Returns workflow slatepack.
+ */
     QString workflowSlatepack() const;
+/**
+ * @brief Returns workflow decoded.
+ */
     QString workflowDecoded() const;
+/**
+ * @brief Returns auto lock on app deactivate.
+ */
     bool autoLockOnAppDeactivate() const;
+/**
+ * @brief Returns wallet outputs.
+ */
     QVariantList walletOutputs() const;
+/**
+ * @brief Returns transaction history.
+ */
     QVariantList transactionHistory() const;
 
     Q_INVOKABLE void initialize();
@@ -129,69 +213,240 @@ public:
 
     // Internal service API kept explicit so workflow/node-sync services do not
     // require friend access to controller internals.
+/**
+ * @brief Returns session mnemonic.
+ */
     QString sessionMnemonic() const;
+/**
+ * @brief Returns whether unlocked session.
+ */
     bool hasUnlockedSession() const;
+/**
+ * @brief Returns node api.
+ */
     NodeForeignApi *nodeApi() const;
+/**
+ * @brief Sets node api.
+ */
     void setNodeApi(NodeForeignApi *nodeApi);
+/**
+ * @brief Sets sync status message.
+ */
     void setSyncStatusMessage(const QString &status);
+/**
+ * @brief Processes notify status changed.
+ */
     void notifyStatusChanged();
+/**
+ * @brief Sets chain height value.
+ */
     void setChainHeightValue(qulonglong height);
+/**
+ * @brief Sets node block header version value.
+ */
     void setNodeBlockHeaderVersionValue(int version);
+/**
+ * @brief Returns wallet scan in flight.
+ */
     bool walletScanInFlight() const;
+/**
+ * @brief Sets wallet scan in flight.
+ */
     void setWalletScanInFlight(bool inFlight);
+/**
+ * @brief Returns seed scan active.
+ */
     bool seedScanActive() const;
+/**
+ * @brief Sets seed scan active.
+ */
     void setSeedScanActive(bool active);
+/**
+ * @brief Returns seed scan next index.
+ */
     qulonglong seedScanNextIndex() const;
+/**
+ * @brief Sets seed scan next index.
+ */
     void setSeedScanNextIndex(qulonglong nextIndex);
     const QList<WalletOutput> &seedScanDiscovered() const;
+/**
+ * @brief Clears seed scan discovered.
+ */
     void clearSeedScanDiscovered();
+/**
+ * @brief Returns append seed scan discovered.
+ */
     void appendSeedScanDiscovered(const WalletOutput &output);
+/**
+ * @brief Returns pending broadcast workflow id.
+ */
     QString pendingBroadcastWorkflowId() const;
+/**
+ * @brief Sets pending broadcast workflow id.
+ */
     void setPendingBroadcastWorkflowId(const QString &workflowId);
+/**
+ * @brief Returns pending broadcast input lookup.
+ */
     bool pendingBroadcastInputLookup() const;
+/**
+ * @brief Sets pending broadcast input lookup.
+ */
     void setPendingBroadcastInputLookup(bool pending);
+/**
+ * @brief Returns pending broadcast tx skeleton.
+ */
     QJsonObject pendingBroadcastTxSkeleton() const;
+/**
+ * @brief Sets pending broadcast tx skeleton.
+ */
     void setPendingBroadcastTxSkeleton(const QJsonObject &txSkeleton);
+/**
+ * @brief Returns pending broadcast input commits.
+ */
     QJsonArray pendingBroadcastInputCommits() const;
+/**
+ * @brief Sets pending broadcast input commits.
+ */
     void setPendingBroadcastInputCommits(const QJsonArray &commits);
+/**
+ * @brief Returns whether pending broadcast workflow.
+ */
     bool hasPendingBroadcastWorkflow() const;
+/**
+ * @brief Returns broadcast status refresh in flight.
+ */
     bool broadcastStatusRefreshInFlight() const;
+/**
+ * @brief Sets broadcast status refresh in flight.
+ */
     void setBroadcastStatusRefreshInFlight(bool inFlight);
+/**
+ * @brief Returns kernel status check in flight.
+ */
     bool kernelStatusCheckInFlight() const;
+/**
+ * @brief Sets kernel status check in flight.
+ */
     void setKernelStatusCheckInFlight(bool inFlight);
+/**
+ * @brief Clears kernel status queue.
+ */
     void clearKernelStatusQueue();
+/**
+ * @brief Returns whether pending kernel status checks.
+ */
     bool hasPendingKernelStatusChecks() const;
+/**
+ * @brief Returns append kernel status check.
+ */
     void appendKernelStatusCheck(const QString &workflowId, const QString &excess);
     QPair<QString, QString> takeNextKernelStatusCheck();
+/**
+ * @brief Returns current kernel workflow id internal.
+ */
     QString currentKernelWorkflowIdInternal() const;
+/**
+ * @brief Returns current kernel excess internal.
+ */
     QString currentKernelExcessInternal() const;
+/**
+ * @brief Sets current kernel check.
+ */
     void setCurrentKernelCheck(const QString &workflowId, const QString &excess);
+/**
+ * @brief Clears current kernel check.
+ */
     void clearCurrentKernelCheck();
+/**
+ * @brief Sets last error.
+ */
     void setLastError(const QString &error);
+/**
+ * @brief Sets last info.
+ */
     void setLastInfo(const QString &info);
+/**
+ * @brief Connects node client.
+ */
     void connectNodeClient();
+/**
+ * @brief Refreshes state from storage.
+ */
     void refreshStateFromStorage();
+/**
+ * @brief Sets workflow.
+ */
     void setWorkflow(const QString &id, const QString &mode, const QString &state, const QString &slatepack, const QString &decoded);
+/**
+ * @brief Returns store owned output.
+ */
     void storeOwnedOutput(const QString &source, const QString &amount, const SlateV4::Commit &commit);
+/**
+ * @brief Returns store owned output.
+ */
     void storeOwnedOutput(const WalletOutput &output);
     bool buildOwnedOutput(const QString &source,
                           const QString &amount,
                           WalletOutput *outputOut,
                           SlateV4::Commit *commitOut,
                           QString *errorOut = 0) const;
+/**
+ * @brief Persists workflow transaction.
+ */
     void persistWorkflowTransaction(const SlateV4 &slate, bool broadcasted);
+/**
+ * @brief Finalizes workflow outputs.
+ */
     void finalizeWorkflowOutputs(const SlateV4 &slate, bool broadcasted);
+/**
+ * @brief Returns store workflow context.
+ */
     void storeWorkflowContext(const QString &workflowId, const QJsonObject &context);
+/**
+ * @brief Returns workflow context.
+ */
     QJsonObject workflowContext(const QString &workflowId) const;
+/**
+ * @brief Requests wallet scan.
+ */
     void requestWalletScan();
+/**
+ * @brief Starts seed scan.
+ */
     void startSeedScan();
+/**
+ * @brief Finalizes the seed scan workflow and stores completion state.
+ */
     void finishSeedScan(const QString &message);
+/**
+ * @brief Refreshes broadcast statuses.
+ */
     void refreshBroadcastStatuses();
+/**
+ * @brief Starts next kernel status check.
+ */
     void startNextKernelStatusCheck();
+/**
+ * @brief Returns kernel excess from entry.
+ */
     QString kernelExcessFromEntry(const QJsonObject &entry) const;
+/**
+ * @brief Refreshes transaction confirmations.
+ */
     void refreshTransactionConfirmations();
+/**
+ * @brief Processes touch wallet session.
+ */
     void touchWalletSession();
+/**
+ * @brief Recovers pending broadcasts.
+ */
     void recoverPendingBroadcasts();
+/**
+ * @brief Finalizes broadcasted workflow.
+ */
     void finalizeBroadcastedWorkflow(const QString &workflowId);
     QJsonArray rebuildTransactionHistoryFromOutputs(const QList<WalletOutput> &outputs,
                                                     const QJsonArray &existingTransactions) const;
@@ -213,52 +468,151 @@ public:
                                       SlateV4 *slate,
                                       WalletCryptoBackend::ParticipantContext *signatureOverrideOut,
                                       QString *errorOut = 0);
+/**
+ * @brief Returns compact invoice slate for return.
+ */
     void compactInvoiceSlateForReturn(const QString &workflowId, SlateV4 *slate);
+/**
+ * @brief Returns compact standard slate for return.
+ */
     void compactStandardSlateForReturn(const QString &workflowId, SlateV4 *slate);
+/**
+ * @brief Returns current slatepack address.
+ */
     QString currentSlatepackAddress() const;
+/**
+ * @brief Returns current payment proof address.
+ */
     QString currentPaymentProofAddress() const;
+/**
+ * @brief Returns current slatepack secret.
+ */
     QByteArray currentSlatepackSecret() const;
+/**
+ * @brief Returns align slate version with node.
+ */
     void alignSlateVersionWithNode(SlateV4 *slate) const;
     void beginBroadcastWithInputPreflight(const QString &workflowId,
                                           const QJsonObject &txSkeleton);
+/**
+ * @brief Returns resolve workflow id by slate id.
+ */
     QString resolveWorkflowIdBySlateId(const SlateV4 &slate) const;
+/**
+ * @brief Returns resolved network name.
+ */
     QString resolvedNetworkName() const;
+/**
+ * @brief Marks transaction broadcast pending.
+ */
     void markTransactionBroadcastPending(const QString &workflowId);
+/**
+ * @brief Marks transaction broadcast failed.
+ */
     void markTransactionBroadcastFailed(const QString &workflowId, const QString &message);
+/**
+ * @brief Marks transaction kernel confirmed.
+ */
     void markTransactionKernelConfirmed(const QString &workflowId, qulonglong confirmedHeight);
+/**
+ * @brief Marks transaction kernel broadcasted.
+ */
     void markTransactionKernelBroadcasted(const QString &workflowId);
+/**
+ * @brief Marks transaction broadcast rejected.
+ */
     void markTransactionBroadcastRejected(const QString &workflowId, const QString &message);
+/**
+ * @brief Marks transaction broadcast succeeded.
+ */
     void markTransactionBroadcastSucceeded(const QString &workflowId);
+/**
+ * @brief Loads document for service.
+ */
     QJsonObject loadDocumentForService() const;
+/**
+ * @brief Saves document for service.
+ */
     bool saveDocumentForService(const QJsonObject &document) const;
+/**
+ * @brief Returns next child index from state for service.
+ */
     quint32 nextChildIndexFromStateForService(const QJsonObject &walletState) const;
     QJsonObject filterWorkflowContextsForTransactionsForService(const QJsonObject &contexts,
                                                                const QJsonArray &transactions) const;
 signals:
+/**
+ * @brief Processes wallet changed.
+ */
     void walletChanged();
+/**
+ * @brief Processes node config changed.
+ */
     void nodeConfigChanged();
+/**
+ * @brief Processes status changed.
+ */
     void statusChanged();
+/**
+ * @brief Processes last error changed.
+ */
     void lastErrorChanged();
+/**
+ * @brief Processes last info changed.
+ */
     void lastInfoChanged();
+/**
+ * @brief Processes workflow changed.
+ */
     void workflowChanged();
 
 private:
+/**
+ * @brief Loads from storage.
+ */
     void loadFromStorage();
+/**
+ * @brief Starts auto refresh.
+ */
     void startAutoRefresh();
+/**
+ * @brief Finalizes transaction store update.
+ */
     void finalizeTransactionStoreUpdate(const QJsonObject &document, bool changed);
     void storeOutputsState(QJsonObject *document,
                            QJsonObject *walletState,
                            const QList<WalletOutput> &outputs,
                            quint32 nextChildIndex) const;
+/**
+ * @brief Updates transaction entry.
+ */
     void updateTransactionEntry(const QString &workflowId, const std::function<void(QJsonObject &)> &updater);
+/**
+ * @brief Refreshes storage persistence state.
+ */
     void refreshStoragePersistenceState();
     quint64 resolveWorkflowAmountNano(const QString &workflowId,
                                       const QJsonObject &localContext,
                                       const QString &amount) const;
+/**
+ * @brief Returns legacy invoice participant from context.
+ */
     static QJsonObject legacyInvoiceParticipantFromContext(const QJsonObject &localContext);
+/**
+ * @brief Returns transaction entry less than.
+ */
     static bool transactionEntryLessThan(const QJsonObject &left, const QJsonObject &right);
+/**
+ * @brief Returns wallet output less than.
+ */
     static bool walletOutputLessThan(const WalletOutput &left, const WalletOutput &right);
+/**
+ * @brief Processes on session lock timeout.
+ */
     void onSessionLockTimeout();
+/**
+ * @brief Processes on application state changed.
+ */
     void onApplicationStateChanged(Qt::ApplicationState state);
 
     NodeForeignApi *m_nodeApi;

@@ -17,10 +17,10 @@ namespace
 {
 
 /**
- * @brief repeatedHex
- * @param nibble
- * @param bytes
- * @return
+ * @brief Creates a repeated hexadecimal string for deterministic test fixtures.
+ * @param nibble Hex nibble character to repeat.
+ * @param bytes Number of bytes represented in the output string.
+ * @return Hex string with length bytes * 2.
  */
 QString repeatedHex(const char nibble, int bytes)
 {
@@ -28,8 +28,8 @@ QString repeatedHex(const char nibble, int bytes)
 }
 
 /**
- * @brief testKeychain
- * @return
+ * @brief Builds a deterministic keychain from a fixed mnemonic.
+ * @return Test keychain instance.
  */
 WalletKeychain testKeychain()
 {
@@ -41,10 +41,10 @@ WalletKeychain testKeychain()
 }
 
 /**
- * @brief buildPartialSlate
- * @param sender
- * @param receiver
- * @return
+ * @brief Creates a partial Slate V4 containing sender and receiver participant data.
+ * @param sender Sender participant context.
+ * @param receiver Receiver participant context.
+ * @return Partial slate prepared for signature workflow tests.
  */
 SlateV4 buildPartialSlate(const WalletCryptoBackend::ParticipantContext &sender,
                           const WalletCryptoBackend::ParticipantContext &receiver)
@@ -60,8 +60,8 @@ SlateV4 buildPartialSlate(const WalletCryptoBackend::ParticipantContext &sender,
 }
 
 /**
- * @brief buildTransactionWithDuplicateInputs
- * @return
+ * @brief Builds a transaction fixture containing duplicate input commitments.
+ * @return Transaction used to test duplicate-input validation failures.
  */
 Transaction buildTransactionWithDuplicateInputs()
 {
@@ -90,10 +90,10 @@ Transaction buildTransactionWithDuplicateInputs()
 }
 
 /**
- * @brief buildKernelSignatureTransaction
- * @param excess
- * @param signatureHex
- * @return
+ * @brief Builds a transaction fixture with a single kernel signature.
+ * @param excess Kernel excess commitment.
+ * @param signatureHex Kernel signature encoded as hex.
+ * @return Transaction containing one configured kernel.
  */
 Transaction buildKernelSignatureTransaction(const QString &excess,
                                             const QString &signatureHex)
@@ -133,7 +133,7 @@ private slots:
 };
 
 /**
- * @brief WalletTests::initTestCase
+ * @brief Initializes test resources required by wallet core tests.
  */
 void WalletTests::initTestCase()
 {
@@ -142,7 +142,7 @@ void WalletTests::initTestCase()
 }
 
 /**
- * @brief WalletTests::paymentProofRoundTrip
+ * @brief Verifies that payment proof signing and verification succeeds for valid data.
  */
 void WalletTests::paymentProofRoundTrip()
 {
@@ -163,7 +163,7 @@ void WalletTests::paymentProofRoundTrip()
 }
 
 /**
- * @brief WalletTests::paymentProofRejectsWrongReceiver
+ * @brief Verifies that signing fails when the receiver address does not match the keychain.
  */
 void WalletTests::paymentProofRejectsWrongReceiver()
 {
@@ -183,7 +183,7 @@ void WalletTests::paymentProofRejectsWrongReceiver()
 }
 
 /**
- * @brief WalletTests::paymentProofDetectsTampering
+ * @brief Verifies that payment proof verification fails after slate tampering.
  */
 void WalletTests::paymentProofDetectsTampering()
 {
@@ -206,7 +206,7 @@ void WalletTests::paymentProofDetectsTampering()
 }
 
 /**
- * @brief WalletTests::slatepackAddressUsesExpectedPrefixes
+ * @brief Verifies network-specific slatepack address prefixes.
  */
 void WalletTests::slatepackAddressUsesExpectedPrefixes()
 {
@@ -222,7 +222,7 @@ void WalletTests::slatepackAddressUsesExpectedPrefixes()
 }
 
 /**
- * @brief WalletTests::finalizeSlateRejectsInsufficientPartialSignatures
+ * @brief Verifies slate finalization fails when not enough partial signatures are present.
  */
 void WalletTests::finalizeSlateRejectsInsufficientPartialSignatures()
 {
@@ -247,7 +247,7 @@ void WalletTests::finalizeSlateRejectsInsufficientPartialSignatures()
 }
 
 /**
- * @brief WalletTests::finalizeSlateSucceedsWithAllParticipants
+ * @brief Verifies slate finalization succeeds after collecting all participant signatures.
  */
 void WalletTests::finalizeSlateSucceedsWithAllParticipants()
 {
@@ -279,7 +279,7 @@ void WalletTests::finalizeSlateSucceedsWithAllParticipants()
 }
 
 /**
- * @brief WalletTests::verifyPartialSignaturesRejectsMissingPartials
+ * @brief Verifies partial signature validation fails when no partial signatures are present.
  */
 void WalletTests::verifyPartialSignaturesRejectsMissingPartials()
 {
@@ -296,7 +296,7 @@ void WalletTests::verifyPartialSignaturesRejectsMissingPartials()
 }
 
 /**
- * @brief WalletTests::validateTransactionBodyRejectsDuplicateInputs
+ * @brief Verifies transaction body validation rejects duplicate inputs.
  */
 void WalletTests::validateTransactionBodyRejectsDuplicateInputs()
 {
@@ -308,7 +308,7 @@ void WalletTests::validateTransactionBodyRejectsDuplicateInputs()
 }
 
 /**
- * @brief WalletTests::validateTransactionKernelSumsRejectsMissingInputs
+ * @brief Verifies kernel-sum validation fails for transactions without inputs.
  */
 void WalletTests::validateTransactionKernelSumsRejectsMissingInputs()
 {
@@ -320,7 +320,7 @@ void WalletTests::validateTransactionKernelSumsRejectsMissingInputs()
 }
 
 /**
- * @brief WalletTests::validateTransactionKernelSignaturesRejectsMalformedSignature
+ * @brief Verifies kernel-signature validation rejects malformed signatures.
  */
 void WalletTests::validateTransactionKernelSignaturesRejectsMalformedSignature()
 {
@@ -340,8 +340,8 @@ void WalletTests::validateTransactionKernelSignaturesRejectsMalformedSignature()
 }
 
 /**
- * @brief createWalletCoreTests
- * @return
+ * @brief Creates the wallet core test object for the shared test runner.
+ * @return Newly allocated Qt test object instance.
  */
 QObject *createWalletCoreTests()
 {

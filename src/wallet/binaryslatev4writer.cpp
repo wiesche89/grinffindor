@@ -30,9 +30,9 @@ const quint8 kFeeFieldsShift = 0;
 const char kBech32Charset[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 /**
- * @brief appendU8
- * @param out
- * @param value
+ * @brief Appends a single unsigned byte in big-endian order.
+ * @param out Target byte buffer.
+ * @param value Value to append.
  */
 void appendU8(QByteArray &out, quint8 value)
 {
@@ -40,9 +40,9 @@ void appendU8(QByteArray &out, quint8 value)
 }
 
 /**
- * @brief appendU16
- * @param out
- * @param value
+ * @brief Appends a 16-bit unsigned value in big-endian order.
+ * @param out Target byte buffer.
+ * @param value Value to append.
  */
 void appendU16(QByteArray &out, quint16 value)
 {
@@ -51,9 +51,9 @@ void appendU16(QByteArray &out, quint16 value)
 }
 
 /**
- * @brief appendU32
- * @param out
- * @param value
+ * @brief Appends a 32-bit unsigned value in big-endian order.
+ * @param out Target byte buffer.
+ * @param value Value to append.
  */
 void appendU32(QByteArray &out, quint32 value)
 {
@@ -63,9 +63,9 @@ void appendU32(QByteArray &out, quint32 value)
 }
 
 /**
- * @brief appendU64
- * @param out
- * @param value
+ * @brief Appends a 64-bit unsigned value in big-endian order.
+ * @param out Target byte buffer.
+ * @param value Value to append.
  */
 void appendU64(QByteArray &out, quint64 value)
 {
@@ -75,11 +75,11 @@ void appendU64(QByteArray &out, quint64 value)
 }
 
 /**
- * @brief appendHex
- * @param out
- * @param hex
- * @param expectedBytes
- * @return
+ * @brief Appends decoded hex bytes when the exact size matches expectations.
+ * @param out Target byte buffer.
+ * @param hex Hex-encoded source string.
+ * @param expectedBytes Required decoded byte length.
+ * @return True when append succeeded.
  */
 bool appendHex(QByteArray &out, const QString &hex, int expectedBytes)
 {
@@ -92,9 +92,9 @@ bool appendHex(QByteArray &out, const QString &hex, int expectedBytes)
 }
 
 /**
- * @brief uuidParts
- * @param uuid
- * @return
+ * @brief Splits a UUID string into dash-separated segments.
+ * @param uuid UUID text.
+ * @return UUID segments.
  */
 QStringList uuidParts(const QString &uuid)
 {
@@ -102,10 +102,10 @@ QStringList uuidParts(const QString &uuid)
 }
 
 /**
- * @brief appendUuid
- * @param out
- * @param uuid
- * @return
+ * @brief Appends a UUID as 16 raw bytes.
+ * @param out Target byte buffer.
+ * @param uuid UUID text.
+ * @return True when UUID encoding succeeded.
  */
 bool appendUuid(QByteArray &out, const QString &uuid)
 {
@@ -114,9 +114,9 @@ bool appendUuid(QByteArray &out, const QString &uuid)
 }
 
 /**
- * @brief parseNanogrin
- * @param amount
- * @return
+ * @brief Parses a decimal GRIN amount string into nanogrin.
+ * @param amount Decimal amount string.
+ * @return Amount in nanogrin.
  */
 quint64 parseNanogrin(const QString &amount)
 {
@@ -154,9 +154,9 @@ quint64 parseNanogrin(const QString &amount)
 }
 
 /**
- * @brief encodeFeeFields
- * @param fee
- * @return
+ * @brief Encodes fee fields for compact binary slate representation.
+ * @param fee Decimal fee string.
+ * @return Encoded fee field value.
  */
 quint64 encodeFeeFields(const QString &fee)
 {
@@ -165,9 +165,9 @@ quint64 encodeFeeFields(const QString &fee)
 }
 
 /**
- * @brief stageByte
- * @param state
- * @return
+ * @brief Maps a SlateV4 state enum to its binary stage byte.
+ * @param state Slate workflow state.
+ * @return Serialized stage value.
  */
 quint8 stageByte(SlateV4::State state)
 {
@@ -185,9 +185,9 @@ quint8 stageByte(SlateV4::State state)
 }
 
 /**
- * @brief encodeBase58
- * @param input
- * @return
+ * @brief Encodes binary data using the Bitcoin base58 alphabet.
+ * @param input Raw binary input.
+ * @return Base58-encoded text.
  */
 QString encodeBase58(const QByteArray &input)
 {
@@ -220,9 +220,9 @@ QString encodeBase58(const QByteArray &input)
 }
 
 /**
- * @brief formatArmored
- * @param data
- * @return
+ * @brief Formats armored slatepack payload text with grouped spacing and line wraps.
+ * @param data Base58 payload text.
+ * @return Human-readable armored payload text.
  */
 QString formatArmored(const QString &data)
 {
@@ -241,9 +241,9 @@ QString formatArmored(const QString &data)
 }
 
 /**
- * @brief randomBytes
- * @param size
- * @return
+ * @brief Produces pseudo-random bytes using Qt's global RNG.
+ * @param size Number of bytes to generate.
+ * @return Random byte buffer.
  */
 QByteArray randomBytes(int size)
 {
@@ -255,8 +255,8 @@ QByteArray randomBytes(int size)
 }
 
 /**
- * @brief bech32CharsetReverse
- * @return
+ * @brief Builds a reverse lookup table for the bech32 charset.
+ * @return Lookup table from ASCII code to bech32 value.
  */
 QVector<int> bech32CharsetReverse()
 {
@@ -268,12 +268,12 @@ QVector<int> bech32CharsetReverse()
 }
 
 /**
- * @brief convertBitsToBytes
- * @param data
- * @param fromBits
- * @param toBits
- * @param pad
- * @return
+ * @brief Converts packed values across bit widths.
+ * @param data Input value sequence.
+ * @param fromBits Source bit width.
+ * @param toBits Target bit width.
+ * @param pad True to allow padded tail bits.
+ * @return Converted byte sequence or empty data on invalid input.
  */
 QByteArray convertBitsToBytes(const QVector<int> &data, int fromBits, int toBits, bool pad)
 {
@@ -308,10 +308,10 @@ QByteArray convertBitsToBytes(const QVector<int> &data, int fromBits, int toBits
 }
 
 /**
- * @brief decodeBech32Payload
- * @param address
- * @param hrpOut
- * @return
+ * @brief Decodes a bech32 address payload into raw bytes.
+ * @param address Bech32 address.
+ * @param hrpOut Optional output HRP prefix.
+ * @return Decoded payload bytes.
  */
 QByteArray decodeBech32Payload(const QString &address, QString *hrpOut = 0)
 {
@@ -346,12 +346,12 @@ QByteArray decodeBech32Payload(const QString &address, QString *hrpOut = 0)
 }
 
 /**
- * @brief hkdfSha256
- * @param ikm
- * @param salt
- * @param info
- * @param outputLength
- * @return
+ * @brief Derives key material using HKDF-SHA256.
+ * @param ikm Input keying material.
+ * @param salt Optional salt.
+ * @param info Context string for domain separation.
+ * @param outputLength Requested output length in bytes.
+ * @return Derived key bytes.
  */
 QByteArray hkdfSha256(const QByteArray &ikm,
                       const QByteArray &salt,
@@ -376,9 +376,9 @@ QByteArray hkdfSha256(const QByteArray &ikm,
 }
 
 /**
- * @brief encodeBase64Raw
- * @param input
- * @return
+ * @brief Encodes bytes as unpadded base64 text.
+ * @param input Binary input.
+ * @return Base64 text without trailing '=' padding.
  */
 QString encodeBase64Raw(const QByteArray &input)
 {
@@ -390,9 +390,9 @@ QString encodeBase64Raw(const QByteArray &input)
 }
 
 /**
- * @brief formatWrappedBase64
- * @param input
- * @return
+ * @brief Wraps base64 text into 64-character lines.
+ * @param input Binary input.
+ * @return Wrapped base64 text.
  */
 QString formatWrappedBase64(const QByteArray &input)
 {
@@ -406,9 +406,9 @@ QString formatWrappedBase64(const QByteArray &input)
 }
 
 /**
- * @brief incrementStreamNonce
- * @param nonce
- * @return
+ * @brief Increments the streaming nonce used for age payload chunks.
+ * @param nonce In/out nonce buffer.
+ * @return True when increment succeeds without overflow.
  */
 bool incrementStreamNonce(QByteArray *nonce)
 {
@@ -429,10 +429,10 @@ bool incrementStreamNonce(QByteArray *nonce)
 #ifdef GRIN_HAS_SLATEPACK_CRYPTO
 
 /**
- * @brief deriveX25519PublicKey
- * @param privateKey
- * @param publicKeyOut
- * @return
+ * @brief Computes an X25519 public key from a private key.
+ * @param privateKey X25519 private key.
+ * @param publicKeyOut Output public key buffer.
+ * @return True on success.
  */
 bool deriveX25519PublicKey(const QByteArray &privateKey, QByteArray *publicKeyOut)
 {
@@ -448,11 +448,11 @@ bool deriveX25519PublicKey(const QByteArray &privateKey, QByteArray *publicKeyOu
 }
 
 /**
- * @brief deriveX25519SharedSecret
- * @param privateKey
- * @param peerPublicKey
- * @param sharedSecretOut
- * @return
+ * @brief Computes an X25519 shared secret with a peer public key.
+ * @param privateKey Local X25519 private key.
+ * @param peerPublicKey Peer X25519 public key.
+ * @param sharedSecretOut Output shared secret buffer.
+ * @return True on success.
  */
 bool deriveX25519SharedSecret(const QByteArray &privateKey,
                               const QByteArray &peerPublicKey,
@@ -471,12 +471,12 @@ bool deriveX25519SharedSecret(const QByteArray &privateKey,
 }
 
 /**
- * @brief chacha20Poly1305Encrypt
- * @param key
- * @param nonce
- * @param plaintext
- * @param ciphertextOut
- * @return
+ * @brief Encrypts plaintext with ChaCha20-Poly1305 and appends authentication tag.
+ * @param key AEAD key.
+ * @param nonce AEAD nonce.
+ * @param plaintext Plaintext bytes.
+ * @param ciphertextOut Output ciphertext with trailing tag.
+ * @return True when encryption succeeds.
  */
 bool chacha20Poly1305Encrypt(const QByteArray &key,
                              const QByteArray &nonce,
@@ -506,9 +506,9 @@ bool chacha20Poly1305Encrypt(const QByteArray &key,
 }
 
 /**
- * @brief x25519SecretFromWalletSecret
- * @param walletSecret
- * @return
+ * @brief Derives an X25519 private scalar from a wallet Ed25519 secret.
+ * @param walletSecret Wallet secret key bytes.
+ * @return Clamped X25519 private key, or empty data on failure.
  */
 QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
 {
@@ -536,10 +536,10 @@ QByteArray x25519SecretFromWalletSecret(const QByteArray &walletSecret)
 }
 
 /**
- * @brief recipientAddressToX25519
- * @param recipientAddress
- * @param x25519PublicOut
- * @return
+ * @brief Resolves a recipient slatepack address to an X25519 public key.
+ * @param recipientAddress Recipient address text.
+ * @param x25519PublicOut Output X25519 public key.
+ * @return True when address conversion succeeds.
  */
 bool recipientAddressToX25519(const QString &recipientAddress, QByteArray *x25519PublicOut)
 {
@@ -566,10 +566,10 @@ bool recipientAddressToX25519(const QString &recipientAddress, QByteArray *x2551
 }
 
 /**
- * @brief buildEncryptedMetadata
- * @param sender
- * @param recipients
- * @return
+ * @brief Builds metadata prefix used inside encrypted slatepack payloads.
+ * @param sender Optional sender address.
+ * @param recipients Optional recipient list.
+ * @return Packed metadata bytes.
  */
 QByteArray buildEncryptedMetadata(const QString &sender, const QStringList &recipients)
 {
@@ -604,14 +604,14 @@ QByteArray buildEncryptedMetadata(const QString &sender, const QStringList &reci
 }
 
 /**
- * @brief encryptAgePayload
- * @param payload
- * @param senderAddress
- * @param recipients
- * @param senderSecret
- * @param encryptedOut
- * @param errorOut
- * @return
+ * @brief Encrypts payload bytes using age-style X25519 recipient stanzas.
+ * @param payload Plain slate payload.
+ * @param senderAddress Optional sender address metadata.
+ * @param recipients Recipient slatepack addresses.
+ * @param senderSecret Sender secret key bytes.
+ * @param encryptedOut Output encrypted age payload.
+ * @param errorOut Optional encryption error message.
+ * @return True when encryption succeeds.
  */
 bool encryptAgePayload(const QByteArray &payload,
                        const QString &senderAddress,
@@ -658,6 +658,9 @@ bool encryptAgePayload(const QByteArray &payload,
         return false;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Building Recipient Stanzas And Wrapped File Keys
+    // -------------------------------------------------------------------------------------------------------
     QByteArray header = QByteArrayLiteral("age-encryption.org/v1\n");
     for (int i = 0; i < recipients.size(); ++i) {
         QByteArray recipientX25519;
@@ -703,6 +706,9 @@ bool encryptAgePayload(const QByteArray &payload,
         hkdfSha256(fileKey, QByteArray(), QByteArrayLiteral("header"), 32),
         QCryptographicHash::Sha256);
 
+    // -------------------------------------------------------------------------------------------------------
+    // Building Authenticated Age Header And Stream Payload
+    // -------------------------------------------------------------------------------------------------------
     QByteArray agePayload = header;
     agePayload.append("--- ");
     agePayload.append(encodeBase64Raw(headerMac).toUtf8());
@@ -745,11 +751,11 @@ bool encryptAgePayload(const QByteArray &payload,
 #endif
 
 /**
- * @brief serializeJsonEnvelope
- * @param payload
- * @param mode
- * @param sender
- * @return
+ * @brief Serializes payload bytes into a compact JSON slatepack envelope.
+ * @param payload Inner payload bytes.
+ * @param mode Slatepack mode value.
+ * @param sender Optional sender address.
+ * @return Serialized JSON envelope bytes.
  */
 QByteArray serializeJsonEnvelope(const QByteArray &payload, int mode, const QString &sender)
 {
@@ -764,11 +770,11 @@ QByteArray serializeJsonEnvelope(const QByteArray &payload, int mode, const QStr
 }
 
 /**
- * @brief buildBinaryEnvelopeOptionalFields
- * @param sender
- * @param recipients
- * @param flagsOut
- * @return
+ * @brief Builds optional sender and recipient fields for a binary slatepack header.
+ * @param sender Optional sender address.
+ * @param recipients Optional recipient address list.
+ * @param flagsOut Output optional field flags.
+ * @return Serialized optional field bytes.
  */
 QByteArray buildBinaryEnvelopeOptionalFields(const QString &sender, const QStringList &recipients, quint16 *flagsOut)
 {
@@ -812,10 +818,10 @@ QByteArray buildBinaryEnvelopeOptionalFields(const QString &sender, const QStrin
 }
 
 /**
- * @brief serializeSlate
- * @param slate
- * @param payloadOut
- * @return
+ * @brief Serializes a SlateV4 object into compact binary payload format.
+ * @param slate Slate object.
+ * @param payloadOut Output serialized payload.
+ * @return True when serialization succeeds.
  */
 bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
 {
@@ -823,6 +829,9 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
         return false;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Writing Core Slate Header Fields
+    // -------------------------------------------------------------------------------------------------------
     QByteArray payload;
     appendU16(payload, static_cast<quint16>(slate.ver.slateVersion));
     appendU16(payload, static_cast<quint16>(slate.ver.blockHeaderVersion));
@@ -854,6 +863,9 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
     if (optionalFields & 0x08) appendU8(payload, static_cast<quint8>(slate.kernelFeatures));
     if (optionalFields & 0x10) appendU64(payload, slate.ttl.toULongLong());
 
+    // -------------------------------------------------------------------------------------------------------
+    // Writing Participant Signatures And Optional Structures
+    // -------------------------------------------------------------------------------------------------------
     appendU8(payload, static_cast<quint8>(slate.signatures.size()));
     for (int i = 0; i < slate.signatures.size(); ++i) {
         const SlateV4::ParticipantData &sig = slate.signatures.at(i);
@@ -911,9 +923,9 @@ bool serializeSlate(const SlateV4 &slate, QByteArray *payloadOut)
 }
 
 /**
- * @brief armorPayload
- * @param payload
- * @return
+ * @brief Wraps binary payload with checksum and slatepack armor markers.
+ * @param payload Binary slatepack payload.
+ * @return Armored slatepack text.
  */
 QString armorPayload(const QByteArray &payload)
 {
@@ -927,14 +939,14 @@ QString armorPayload(const QByteArray &payload)
 }
 
 /**
- * @brief BinarySlateV4Writer::encodeSlatepack
- * @param slate
- * @param armoredOut
- * @param errorOut
- * @param sender
- * @param recipients
- * @param senderSecret
- * @return
+ * @brief Encodes a SlateV4 object into armored slatepack text.
+ * @param slate Slate object to encode.
+ * @param armoredOut Output armored slatepack string.
+ * @param errorOut Optional error message.
+ * @param sender Optional sender address.
+ * @param recipients Optional recipient addresses.
+ * @param senderSecret Optional sender secret for encrypted modes.
+ * @return True when encoding succeeds.
  */
 bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
                                           QString *armoredOut,
@@ -943,6 +955,9 @@ bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
                                           const QStringList &recipients,
                                           const QByteArray &senderSecret)
 {
+    // -------------------------------------------------------------------------------------------------------
+    // Serializing Slate Payload
+    // -------------------------------------------------------------------------------------------------------
     QByteArray slatePayload;
     if (!serializeSlate(slate, &slatePayload)) {
         if (errorOut) {
@@ -958,6 +973,9 @@ bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
         QStringList(),
         &optFlags);
 
+    // -------------------------------------------------------------------------------------------------------
+    // Building Binary Slatepack Envelope
+    // -------------------------------------------------------------------------------------------------------
     QByteArray slatepackPayload;
     appendU8(slatepackPayload, 1);
     appendU8(slatepackPayload, 0);
@@ -988,6 +1006,9 @@ bool BinarySlateV4Writer::encodeSlatepack(const SlateV4 &slate,
     }
 
     if (!sender.trimmed().isEmpty() && !preserveExternalBinary) {
+        // -------------------------------------------------------------------------------------------------------
+        // Rebuilding Plain Sender Envelope For Compatibility
+        // -------------------------------------------------------------------------------------------------------
         // Keep sender in optional binary header fields for plaintext mode compatibility.
         quint16 plainOptFlags = 0;
         const QByteArray plainOptFields = buildBinaryEnvelopeOptionalFields(

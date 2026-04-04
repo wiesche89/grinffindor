@@ -1,4 +1,4 @@
-#ifndef GRINWALLETCONTROLLERHELPERS_H
+﻿#ifndef GRINWALLETCONTROLLERHELPERS_H
 #define GRINWALLETCONTROLLERHELPERS_H
 
 #include <QJsonArray>
@@ -11,11 +11,29 @@
 class GrinWalletControllerHelpers
 {
 public:
+/**
+ * @brief Processes default network name.
+ */
     static QString defaultNetworkName();
+/**
+ * @brief Returns whether accepted network name.
+ */
     static bool isAcceptedNetworkName(const QString &networkName);
+/**
+ * @brief Returns default node url for network.
+ */
     static QString defaultNodeUrlForNetwork(const QString &networkName);
+/**
+ * @brief Returns infer network name.
+ */
     static QString inferNetworkName(const QString &networkName, const QString &nodeUrl);
+/**
+ * @brief Returns whether node url accepted.
+ */
     static bool isNodeUrlAccepted(const QString &nodeUrl);
+/**
+ * @brief Returns whether final transaction status.
+ */
     static bool isFinalTransactionStatus(const QString &status);
     static WalletOutput findTrackedOutputByCommitment(const QList<WalletOutput> &outputs,
                                                       const QString &commitment);

@@ -15,9 +15,9 @@
 namespace {
 
 /**
- * @brief amountToNanogrin
- * @param amount
- * @return
+ * @brief Converts a decimal GRIN amount string into nanogrin.
+ * @param amount Decimal amount string.
+ * @return Amount represented in nanogrin.
  */
 quint64 amountToNanogrin(const QString &amount)
 {
@@ -50,9 +50,9 @@ quint64 amountToNanogrin(const QString &amount)
 }
 
 /**
- * @brief outputFeatureString
- * @param coinbase
- * @return
+ * @brief Maps an output coinbase flag to the canonical feature name.
+ * @param coinbase True when the output uses coinbase features.
+ * @return Feature string expected by serialization helpers.
  */
 QString outputFeatureString(bool coinbase)
 {
@@ -60,10 +60,10 @@ QString outputFeatureString(bool coinbase)
 }
 
 /**
- * @brief containsOutputCommitment
- * @param outputs
- * @param commitment
- * @return
+ * @brief Checks whether a list of outputs already contains a commitment.
+ * @param outputs Outputs to inspect.
+ * @param commitment Commitment to locate.
+ * @return True when the commitment exists in the list.
  */
 bool containsOutputCommitment(const QVector<Output> &outputs, const QString &commitment)
 {
@@ -76,10 +76,10 @@ bool containsOutputCommitment(const QVector<Output> &outputs, const QString &com
 }
 
 /**
- * @brief containsInputCommitment
- * @param inputs
- * @param commitment
- * @return
+ * @brief Checks whether a list of inputs already contains a commitment.
+ * @param inputs Inputs to inspect.
+ * @param commitment Commitment to locate.
+ * @return True when the commitment exists in the list.
  */
 bool containsInputCommitment(const QVector<Input> &inputs, const QString &commitment)
 {
@@ -92,9 +92,9 @@ bool containsInputCommitment(const QVector<Input> &inputs, const QString &commit
 }
 
 /**
- * @brief outputSortKeyForCanonicalization
- * @param output
- * @return
+ * @brief Produces a deterministic sort key for output canonicalization.
+ * @param output Output instance to hash.
+ * @return Canonical output ordering key.
  */
 QString outputSortKeyForCanonicalization(const Output &output)
 {
@@ -102,10 +102,10 @@ QString outputSortKeyForCanonicalization(const Output &output)
 }
 
 /**
- * @brief inputCanonicalLessThan
- * @param left
- * @param right
- * @return
+ * @brief Compares two inputs by canonical wallet ordering.
+ * @param left Left input.
+ * @param right Right input.
+ * @return True when the left input must appear before the right input.
  */
 bool inputCanonicalLessThan(const Input &left, const Input &right)
 {
@@ -113,10 +113,10 @@ bool inputCanonicalLessThan(const Input &left, const Input &right)
 }
 
 /**
- * @brief outputCanonicalLessThan
- * @param left
- * @param right
- * @return
+ * @brief Compares two outputs by canonical wallet ordering.
+ * @param left Left output.
+ * @param right Right output.
+ * @return True when the left output must appear before the right output.
  */
 bool outputCanonicalLessThan(const Output &left, const Output &right)
 {
@@ -124,8 +124,8 @@ bool outputCanonicalLessThan(const Output &left, const Output &right)
 }
 
 /**
- * @brief canonicalizeBody
- * @param body
+ * @brief Deduplicates and canonicalizes transaction body inputs and outputs.
+ * @param body Transaction body to normalize in place.
  */
 void canonicalizeBody(TransactionBody *body)
 {
@@ -136,7 +136,9 @@ void canonicalizeBody(TransactionBody *body)
     QVector<Input> inputs = body->inputs();
     QVector<Output> outputs = body->outputs();
 
-    // Deduplicate by commitment first.
+    // -------------------------------------------------------------------------------------------------------
+    // Deduplicating Inputs And Outputs By Commitment
+    // -------------------------------------------------------------------------------------------------------
     QVector<Input> uniqueInputs;
     for (const Input &input : inputs) {
         const QString commitHex = input.commit().hex();
@@ -163,15 +165,18 @@ void canonicalizeBody(TransactionBody *body)
 }
 
 /**
- * @brief finalizeBuildResult
- * @param slate
- * @param tx
- * @return
+ * @brief Finalizes a transaction skeleton by adding kernel data and validating sums/signatures.
+ * @param slate Slate V4 payload used for fee and signature metadata.
+ * @param tx Partially assembled transaction.
+ * @return Final build result with validation status.
  */
 WalletTxBuilder::BuildResult finalizeBuildResult(const SlateV4 &slate, Transaction tx)
 {
     WalletTxBuilder::BuildResult result;
 
+    // -------------------------------------------------------------------------------------------------------
+    // Building Kernel Data
+    // -------------------------------------------------------------------------------------------------------
     QString excessError;
     const QString excessCommitment = WalletCryptoBackend::calculateExcessCommitment(slate, &excessError);
     if (excessCommitment.isEmpty()) {
@@ -193,6 +198,9 @@ WalletTxBuilder::BuildResult finalizeBuildResult(const SlateV4 &slate, Transacti
     body.setKernels(kernels);
     tx.setBody(body);
 
+    // -------------------------------------------------------------------------------------------------------
+    // Validating Transaction Kernels
+    // -------------------------------------------------------------------------------------------------------
     QString validationError;
     if (!WalletCryptoBackend::validateTransactionKernelSums(tx, &validationError)) {
         result.error = validationError.isEmpty()
@@ -216,12 +224,12 @@ WalletTxBuilder::BuildResult finalizeBuildResult(const SlateV4 &slate, Transacti
 }
 
 /**
- * @brief WalletTxBuilder::buildTransactionSkeleton
- * @param slate
- * @param selectedInputs
- * @param receiverOutput
- * @param changeOutput
- * @return
+ * @brief Builds a transaction skeleton from selected wallet outputs.
+ * @param slate Slate V4 payload containing transaction metadata.
+ * @param selectedInputs Selected spendable outputs used as inputs.
+ * @param receiverOutput Receiver output candidate.
+ * @param changeOutput Optional change output candidate.
+ * @return Build result containing a canonicalized transaction skeleton.
  */
 WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeleton(const SlateV4 &slate,
                                                                        const QList<WalletOutput> &selectedInputs,
@@ -240,6 +248,9 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeleton(const Sla
         return result;
     }
 
+    // -------------------------------------------------------------------------------------------------------
+    // Building Inputs And Outputs
+    // -------------------------------------------------------------------------------------------------------
     TransactionBody body;
 
     QVector<Input> inputs;
@@ -263,6 +274,9 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeleton(const Sla
     body.setOutputs(outputs);
     canonicalizeBody(&body);
 
+    // -------------------------------------------------------------------------------------------------------
+    // Assembling Transaction Envelope
+    // -------------------------------------------------------------------------------------------------------
     Transaction tx;
     tx.setTxId(slate.id);
     BlindingFactor offset;
@@ -274,10 +288,10 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeleton(const Sla
 }
 
 /**
- * @brief WalletTxBuilder::buildTransactionSkeletonFromCommitments
- * @param slate
- * @param receiverOutput
- * @return
+ * @brief Builds a transaction skeleton from compact slate commitments.
+ * @param slate Slate V4 payload containing commitment entries.
+ * @param receiverOutput Optional receiver output appended when not present.
+ * @return Build result containing a canonicalized transaction skeleton.
  */
 WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeletonFromCommitments(const SlateV4 &slate,
                                                                                       const WalletOutput *receiverOutput)
@@ -293,6 +307,9 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeletonFromCommit
     QVector<Input> inputs;
     QVector<Output> outputs;
 
+    // -------------------------------------------------------------------------------------------------------
+    // Mapping Compact Commitments To Inputs And Outputs
+    // -------------------------------------------------------------------------------------------------------
     for (int i = 0; i < slate.commitments.size(); ++i) {
         const SlateV4::Commit &commit = slate.commitments.at(i);
         if (commit.commitment.trimmed().isEmpty()) {
@@ -333,6 +350,9 @@ WalletTxBuilder::BuildResult WalletTxBuilder::buildTransactionSkeletonFromCommit
     body.setOutputs(outputs);
     canonicalizeBody(&body);
 
+    // -------------------------------------------------------------------------------------------------------
+    // Assembling Transaction Envelope
+    // -------------------------------------------------------------------------------------------------------
     Transaction tx;
     tx.setTxId(slate.id);
     BlindingFactor offset;

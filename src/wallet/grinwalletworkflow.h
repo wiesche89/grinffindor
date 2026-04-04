@@ -1,4 +1,4 @@
-#ifndef GRINWALLETWORKFLOW_H
+﻿#ifndef GRINWALLETWORKFLOW_H
 #define GRINWALLETWORKFLOW_H
 
 #include <QJsonObject>
@@ -8,6 +8,9 @@
 class GrinWalletWorkflow
 {
 public:
+/**
+ * @brief Persists transaction.
+ */
     static bool persistTransaction(QJsonObject *document, const SlateV4 &slate, bool broadcasted);
     static bool finalizeOutputs(QJsonObject *document,
                                 const SlateV4 &slate,
