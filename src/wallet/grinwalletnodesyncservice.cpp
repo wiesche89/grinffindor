@@ -131,7 +131,12 @@ void GrinWalletNodeSyncService::requestNextFullRescanBatch()
         static_cast<int>(m_controller->seedScanNextIndex()),
         -1,
         kFullRescanBatchSize,
+        kFullRescanIncludeProof,
         [batchState](const NodeForeignApi::RescanOutput &output) -> QString {
+            if (output.proof.isEmpty()) {
+                return QStringLiteral("Full rescan requires output proofs for rewind.");
+            }
+
             WalletOutput discovered;
             if (!WalletScanner::discoverOwnedOutput(output.commitment,
                                                     output.proof,

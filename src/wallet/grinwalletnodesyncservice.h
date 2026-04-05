@@ -94,7 +94,8 @@ private slots:
 
 private:
     static constexpr int kSeedScanBatchSize = 5000;
-    static constexpr int kFullRescanBatchSize = 1000;
+    static constexpr int kFullRescanBatchSize = 3000;
+    static constexpr bool kFullRescanIncludeProof = true;
 /**
  * @brief Clears pending broadcast state.
  */
