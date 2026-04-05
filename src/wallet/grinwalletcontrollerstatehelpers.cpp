@@ -307,6 +307,11 @@ void GrinWalletController::onSessionLockTimeout()
         return;
     }
 
+    if (m_walletScanInFlight || m_seedScanActive || m_fullRescanInFlight) {
+        touchWalletSession();
+        return;
+    }
+
     lockWallet();
     setLastInfo(QStringLiteral("Wallet locked after inactivity."));
 }
@@ -324,6 +329,10 @@ void GrinWalletController::onApplicationStateChanged(Qt::ApplicationState state)
         return;
     }
     if (state == Qt::ApplicationHidden || state == Qt::ApplicationInactive) {
+        if (m_walletScanInFlight || m_seedScanActive || m_fullRescanInFlight) {
+            touchWalletSession();
+            return;
+        }
         lockWallet();
         setLastInfo(QStringLiteral("Wallet locked because the browser tab or app became inactive."));
     }

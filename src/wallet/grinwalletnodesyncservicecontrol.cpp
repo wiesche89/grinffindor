@@ -94,10 +94,7 @@ void GrinWalletNodeSyncService::requestWalletScan()
     }
 
     if (unspentOnChainCount == 0) {
-        walletState.insert(QStringLiteral("restore_leaf_index"), 0);
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        m_controller->saveDocumentForService(document);
-        m_controller->setLastInfo(QStringLiteral("All tracked outputs are currently off-chain. Restarting seed scan from leaf 1."));
+        m_controller->setLastInfo(QStringLiteral("All tracked outputs are currently off-chain. Continuing seed scan from stored leaf progress."));
     } else {
         m_controller->setLastInfo(QStringLiteral("Refreshing tracked outputs via seed scan."));
     }

@@ -113,7 +113,7 @@ private:
     static constexpr int kSeedScanBatchSize = 5000;
     static constexpr int kFullRescanBatchSize = 2000;
     static constexpr bool kFullRescanIncludeProof = true;
-    static constexpr int kFullRescanCheckpointInterval = 5;
+    static constexpr int kFullRescanCheckpointInterval = 1;
 /**
  * @brief Clears pending broadcast state.
  */

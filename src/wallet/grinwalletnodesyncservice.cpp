@@ -215,6 +215,8 @@ void GrinWalletNodeSyncService::requestNextFullRescanBatch()
         return;
     }
 
+    m_controller->touchWalletSession();
+
     if (!m_controller->hasUnlockedSession()) {
         abortFullRescan(QStringLiteral("Unlock the wallet before continuing the full rescan."));
         return;
@@ -260,6 +262,8 @@ void GrinWalletNodeSyncService::requestNextFullRescanBatch()
             if (m_fullRescanSession != session) {
                 return;
             }
+
+            m_controller->touchWalletSession();
 
             if (result.hasError()) {
                 abortFullRescan(result.errorMessage());
@@ -425,11 +429,8 @@ void GrinWalletNodeSyncService::onNodeOutputsFinished(const Result<QList<OutputP
     }
 
     if (!tracked.isEmpty() && (chainOutputs.isEmpty() || matchedCommitments == 0)) {
-        walletState.insert(QStringLiteral("restore_leaf_index"), 0);
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        m_controller->saveDocumentForService(document);
         m_controller->setWalletScanInFlight(false);
-        m_controller->setLastInfo(QStringLiteral("Node returned no tracked outputs. Falling back to seed scan from leaf 1."));
+        m_controller->setLastInfo(QStringLiteral("Node returned no tracked outputs. Falling back to seed scan from stored leaf progress."));
         startSeedScan();
         return;
     }
@@ -577,6 +578,8 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
         return;
     }
 
+    m_controller->touchWalletSession();
+
     WalletKeychain keychain(m_controller->sessionMnemonic());
     if (!keychain.isValid()) {
         m_controller->setLastError(QStringLiteral("Wallet keychain could not be derived for seed scan."));
@@ -619,8 +622,6 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
                                                .arg(QString::number(listing.lastRetrievedIndex()))
                                                .arg(QString::number(listing.highestIndex())));
         m_controller->notifyStatusChanged();
-        qInfo().noquote() << QStringLiteral("Seed scan batch: continuing normal getUnspentOutputsAsync path at leaf %1.")
-                                 .arg(QString::number(m_controller->seedScanNextIndex()));
         m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
         return;
     }
@@ -634,8 +635,6 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
         m_controller->setSyncStatusMessage(QStringLiteral("Seed scan 0% (starting at leaf %1)")
                                .arg(QString::number(m_controller->seedScanNextIndex())));
         m_controller->notifyStatusChanged();
-        qInfo().noquote() << QStringLiteral("Seed scan batch: continuing normal getUnspentOutputsAsync path at leaf %1.")
-                                 .arg(QString::number(m_controller->seedScanNextIndex()));
         m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
         return;
     }
