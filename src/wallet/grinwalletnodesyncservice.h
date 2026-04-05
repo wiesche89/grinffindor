@@ -2,7 +2,9 @@
 #define GRINWALLETNODESYNCSERVICE_H
 
 #include <QObject>
+#include <memory>
 #include <QJsonArray>
+#include <QHash>
 #include <QJsonObject>
 #include <QString>
 
@@ -13,6 +15,8 @@
 #include "poolentry.h"
 #include "result.h"
 #include "tip.h"
+#include "walletkeychain.h"
+#include "walletoutput.h"
 
 class GrinWalletController;
 class NodeForeignApi;
@@ -93,9 +97,23 @@ private slots:
     void onNodePushTransactionFinished(const Result<bool> &result);
 
 private:
+    struct FullRescanSessionState {
+        QJsonObject document;
+        QJsonObject walletState;
+        QList<WalletOutput> tracked;
+        QHash<QString, int> trackedIndexByCommitment;
+        WalletKeychain keychain;
+        quint32 nextChildIndex{0};
+        QJsonArray transactionRescanBackup;
+        bool rebuildTransactions{false};
+        bool fullRescanMode{false};
+        int batchesSinceCheckpoint{0};
+    };
+
     static constexpr int kSeedScanBatchSize = 5000;
-    static constexpr int kFullRescanBatchSize = 3000;
+    static constexpr int kFullRescanBatchSize = 2000;
     static constexpr bool kFullRescanIncludeProof = true;
+    static constexpr int kFullRescanCheckpointInterval = 5;
 /**
  * @brief Clears pending broadcast state.
  */
@@ -104,9 +122,14 @@ private:
  * @brief Marks a pending broadcast as failed and updates controller status.
  */
     void failPendingBroadcast(const QString &workflowId, const QString &message);
+    bool ensureFullRescanSession(QString *errorMessage);
+    void clearFullRescanSession();
+    bool persistFullRescanSession(quint64 restoreLeafIndex, bool completed, QString *errorMessage);
+    void abortFullRescan(const QString &message);
     void requestNextFullRescanBatch();
 
     GrinWalletController *m_controller;
+    std::shared_ptr<FullRescanSessionState> m_fullRescanSession;
 };
 
 #endif

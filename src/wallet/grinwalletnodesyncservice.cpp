@@ -1,6 +1,8 @@
 #include "grinwalletnodesyncservice.h"
 
 #include <QDateTime>
+#include <QDebug>
+#include <QHash>
 #include <QTimer>
 #include <QtGlobal>
 #include <QSet>
@@ -23,12 +25,23 @@
 
 namespace {
 
-void mergeDiscoveredOutput(QList<WalletOutput> &tracked, const WalletOutput &discovered)
+QHash<QString, int> buildTrackedOutputIndex(const QList<WalletOutput> &tracked)
 {
+    QHash<QString, int> trackedIndexByCommitment;
+    trackedIndexByCommitment.reserve(tracked.size());
     for (int index = 0; index < tracked.size(); ++index) {
-        if (tracked.at(index).commitment != discovered.commitment) {
-            continue;
-        }
+        trackedIndexByCommitment.insert(tracked.at(index).commitment, index);
+    }
+    return trackedIndexByCommitment;
+}
+
+void mergeDiscoveredOutput(QList<WalletOutput> &tracked,
+                          QHash<QString, int> &trackedIndexByCommitment,
+                          const WalletOutput &discovered)
+{
+    const auto existing = trackedIndexByCommitment.constFind(discovered.commitment);
+    if (existing != trackedIndexByCommitment.constEnd()) {
+        const int index = existing.value();
 
         WalletOutput merged = tracked.at(index);
         merged.proof = discovered.proof;
@@ -47,6 +60,7 @@ void mergeDiscoveredOutput(QList<WalletOutput> &tracked, const WalletOutput &dis
         return;
     }
 
+    trackedIndexByCommitment.insert(discovered.commitment, tracked.size());
     tracked.append(discovered);
 }
 
@@ -88,6 +102,113 @@ void GrinWalletNodeSyncService::failPendingBroadcast(const QString &workflowId, 
     m_controller->setLastError(message);
 }
 
+bool GrinWalletNodeSyncService::ensureFullRescanSession(QString *errorMessage)
+{
+    if (m_fullRescanSession) {
+        return true;
+    }
+
+    const QJsonObject document = m_controller->loadDocumentForService();
+    const QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+
+    std::shared_ptr<FullRescanSessionState> session = std::make_shared<FullRescanSessionState>();
+    session->document = document;
+    session->walletState = walletState;
+    session->tracked = WalletScanner::outputsFromState(walletState);
+    session->trackedIndexByCommitment = buildTrackedOutputIndex(session->tracked);
+    session->keychain = WalletKeychain(m_controller->sessionMnemonic());
+    session->nextChildIndex = m_controller->nextChildIndexFromStateForService(walletState);
+    session->transactionRescanBackup = walletState.value(QStringLiteral("transaction_rescan_backup")).toArray();
+    session->fullRescanMode = walletState.value(QStringLiteral("last_sync_mode")).toString() == QStringLiteral("full-rescan")
+        || m_controller->fullRescanInFlight();
+    session->rebuildTransactions = walletState.value(QStringLiteral("last_sync_mode")).toString() == QStringLiteral("full-rescan");
+
+    if (!session->keychain.isValid()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Wallet keychain could not be derived for full rescan.");
+        }
+        return false;
+    }
+
+    m_fullRescanSession = session;
+    return true;
+}
+
+void GrinWalletNodeSyncService::clearFullRescanSession()
+{
+    m_fullRescanSession.reset();
+}
+
+bool GrinWalletNodeSyncService::persistFullRescanSession(quint64 restoreLeafIndex,
+                                                         bool completed,
+                                                         QString *errorMessage)
+{
+    if (!m_fullRescanSession) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Full rescan session is not initialized.");
+        }
+        return false;
+    }
+
+    FullRescanSessionState &session = *m_fullRescanSession;
+    session.walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(session.tracked));
+    session.walletState.insert(QStringLiteral("balances"),
+                               WalletScanner::balancesFromOutputs(session.tracked, m_controller->chainHeight()));
+    session.walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
+    session.walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(restoreLeafIndex));
+    session.walletState.insert(QStringLiteral("next_child_index"), static_cast<int>(session.nextChildIndex));
+
+    if (completed) {
+        if (session.rebuildTransactions) {
+            const QJsonArray rebuiltTransactions =
+                m_controller->rebuildTransactionHistoryFromOutputs(session.tracked, session.transactionRescanBackup);
+            session.walletState.insert(QStringLiteral("transactions"), rebuiltTransactions);
+            session.document.insert(QStringLiteral("workflow_contexts"),
+                                    m_controller->filterWorkflowContextsForTransactionsForService(
+                                        session.document.value(QStringLiteral("workflow_contexts")).toObject(),
+                                        rebuiltTransactions));
+        }
+
+        session.walletState.remove(QStringLiteral("transaction_rescan_backup"));
+        session.walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("seed-rewind"));
+        session.walletState.insert(QStringLiteral("last_synced_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+    } else {
+        if (session.fullRescanMode && session.rebuildTransactions) {
+            session.walletState.insert(QStringLiteral("transaction_rescan_backup"), session.transactionRescanBackup);
+        }
+        if (session.fullRescanMode) {
+            session.walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("full-rescan"));
+            session.walletState.insert(QStringLiteral("last_synced_at"), QString());
+        }
+    }
+
+    session.document.insert(QStringLiteral("wallet_state"), session.walletState);
+    if (!m_controller->saveDocumentForService(session.document)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = completed
+                ? QStringLiteral("Failed to persist full-rescan results.")
+                : QStringLiteral("Failed to persist full-rescan checkpoint.");
+        }
+        return false;
+    }
+
+    session.batchesSinceCheckpoint = 0;
+    return true;
+}
+
+void GrinWalletNodeSyncService::abortFullRescan(const QString &message)
+{
+    const bool fullRescanMode = m_fullRescanSession && m_fullRescanSession->fullRescanMode;
+    clearFullRescanSession();
+    m_controller->setSyncStatusMessage(fullRescanMode ? QStringLiteral("Full rescan failed")
+                                                     : QStringLiteral("Seed scan failed"));
+    m_controller->notifyStatusChanged();
+    m_controller->setLastError(message);
+    m_controller->setSeedScanActive(false);
+    m_controller->setWalletScanInFlight(false);
+    m_controller->setFullRescanInFlight(false);
+}
+
 void GrinWalletNodeSyncService::requestNextFullRescanBatch()
 {
     if (!m_controller->nodeApi() || !m_controller->seedScanActive()) {
@@ -95,44 +216,24 @@ void GrinWalletNodeSyncService::requestNextFullRescanBatch()
     }
 
     if (!m_controller->hasUnlockedSession()) {
-        m_controller->setLastError(QStringLiteral("Unlock the wallet before continuing the full rescan."));
-        m_controller->setSeedScanActive(false);
-        m_controller->setWalletScanInFlight(false);
-        m_controller->setFullRescanInFlight(false);
+        abortFullRescan(QStringLiteral("Unlock the wallet before continuing the full rescan."));
         return;
     }
 
-    struct FullRescanBatchState {
-        QJsonObject document;
-        QJsonObject walletState;
-        QList<WalletOutput> tracked;
-        WalletKeychain keychain;
-        quint32 nextChildIndex{0};
-    };
-
-    const QJsonObject document = m_controller->loadDocumentForService();
-    const QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    const std::shared_ptr<FullRescanBatchState> batchState = std::make_shared<FullRescanBatchState>();
-    batchState->document = document;
-    batchState->walletState = walletState;
-    batchState->tracked = WalletScanner::outputsFromState(walletState);
-    batchState->keychain = WalletKeychain(m_controller->sessionMnemonic());
-    batchState->nextChildIndex = m_controller->nextChildIndexFromStateForService(walletState);
-
-    if (!batchState->keychain.isValid()) {
-        m_controller->setLastError(QStringLiteral("Wallet keychain could not be derived for full rescan."));
-        m_controller->setSeedScanActive(false);
-        m_controller->setWalletScanInFlight(false);
-        m_controller->setFullRescanInFlight(false);
+    QString sessionError;
+    if (!ensureFullRescanSession(&sessionError)) {
+        abortFullRescan(sessionError);
         return;
     }
+
+    const std::shared_ptr<FullRescanSessionState> session = m_fullRescanSession;
 
     m_controller->nodeApi()->getUnspentOutputsForRescanAsync(
         static_cast<int>(m_controller->seedScanNextIndex()),
         -1,
         kFullRescanBatchSize,
         kFullRescanIncludeProof,
-        [batchState](const NodeForeignApi::RescanOutput &output) -> QString {
+        [session](const NodeForeignApi::RescanOutput &output) -> QString {
             if (output.proof.isEmpty()) {
                 return QStringLiteral("Full rescan requires output proofs for rewind.");
             }
@@ -143,26 +244,25 @@ void GrinWalletNodeSyncService::requestNextFullRescanBatch()
                                                     output.blockHeight,
                                                     output.spent,
                                                     output.coinbase,
-                                                    batchState->keychain,
+                                                    session->keychain,
                                                     &discovered)) {
                 return QString();
             }
 
-            mergeDiscoveredOutput(batchState->tracked, discovered);
-            if (discovered.childIndex + 1 > batchState->nextChildIndex) {
-                batchState->nextChildIndex = discovered.childIndex + 1;
+            mergeDiscoveredOutput(session->tracked, session->trackedIndexByCommitment, discovered);
+            if (discovered.childIndex + 1 > session->nextChildIndex) {
+                session->nextChildIndex = discovered.childIndex + 1;
             }
 
             return QString();
         },
-        [this, batchState](const Result<NodeForeignApi::RescanBatchProgress> &result) {
+        [this, session](const Result<NodeForeignApi::RescanBatchProgress> &result) {
+            if (m_fullRescanSession != session) {
+                return;
+            }
+
             if (result.hasError()) {
-                m_controller->setSyncStatusMessage(QStringLiteral("Full rescan failed"));
-                m_controller->notifyStatusChanged();
-                m_controller->setLastError(result.errorMessage());
-                m_controller->setSeedScanActive(false);
-                m_controller->setWalletScanInFlight(false);
-                m_controller->setFullRescanInFlight(false);
+                abortFullRescan(result.errorMessage());
                 return;
             }
 
@@ -170,51 +270,39 @@ void GrinWalletNodeSyncService::requestNextFullRescanBatch()
             const bool hasMore = progress.lastRetrievedIndex > 0
                 && progress.highestIndex > 0
                 && progress.lastRetrievedIndex < progress.highestIndex;
+            const bool moreWithoutIndices = progress.lastRetrievedIndex == 0 && progress.outputsProcessed >= kFullRescanBatchSize;
+            session->batchesSinceCheckpoint += 1;
 
             if (hasMore) {
                 m_controller->setSeedScanNextIndex(progress.lastRetrievedIndex + 1);
-            } else if (progress.lastRetrievedIndex == 0 && progress.outputsProcessed >= kFullRescanBatchSize) {
+            } else if (moreWithoutIndices) {
                 m_controller->setSeedScanNextIndex(m_controller->seedScanNextIndex() + kFullRescanBatchSize);
             }
 
-            QJsonObject walletState = batchState->walletState;
-            walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(batchState->tracked));
-            walletState.insert(QStringLiteral("balances"),
-                               WalletScanner::balancesFromOutputs(batchState->tracked, m_controller->chainHeight()));
-            walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
-            walletState.insert(QStringLiteral("restore_leaf_index"),
-                               QString::number(progress.lastRetrievedIndex > 0
-                                                   ? progress.lastRetrievedIndex
-                                                   : (m_controller->seedScanNextIndex() > 0
-                                                         ? m_controller->seedScanNextIndex() - 1
-                                                         : 1)));
-            walletState.insert(QStringLiteral("next_child_index"), static_cast<int>(batchState->nextChildIndex));
+            const quint64 restoreLeafIndex = progress.lastRetrievedIndex > 0
+                ? progress.lastRetrievedIndex
+                : (m_controller->seedScanNextIndex() > 0 ? m_controller->seedScanNextIndex() - 1 : 1);
 
-            if (hasMore || (progress.lastRetrievedIndex == 0 && progress.outputsProcessed >= kFullRescanBatchSize)) {
+            if (hasMore || moreWithoutIndices) {
                 const int progressPercent = progress.highestIndex > 0
                     ? qBound(0,
-                             static_cast<int>((walletState.value(QStringLiteral("restore_leaf_index")).toString().toULongLong() * 100)
-                                              / progress.highestIndex),
+                             static_cast<int>((restoreLeafIndex * 100) / progress.highestIndex),
                              99)
                     : 0;
 
-                walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("full-rescan"));
-                walletState.insert(QStringLiteral("last_synced_at"), QString());
-                batchState->document.insert(QStringLiteral("wallet_state"), walletState);
-
-                if (!m_controller->saveDocumentForService(batchState->document)) {
-                    m_controller->setSyncStatusMessage(QStringLiteral("Full rescan failed"));
-                    m_controller->notifyStatusChanged();
-                    m_controller->setLastError(QStringLiteral("Failed to persist full-rescan batch results."));
-                    m_controller->setSeedScanActive(false);
-                    m_controller->setWalletScanInFlight(false);
-                    m_controller->setFullRescanInFlight(false);
-                    return;
+                if (session->batchesSinceCheckpoint >= kFullRescanCheckpointInterval) {
+                    QString persistError;
+                    if (!persistFullRescanSession(restoreLeafIndex, false, &persistError)) {
+                        abortFullRescan(persistError);
+                        return;
+                    }
                 }
 
-                m_controller->setSyncStatusMessage(QStringLiteral("Full rescan %1% (%2 / %3)")
+                m_controller->setSyncStatusMessage(QStringLiteral("%1 %2% (%3 / %4)")
+                                                       .arg(session->fullRescanMode ? QStringLiteral("Full rescan")
+                                                                                   : QStringLiteral("Seed scan"))
                                                        .arg(QString::number(progressPercent))
-                                                       .arg(walletState.value(QStringLiteral("restore_leaf_index")).toString())
+                                                       .arg(QString::number(restoreLeafIndex))
                                                        .arg(QString::number(progress.highestIndex)));
                 m_controller->notifyStatusChanged();
 
@@ -224,36 +312,17 @@ void GrinWalletNodeSyncService::requestNextFullRescanBatch()
                 return;
             }
 
-            const QString previousSyncMode = walletState.value(QStringLiteral("last_sync_mode")).toString();
-            const bool rebuildingTransactions = previousSyncMode == QStringLiteral("full-rescan");
-            if (rebuildingTransactions) {
-                const QJsonArray rebuiltTransactions =
-                    m_controller->rebuildTransactionHistoryFromOutputs(batchState->tracked,
-                                                                       walletState.value(QStringLiteral("transaction_rescan_backup")).toArray());
-                walletState.insert(QStringLiteral("transactions"), rebuiltTransactions);
-                batchState->document.insert(QStringLiteral("workflow_contexts"),
-                                            m_controller->filterWorkflowContextsForTransactionsForService(
-                                                batchState->document.value(QStringLiteral("workflow_contexts")).toObject(),
-                                                rebuiltTransactions));
-            }
-
-            walletState.remove(QStringLiteral("transaction_rescan_backup"));
-            walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("seed-rewind"));
-            walletState.insert(QStringLiteral("last_synced_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-            batchState->document.insert(QStringLiteral("wallet_state"), walletState);
-
-            if (!m_controller->saveDocumentForService(batchState->document)) {
-                m_controller->setSyncStatusMessage(QStringLiteral("Full rescan failed"));
-                m_controller->notifyStatusChanged();
-                m_controller->setLastError(QStringLiteral("Failed to persist full-rescan results."));
-                m_controller->setSeedScanActive(false);
-                m_controller->setWalletScanInFlight(false);
-                m_controller->setFullRescanInFlight(false);
+            QString persistError;
+            if (!persistFullRescanSession(restoreLeafIndex, true, &persistError)) {
+                abortFullRescan(persistError);
                 return;
             }
 
+            clearFullRescanSession();
             m_controller->refreshStateFromStorage();
-            m_controller->setSyncStatusMessage(QStringLiteral("Full rescan 100% complete"));
+            m_controller->setSyncStatusMessage(session->fullRescanMode
+                                                   ? QStringLiteral("Full rescan 100% complete")
+                                                   : QStringLiteral("Seed scan 100% complete"));
             m_controller->notifyStatusChanged();
             m_controller->setLastError(QString());
             m_controller->setLastInfo(QString());
@@ -291,10 +360,15 @@ void GrinWalletNodeSyncService::onNodeTipFinished(const Result<Tip> &result)
         && !m_controller->seedScanActive()) {
         if (m_controller->resumePendingFullRescan()) {
             // Resume takes precedence over starting a fresh rescan because it preserves leaf progress.
-        } else if (m_controller->scanHeight() == 0) {
+            qInfo().noquote() << QStringLiteral("Auto-sync decision: resume full rescan from persisted state.");
+        } else if (m_controller->scanHeight() == 0 && m_controller->chainHeight() > 0) {
+            qInfo().noquote() << QStringLiteral("Auto-sync decision: start initial full rescan because scan height is zero.");
             m_controller->rescanWallet();
-        } else {
+        } else if (m_controller->scanHeight() < m_controller->chainHeight()) {
+            qInfo().noquote() << QStringLiteral("Auto-sync decision: start incremental wallet scan because wallet height lags node height.");
             requestWalletScan();
+        } else {
+            qInfo().noquote() << QStringLiteral("Auto-sync decision: wallet already up to date; no automatic scan started.");
         }
     }
 
@@ -545,6 +619,8 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
                                                .arg(QString::number(listing.lastRetrievedIndex()))
                                                .arg(QString::number(listing.highestIndex())));
         m_controller->notifyStatusChanged();
+        qInfo().noquote() << QStringLiteral("Seed scan batch: continuing normal getUnspentOutputsAsync path at leaf %1.")
+                                 .arg(QString::number(m_controller->seedScanNextIndex()));
         m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
         return;
     }
@@ -558,6 +634,8 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
         m_controller->setSyncStatusMessage(QStringLiteral("Seed scan 0% (starting at leaf %1)")
                                .arg(QString::number(m_controller->seedScanNextIndex())));
         m_controller->notifyStatusChanged();
+        qInfo().noquote() << QStringLiteral("Seed scan batch: continuing normal getUnspentOutputsAsync path at leaf %1.")
+                                 .arg(QString::number(m_controller->seedScanNextIndex()));
         m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
         return;
     }

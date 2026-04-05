@@ -1,6 +1,7 @@
 ﻿#include "grinwalletcontroller.h"
 
 #include <QByteArray>
+#include <QDebug>
 #include <QJsonDocument>
 #include <QStringList>
 #include <QUuid>
@@ -702,11 +703,12 @@ bool GrinWalletController::resumePendingFullRescan()
     }
 
     const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
-    if (walletState.value(QStringLiteral("last_sync_mode")).toString() != QStringLiteral("full-rescan")) {
+    const QString lastSyncMode = walletState.value(QStringLiteral("last_sync_mode")).toString();
+    const qulonglong restoreLeafIndex = walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toULongLong();
+    if (lastSyncMode != QStringLiteral("full-rescan")) {
         return false;
     }
 
-    const qulonglong restoreLeafIndex = walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toULongLong();
     const qulonglong resumeLeaf = qMax<qulonglong>(1, restoreLeafIndex + 1);
 
     setFullRescanInFlight(true);
@@ -722,6 +724,8 @@ bool GrinWalletController::resumePendingFullRescan()
     }
 
     setWalletScanInFlight(true);
+    qInfo().noquote() << QStringLiteral("Full rescan resume: starting seed scan dispatcher from leaf %1.")
+                             .arg(QString::number(resumeLeaf));
     setLastInfo(QStringLiteral("Resuming full wallet rescan from leaf %1.").arg(QString::number(resumeLeaf)));
     startSeedScan();
     return true;

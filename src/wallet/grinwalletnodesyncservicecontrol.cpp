@@ -64,16 +64,21 @@ void GrinWalletNodeSyncService::requestWalletScan()
 
     QJsonObject document = m_controller->loadDocumentForService();
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    const qulonglong restoreLeafIndex = walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toULongLong();
 
     const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     if (outputs.isEmpty()) {
         walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
         walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
-        walletState.insert(QStringLiteral("restore_leaf_index"), 0);
         document.insert(QStringLiteral("wallet_state"), walletState);
         m_controller->saveDocumentForService(document);
         m_controller->refreshStateFromStorage();
-        m_controller->setLastInfo(QStringLiteral("Wallet has no tracked outputs yet. Starting seed scan."));
+        if (restoreLeafIndex > 0) {
+            m_controller->setLastInfo(QStringLiteral("Wallet has no tracked outputs yet. Continuing seed scan from leaf %1.")
+                                          .arg(QString::number(restoreLeafIndex + 1)));
+        } else {
+            m_controller->setLastInfo(QStringLiteral("Wallet has no tracked outputs yet. Starting seed scan."));
+        }
         m_controller->setSyncStatusMessage(QStringLiteral("Scanning wallet outputs..."));
         m_controller->notifyStatusChanged();
         m_controller->setWalletScanInFlight(true);
@@ -115,12 +120,7 @@ void GrinWalletNodeSyncService::startSeedScan()
     m_controller->clearSeedScanDiscovered();
     m_controller->setSyncStatusMessage(seedScanState.syncStatus);
     m_controller->notifyStatusChanged();
-    if (m_controller->fullRescanInFlight()) {
-        requestNextFullRescanBatch();
-        return;
-    }
-
-    m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
+    requestNextFullRescanBatch();
 }
 
 /**
@@ -130,6 +130,7 @@ void GrinWalletNodeSyncService::startSeedScan()
 void GrinWalletNodeSyncService::finishSeedScan(const QString &message)
 {
 
+    clearFullRescanSession();
     m_controller->setSeedScanActive(false);
     m_controller->setFullRescanInFlight(false);
     if (!message.isEmpty()) {
