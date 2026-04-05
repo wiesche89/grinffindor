@@ -115,6 +115,11 @@ void GrinWalletNodeSyncService::startSeedScan()
     m_controller->clearSeedScanDiscovered();
     m_controller->setSyncStatusMessage(seedScanState.syncStatus);
     m_controller->notifyStatusChanged();
+    if (m_controller->fullRescanInFlight()) {
+        requestNextFullRescanBatch();
+        return;
+    }
+
     m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
 }
 

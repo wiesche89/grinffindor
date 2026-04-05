@@ -94,6 +94,7 @@ private slots:
 
 private:
     static constexpr int kSeedScanBatchSize = 5000;
+    static constexpr int kFullRescanBatchSize = 1000;
 /**
  * @brief Clears pending broadcast state.
  */
@@ -102,6 +103,7 @@ private:
  * @brief Marks a pending broadcast as failed and updates controller status.
  */
     void failPendingBroadcast(const QString &workflowId, const QString &message);
+    void requestNextFullRescanBatch();
 
     GrinWalletController *m_controller;
 };

@@ -27,6 +27,13 @@ public:
     static QJsonArray commitmentsToJson(const QList<WalletOutput> &outputs);
     static QList<WalletOutput> reconcileTrackedOutputs(const QList<WalletOutput> &trackedOutputs,
                                                        const QList<OutputPrintable> &chainOutputs);
+   static bool discoverOwnedOutput(const QString &commitment,
+                           const QString &proof,
+                           quint64 height,
+                           bool spent,
+                           bool coinbase,
+                           const WalletKeychain &keychain,
+                           WalletOutput *output);
     static QList<WalletOutput> discoverOwnedOutputs(const QList<OutputPrintable> &chainOutputs,
                                                     const WalletKeychain &keychain);
 /**

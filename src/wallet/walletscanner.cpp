@@ -141,6 +141,46 @@ QList<WalletOutput> WalletScanner::reconcileTrackedOutputs(const QList<WalletOut
     return reconciled;
 }
 
+bool WalletScanner::discoverOwnedOutput(const QString &commitment,
+                                        const QString &proof,
+                                        quint64 height,
+                                        bool spent,
+                                        bool coinbase,
+                                        const WalletKeychain &keychain,
+                                        WalletOutput *output)
+{
+    if (output == nullptr || !keychain.isValid()) {
+        return false;
+    }
+
+    const WalletKeychain::RewindResult rewound = keychain.rewindOutputProof(commitment, proof);
+    if (!rewound.success) {
+        return false;
+    }
+
+    WalletOutput discovered;
+    discovered.commitment = commitment;
+    discovered.proof = proof;
+    discovered.amount = formatNanogrin(rewound.amount);
+    discovered.source = QStringLiteral("scan");
+    discovered.keyPath = rewound.keyPath;
+    discovered.childIndex = rewound.childIndex;
+    discovered.height = height;
+    discovered.coinbase = coinbase;
+    discovered.onChain = true;
+    discovered.spent = spent;
+    discovered.locked = false;
+
+    const WalletKeychain::OutputSecrets secrets =
+        keychain.deriveOutputSecrets(rewound.childIndex, rewound.amount);
+    discovered.blindingFactor = secrets.success
+        ? QString::fromUtf8(secrets.blindingFactor.toHex())
+        : rewound.blindingFactor;
+
+    *output = discovered;
+    return true;
+}
+
 /**
  * @brief WalletScanner::discoverOwnedOutputs
  * @param chainOutputs
@@ -157,32 +197,15 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
 
     for (int i = 0; i < chainOutputs.size(); ++i) {
         const OutputPrintable &chainOutput = chainOutputs.at(i);
-        const WalletKeychain::RewindResult rewound = keychain.rewindOutputProof(
-            chainOutput.commit().hex(),
-            chainOutput.proof());
-        if (!rewound.success) {
-            continue;
-        }
-
         WalletOutput output;
-        output.commitment = chainOutput.commit().hex();
-        output.proof = chainOutput.proof();
-        output.amount = formatNanogrin(rewound.amount);
-        output.source = QStringLiteral("scan");
-        output.keyPath = rewound.keyPath;
-        output.childIndex = rewound.childIndex;
-        output.height = chainOutput.blockHeight().toULongLong();
-        output.coinbase =
-            chainOutput.outputType() == OutputPrintable::OutputType::OutputTypeCoinbase;
-        output.onChain = true;
-        output.spent = chainOutput.spent();
-        output.locked = false;
-        const WalletKeychain::OutputSecrets secrets =
-            keychain.deriveOutputSecrets(rewound.childIndex, rewound.amount);
-        if (secrets.success) {
-            output.blindingFactor = QString::fromUtf8(secrets.blindingFactor.toHex());
-        } else {
-            output.blindingFactor = rewound.blindingFactor;
+        if (!discoverOwnedOutput(chainOutput.commit().hex(),
+                                 chainOutput.proof(),
+                                 chainOutput.blockHeight().toULongLong(),
+                                 chainOutput.spent(),
+                                 chainOutput.outputType() == OutputPrintable::OutputType::OutputTypeCoinbase,
+                                 keychain,
+                                 &output)) {
+            continue;
         }
         discovered.append(output);
     }
