@@ -66,7 +66,10 @@ Item {
     function applyPasteDialog() {
         if (pasteTargetControl && pasteTargetControl.text !== undefined) {
             pasteTargetControl.text = pasteDialogText
-            pasteTargetControl.forceActiveFocus()
+            if (pasteTargetControl.bridgeId !== undefined)
+                PlatformBridge.requestFocus(pasteTargetControl.bridgeId)
+            else
+                pasteTargetControl.forceActiveFocus()
             syncBrowserShortcutContext(pasteTargetControl)
         }
         pasteInputPopup.close()

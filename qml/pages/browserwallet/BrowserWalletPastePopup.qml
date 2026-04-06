@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
 
 Popup {
     id: pasteInputPopup
@@ -13,6 +14,11 @@ Popup {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     width: Math.min(walletRoot.width - 28, 760)
     padding: 0
+
+    onOpened: {
+        if (pasteInputArea.bridgeId !== undefined)
+            PlatformBridge.requestFocus(pasteInputArea.bridgeId)
+    }
 
     onClosed: {
         walletRoot.pasteTargetControl = null
@@ -50,23 +56,22 @@ Popup {
             wrapMode: Text.WordWrap
         }
 
-        TextArea {
+        AppComponents.AppTextArea {
             id: pasteInputArea
             Layout.fillWidth: true
             Layout.preferredHeight: 260
+            editorTitle: walletRoot.pasteDialogTitle.length > 0
+                         ? walletRoot.pasteDialogTitle
+                         : walletRoot.tf("browser_wallet_paste_generic_title", "Paste Text")
             wrapMode: TextEdit.WrapAnywhere
             selectByMouse: true
             persistentSelection: true
             activeFocusOnPress: true
             text: walletRoot.pasteDialogText
             placeholderText: walletRoot.pasteDialogPlaceholder
-            onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(pasteInputArea)
-            onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(pasteInputArea)
             onTextChanged: {
                 walletRoot.pasteDialogText = text
-                walletRoot.syncBrowserShortcutContext(pasteInputArea)
             }
-            Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(pasteInputArea, event) }
         }
 
         RowLayout {

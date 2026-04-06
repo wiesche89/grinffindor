@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
 
 Item {
     id: authPanel
@@ -131,27 +132,24 @@ Item {
                     }
                 }
 
-                TextField {
+                AppComponents.AppTextField {
                     id: walletNameField
                     Layout.fillWidth: true
                     visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
                     font.pixelSize: walletRoot.controlTextSize
                     text: walletPageSettings.walletNameDraft
                     placeholderText: walletRoot.tf("browser_wallet_name_placeholder", "Wallet name")
-                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(walletNameField)
-                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(walletNameField)
                     onTextChanged: {
                         walletPageSettings.walletNameDraft = text
-                        walletRoot.syncBrowserShortcutContext(walletNameField)
                     }
-                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(walletNameField, event) }
                 }
 
-                TextArea {
+                AppComponents.AppTextArea {
                     id: restoreMnemonicArea
                     Layout.fillWidth: true
                     Layout.preferredHeight: walletRoot.authMode === "restore" ? (veryPhoneMode ? 104 : (phoneMode ? 116 : 132)) : 0
                     visible: walletRoot.authMode === "restore"
+                    editorTitle: walletRoot.tf("browser_wallet_paste_restore_title", "Paste Seed Phrase")
                     font.pixelSize: walletRoot.controlTextSize
                     wrapMode: TextEdit.Wrap
                     selectByMouse: true
@@ -159,20 +157,17 @@ Item {
                     activeFocusOnPress: true
                     text: walletRoot.restoreMnemonicDraft
                     placeholderText: walletRoot.tf("browser_wallet_mnemonic_placeholder", "24-word mnemonic for importing an existing wallet.")
-                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(restoreMnemonicArea)
-                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(restoreMnemonicArea)
                     onTextChanged: {
                         walletRoot.restoreMnemonicDraft = text
-                        walletRoot.syncBrowserShortcutContext(restoreMnemonicArea)
                     }
-                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(restoreMnemonicArea, event) }
                 }
 
-                TextArea {
+                AppComponents.AppTextArea {
                     id: importBackupArea
                     Layout.fillWidth: true
                     Layout.preferredHeight: walletRoot.authMode === "import_backup" ? (veryPhoneMode ? 136 : (phoneMode ? 152 : 176)) : 0
                     visible: walletRoot.authMode === "import_backup"
+                    editorTitle: walletRoot.tf("browser_wallet_paste_backup_title", "Paste Encrypted Backup")
                     font.pixelSize: walletRoot.controlTextSize
                     wrapMode: TextEdit.WrapAnywhere
                     selectByMouse: true
@@ -180,13 +175,9 @@ Item {
                     activeFocusOnPress: true
                     text: walletRoot.backupImportDraft
                     placeholderText: walletRoot.tf("browser_wallet_backup_import_placeholder", "Paste encrypted wallet backup JSON here.")
-                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(importBackupArea)
-                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(importBackupArea)
                     onTextChanged: {
                         walletRoot.backupImportDraft = text
-                        walletRoot.syncBrowserShortcutContext(importBackupArea)
                     }
-                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(importBackupArea, event) }
                 }
 
                 RowLayout {
@@ -223,57 +214,48 @@ Item {
                     }
                 }
 
-                TextField {
+                AppComponents.AppTextField {
                     id: unlockPasswordField
                     Layout.fillWidth: true
                     visible: walletRoot.authMode === "unlock"
+                    editorTitle: walletRoot.tf("browser_wallet_login_title", "Unlock Your Wallet")
                     font.pixelSize: walletRoot.controlTextSize
                     echoMode: TextInput.Password
                     text: walletRoot.unlockPasswordDraft
                     placeholderText: walletRoot.tf("browser_wallet_password_placeholder", "Encryption password")
-                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(unlockPasswordField)
-                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(unlockPasswordField)
                     onTextChanged: {
                         walletRoot.unlockPasswordDraft = text
-                        walletRoot.syncBrowserShortcutContext(unlockPasswordField)
                     }
                     onAccepted: walletRoot.submitAuth()
-                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(unlockPasswordField, event) }
                 }
 
-                TextField {
+                AppComponents.AppTextField {
                     id: createPasswordField
                     Layout.fillWidth: true
                     visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
+                    editorTitle: walletRoot.tf("browser_wallet_setup_title", "Set Up Your Wallet")
                     font.pixelSize: walletRoot.controlTextSize
                     echoMode: TextInput.Password
                     text: walletRoot.passwordDraft
                     placeholderText: walletRoot.tf("browser_wallet_password_placeholder", "Encryption password")
-                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(createPasswordField)
-                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(createPasswordField)
                     onTextChanged: {
                         walletRoot.passwordDraft = text
-                        walletRoot.syncBrowserShortcutContext(createPasswordField)
                     }
-                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(createPasswordField, event) }
                 }
 
-                TextField {
+                AppComponents.AppTextField {
                     id: confirmPasswordField
                     Layout.fillWidth: true
                     visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
+                    editorTitle: walletRoot.tf("browser_wallet_confirm_password_placeholder", "Confirm password")
                     font.pixelSize: walletRoot.controlTextSize
                     echoMode: TextInput.Password
                     text: walletRoot.passwordConfirmDraft
                     placeholderText: walletRoot.tf("browser_wallet_confirm_password_placeholder", "Confirm password")
-                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(confirmPasswordField)
-                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(confirmPasswordField)
                     onTextChanged: {
                         walletRoot.passwordConfirmDraft = text
-                        walletRoot.syncBrowserShortcutContext(confirmPasswordField)
                     }
                     onAccepted: walletRoot.submitAuth()
-                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(confirmPasswordField, event) }
                 }
 
                 Label {

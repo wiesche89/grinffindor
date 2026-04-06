@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
 
 Popup {
     id: revealSeedPopup
@@ -13,6 +14,11 @@ Popup {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     width: Math.min(walletRoot.width - 28, 520)
     padding: 0
+
+    onOpened: {
+        if (revealSeedPasswordField.bridgeId !== undefined)
+            PlatformBridge.requestFocus(revealSeedPasswordField.bridgeId)
+    }
 
     background: Rectangle {
         radius: 28
@@ -41,17 +47,15 @@ Popup {
             wrapMode: Text.WordWrap
         }
 
-        TextField {
+        AppComponents.AppTextField {
             id: revealSeedPasswordField
             Layout.fillWidth: true
+            editorTitle: walletRoot.tf("browser_wallet_seed_prompt_title", "Reveal Seed Phrase")
             echoMode: TextInput.Password
             text: walletRoot.revealSeedPasswordDraft
             placeholderText: walletRoot.tf("browser_wallet_password_placeholder", "Encryption password")
-            onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(revealSeedPasswordField)
-            onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(revealSeedPasswordField)
             onTextChanged: {
                 walletRoot.revealSeedPasswordDraft = text
-                walletRoot.syncBrowserShortcutContext(revealSeedPasswordField)
             }
             onAccepted: {
                 if (grinWalletController.revealSeedPhrase(walletRoot.revealSeedPasswordDraft)) {
@@ -59,7 +63,6 @@ Popup {
                     revealSeedPopup.close()
                 }
             }
-            Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(revealSeedPasswordField, event) }
         }
 
         RowLayout {

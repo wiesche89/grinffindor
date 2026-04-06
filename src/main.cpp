@@ -9,6 +9,7 @@
 #include <emscripten/emscripten.h>
 #endif
 
+#include "platformbridge.h"
 #include "nodefooterstatus.h"
 #include "wallet/grinwalletcontroller.h"
 
@@ -59,9 +60,11 @@ int main(int argc, char *argv[])
     // Wiring Backend Services To The QML Engine
     // -------------------------------------------------------------------------------------------------------
     NodeFooterStatus nodeFooterStatus;
+    PlatformBridge platformBridge;
     GrinWalletController grinWalletController;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("nodeFooterStatus", &nodeFooterStatus);
+    engine.rootContext()->setContextProperty("PlatformBridge", &platformBridge);
     engine.rootContext()->setContextProperty("grinWalletController", &grinWalletController);
     engine.rootContext()->setContextProperty("assetBaseUrl", detectAssetBaseUrl());
     engine.load(QUrl(QStringLiteral("qrc:/qml/qml//Main.qml")));

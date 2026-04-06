@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
 
 BrowserWalletSectionCard {
     id: backupCard
@@ -19,10 +20,11 @@ BrowserWalletSectionCard {
         width: parent.width
         spacing: 12
 
-        TextArea {
+        AppComponents.AppTextArea {
             id: mnemonicPreviewArea
             Layout.fillWidth: true
             Layout.preferredHeight: 116
+            editorTitle: walletRoot.tf("browser_wallet_backup_title", "Write Down Your Seed Phrase Now")
             readOnly: true
             font.pixelSize: walletRoot.controlTextSize
             wrapMode: TextEdit.Wrap
@@ -31,10 +33,6 @@ BrowserWalletSectionCard {
             persistentSelection: true
             activeFocusOnPress: true
             text: grinWalletController.mnemonicPreview
-            onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(mnemonicPreviewArea)
-            onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(mnemonicPreviewArea)
-            onTextChanged: walletRoot.syncBrowserShortcutContext(mnemonicPreviewArea)
-            Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(mnemonicPreviewArea, event) }
         }
 
         RowLayout {

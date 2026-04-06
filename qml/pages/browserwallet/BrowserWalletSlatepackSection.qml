@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
 
 Item {
     id: slatepackSection
@@ -123,8 +124,7 @@ Item {
             walletPageSettings.amountDraft = "1"
             if (amountDialogMode === "send")
                 slatepackSection.syncSliderFromAmountField()
-            amountField.forceActiveFocus()
-            walletRoot.syncBrowserShortcutContext(amountField)
+            PlatformBridge.requestFocus(amountField.bridgeId)
         }
 
         onClosed: walletRoot.syncBrowserShortcutContext(null)
@@ -161,10 +161,14 @@ Item {
                 wrapMode: Text.WordWrap
             }
 
-            TextField {
+            AppComponents.AppTextField {
                 id: amountField
                 Layout.fillWidth: true
                 implicitHeight: 42
+                editorTitle: amountDialogMode === "receive"
+                             ? walletRoot.tf("browser_wallet_amount_dialog_receive_title", "Receive Amount")
+                             : walletRoot.tf("browser_wallet_amount_dialog_send_title", "Send Amount")
+                inputMode: "decimal"
                 font.pixelSize: walletRoot.controlTextSize
                 text: walletPageSettings.amountDraft
                 placeholderText: walletRoot.tf("browser_wallet_amount_placeholder", "Amount")
@@ -176,14 +180,10 @@ Item {
                     decimals: 9
                     notation: DoubleValidator.StandardNotation
                 }
-                onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(amountField)
-                onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(amountField)
                 onTextChanged: {
                     walletPageSettings.amountDraft = text
-                    walletRoot.syncBrowserShortcutContext(amountField)
                 }
                 onEditingFinished: slatepackSection.syncSliderFromAmountField()
-                Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(amountField, event) }
             }
 
             Slider {
@@ -437,14 +437,17 @@ Item {
             }
 
             ScrollView {
+                id: slatepackScroll
                 Layout.fillWidth: true
                 Layout.preferredHeight: 220
                 clip: true
+                contentWidth: availableWidth
 
-                TextArea {
+                AppComponents.AppTextArea {
                     id: slatepackArea
                     objectName: "slatepackArea"
-                    width: parent.width
+                    width: slatepackScroll.availableWidth
+                    editorTitle: walletRoot.tf("browser_wallet_paste_slatepack", "Paste Slatepack")
                     wrapMode: TextEdit.WrapAnywhere
                     textFormat: TextEdit.PlainText
                     color: "#e2f4ff"
@@ -456,10 +459,6 @@ Item {
                     activeFocusOnPress: true
                     text: ""
                     placeholderText: "BEGINSLATEPACK. ..."
-                    onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(slatepackArea)
-                    onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(slatepackArea)
-                    onTextChanged: walletRoot.syncBrowserShortcutContext(slatepackArea)
-                    Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(slatepackArea, event) }
                 }
             }
         }

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
 
 BrowserWalletSectionCard {
     id: historyCard
@@ -237,11 +238,12 @@ BrowserWalletSectionCard {
                                 font.pixelSize: walletRoot.compactTextSize
                         }
 
-                        TextArea {
+                        AppComponents.AppTextArea {
                             Layout.fillWidth: true
                             Layout.preferredHeight: visible ? Math.min(140, Math.max(72, contentHeight + 18)) : 0
                             visible: modelData.payment_proof !== undefined
                                      && JSON.stringify(modelData.payment_proof).length > 2
+                            editorTitle: walletRoot.tf("browser_wallet_history_payment_proof_signature", "Payment proof")
                             readOnly: true
                             selectByMouse: true
                             persistentSelection: true
@@ -250,7 +252,6 @@ BrowserWalletSectionCard {
                             color: "#d7e9f4"
                             font.pixelSize: walletRoot.compactTextSize
                             text: modelData.payment_proof !== undefined ? JSON.stringify(modelData.payment_proof, null, 2) : ""
-                            Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(this, event) }
                         }
                     }
                 }

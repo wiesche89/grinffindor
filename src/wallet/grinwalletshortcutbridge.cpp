@@ -138,6 +138,13 @@ EM_JS(void, browserInstallWalletShortcutBridge, (), {
             return false;
         };
 
+        const platformEditorActive = function() {
+            try {
+                return !!(window.__grinffindorPlatformEditor && window.__grinffindorPlatformEditor.active);
+            } catch (e) {}
+            return false;
+        };
+
         const isQtCanvasFocused = function() {
             if (typeof document === "undefined") {
                 return false;
@@ -152,6 +159,9 @@ EM_JS(void, browserInstallWalletShortcutBridge, (), {
 
         const shouldIntercept = function(event) {
             if (!event) {
+                return false;
+            }
+            if (platformEditorActive()) {
                 return false;
             }
             const ctrlOrMeta = !!event.ctrlKey || !!event.metaKey;
@@ -265,6 +275,9 @@ EM_JS(void, browserInstallWalletShortcutBridge, (), {
 
         window.addEventListener("paste", function(event) {
             try {
+                if (platformEditorActive()) {
+                    return;
+                }
                 if (!isQtCanvasFocused() && !shortcutContextFocused()) {
                     return;
                 }
@@ -294,6 +307,9 @@ EM_JS(void, browserInstallWalletShortcutBridge, (), {
 
         window.addEventListener("beforeinput", function(event) {
             try {
+                if (platformEditorActive()) {
+                    return;
+                }
                 if (!event) {
                     return;
                 }
@@ -320,6 +336,9 @@ EM_JS(void, browserInstallWalletShortcutBridge, (), {
         if (typeof document !== "undefined" && document.addEventListener) {
             document.addEventListener("contextmenu", function(event) {
                 try {
+                    if (platformEditorActive()) {
+                        return;
+                    }
                     debug("contextmenu", {
                         focused: shortcutContextFocused(),
                         activeTag: document.activeElement ? (document.activeElement.tagName || "") : ""

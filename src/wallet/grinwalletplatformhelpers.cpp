@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonDocument>
 #include <QSaveFile>
 
 #ifdef Q_OS_WASM
@@ -175,7 +176,425 @@ EM_JS(char *, browserStoragePersistenceState, (), {
     stringToUTF8(fallback, buffer, length);
     return buffer;
 });
+
+EM_JS(int, browserIsMobileBrowser, (), {
+    try {
+        if (typeof window === "undefined" || typeof navigator === "undefined") {
+            return 0;
+        }
+        const userAgent = navigator.userAgent || "";
+        const coarsePointer = typeof window.matchMedia === "function"
+            && window.matchMedia("(pointer: coarse)").matches;
+        const touchPoints = navigator.maxTouchPoints || 0;
+        const mobileAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+        return (coarsePointer || touchPoints > 1 || mobileAgent) ? 1 : 0;
+    } catch (e) {}
+    return 0;
+});
+
+EM_JS(int, browserSupportsNativeTouchSelection, (), {
+    try {
+        if (typeof window === "undefined" || typeof navigator === "undefined") {
+            return 0;
+        }
+        const userAgent = navigator.userAgent || "";
+        const coarsePointer = typeof window.matchMedia === "function"
+            && window.matchMedia("(pointer: coarse)").matches;
+        const touchPoints = navigator.maxTouchPoints || 0;
+        const mobileAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+        return (coarsePointer || touchPoints > 1 || mobileAgent) ? 1 : 0;
+    } catch (e) {}
+    return 0;
+});
+
+EM_JS(int, browserOpenTextEditor, (const char *editorId,
+                                   const char *title,
+                                   const char *text,
+                                   const char *optionsJson), {
+    try {
+        if (typeof window === "undefined" || typeof document === "undefined" || !document.body) {
+            return 0;
+        }
+
+        const ensureManager = function() {
+            if (window.__grinffindorPlatformEditorManager) {
+                return window.__grinffindorPlatformEditorManager;
+            }
+
+            const state = {
+                active: false,
+                currentId: "",
+                activeField: null,
+                restoreOverflow: "",
+                elements: {}
+            };
+
+            const sendEditorEvent = function(method, idValue, textValue, acceptedValue) {
+                try {
+                    if (typeof Module === "undefined") {
+                        return;
+                    }
+
+                    const exported = Module["_" + method];
+                    if (typeof exported !== "function") {
+                        return;
+                    }
+
+                    const safeId = idValue || "";
+                    const safeText = textValue || "";
+                    const idLength = lengthBytesUTF8(safeId) + 1;
+                    const textLength = lengthBytesUTF8(safeText) + 1;
+                    const idPointer = _malloc(idLength);
+                    const textPointer = _malloc(textLength);
+
+                    stringToUTF8(safeId, idPointer, idLength);
+                    stringToUTF8(safeText, textPointer, textLength);
+
+                    try {
+                        if (acceptedValue === undefined) {
+                            exported(idPointer, textPointer);
+                        } else {
+                            exported(idPointer, textPointer, acceptedValue ? 1 : 0);
+                        }
+                    } finally {
+                        _free(idPointer);
+                        _free(textPointer);
+                    }
+                } catch (e) {}
+            };
+
+            const syncGlobalState = function(active, id) {
+                window.__grinffindorPlatformEditor = {
+                    active: !!active,
+                    id: id || ""
+                };
+            };
+
+            const createButton = function(label) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = label;
+                button.style.border = "1px solid #2a4f64";
+                button.style.background = "#10273a";
+                button.style.color = "#f3fbff";
+                button.style.borderRadius = "999px";
+                button.style.padding = "12px 18px";
+                button.style.fontSize = "14px";
+                button.style.fontWeight = "600";
+                button.style.cursor = "pointer";
+                return button;
+            };
+
+            const ensureElements = function() {
+                if (state.elements.overlay) {
+                    return;
+                }
+
+                const overlay = document.createElement("div");
+                overlay.style.position = "fixed";
+                overlay.style.inset = "0";
+                overlay.style.zIndex = "2147483647";
+                overlay.style.display = "none";
+                overlay.style.alignItems = "stretch";
+                overlay.style.justifyContent = "center";
+                overlay.style.background = "rgba(3, 8, 13, 0.78)";
+                overlay.style.padding = "max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom))";
+                overlay.style.boxSizing = "border-box";
+
+                const panel = document.createElement("div");
+                panel.style.width = "min(100%, 820px)";
+                panel.style.maxHeight = "100%";
+                panel.style.display = "flex";
+                panel.style.flexDirection = "column";
+                panel.style.background = "#0f1b26";
+                panel.style.border = "1px solid #2a4f64";
+                panel.style.borderRadius = "24px";
+                panel.style.boxShadow = "0 32px 90px rgba(0, 0, 0, 0.45)";
+                panel.style.overflow = "hidden";
+
+                const header = document.createElement("div");
+                header.style.padding = "18px 20px 10px";
+                header.style.display = "flex";
+                header.style.flexDirection = "column";
+                header.style.gap = "8px";
+
+                const titleNode = document.createElement("div");
+                titleNode.style.color = "#ffffff";
+                titleNode.style.fontSize = "22px";
+                titleNode.style.fontWeight = "700";
+                titleNode.style.lineHeight = "1.2";
+
+                const noteNode = document.createElement("div");
+                noteNode.style.color = "#d7e9f4";
+                noteNode.style.fontSize = "14px";
+                noteNode.style.lineHeight = "1.45";
+                noteNode.textContent = "Use the browser-native input below for touch selection, clipboard, and keyboard handling.";
+
+                const body = document.createElement("div");
+                body.style.padding = "0 20px 20px";
+                body.style.display = "flex";
+                body.style.flex = "1 1 auto";
+                body.style.minHeight = "180px";
+
+                const footer = document.createElement("div");
+                footer.style.display = "flex";
+                footer.style.justifyContent = "flex-end";
+                footer.style.gap = "10px";
+                footer.style.padding = "0 20px 20px";
+
+                const cancelButton = createButton("Cancel");
+                const acceptButton = createButton("Done");
+                acceptButton.style.background = "#194866";
+                acceptButton.style.borderColor = "#2c6585";
+
+                footer.appendChild(cancelButton);
+                footer.appendChild(acceptButton);
+                header.appendChild(titleNode);
+                header.appendChild(noteNode);
+                panel.appendChild(header);
+                panel.appendChild(body);
+                panel.appendChild(footer);
+                overlay.appendChild(panel);
+                document.body.appendChild(overlay);
+
+                overlay.addEventListener("click", function(event) {
+                    if (event.target === overlay) {
+                        state.close(false);
+                    }
+                });
+
+                cancelButton.addEventListener("click", function() {
+                    state.close(false);
+                });
+
+                acceptButton.addEventListener("click", function() {
+                    state.close(true);
+                });
+
+                state.elements.overlay = overlay;
+                state.elements.titleNode = titleNode;
+                state.elements.noteNode = noteNode;
+                state.elements.body = body;
+                state.elements.cancelButton = cancelButton;
+                state.elements.acceptButton = acceptButton;
+            };
+
+            const buildField = function(multiline) {
+                const field = document.createElement(multiline ? "textarea" : "input");
+                if (!multiline) {
+                    field.type = "text";
+                }
+                field.style.width = "100%";
+                field.style.minHeight = multiline ? "220px" : "52px";
+                field.style.maxHeight = multiline ? "min(52vh, 520px)" : "52px";
+                field.style.padding = multiline ? "16px" : "14px 16px";
+                field.style.borderRadius = "18px";
+                field.style.border = "1px solid #2a4f64";
+                field.style.background = "#08131c";
+                field.style.color = "#e2f4ff";
+                field.style.fontSize = multiline ? "15px" : "16px";
+                field.style.lineHeight = multiline ? "1.45" : "1.2";
+                field.style.outline = "none";
+                field.style.resize = multiline ? "vertical" : "none";
+                field.style.boxSizing = "border-box";
+                field.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+                field.spellcheck = true;
+                field.autocomplete = "off";
+                return field;
+            };
+
+            state.handleInput = function() {
+                if (!state.active || !state.activeField) {
+                    return;
+                }
+                sendEditorEvent("grinffindorPlatformBridgeEditorChanged",
+                                state.currentId || "",
+                                state.activeField.value || "");
+            };
+
+            state.hideWithoutSignal = function() {
+                if (state.elements.overlay) {
+                    state.elements.overlay.style.display = "none";
+                }
+                if (state.elements.body) {
+                    state.elements.body.innerHTML = "";
+                }
+                if (document.body) {
+                    document.body.style.overflow = state.restoreOverflow || "";
+                }
+                state.active = false;
+                state.currentId = "";
+                state.activeField = null;
+                syncGlobalState(false, "");
+            };
+
+            state.close = function(accepted) {
+                if (!state.active) {
+                    return;
+                }
+                const textValue = state.activeField ? (state.activeField.value || "") : "";
+                const currentId = state.currentId || "";
+                if (accepted) {
+                    sendEditorEvent("grinffindorPlatformBridgeEditorAccepted",
+                                 currentId,
+                                 textValue);
+                }
+                 sendEditorEvent("grinffindorPlatformBridgeEditorClosed",
+                              currentId,
+                              textValue,
+                              accepted);
+                state.hideWithoutSignal();
+            };
+
+            state.open = function(payload) {
+                ensureElements();
+
+                const options = payload.options || {};
+                const multiline = !!options.multiline;
+                const field = buildField(multiline);
+
+                state.restoreOverflow = document.body ? document.body.style.overflow : "";
+                if (document.body) {
+                    document.body.style.overflow = "hidden";
+                }
+
+                if (!multiline) {
+                    if (options.password === true) {
+                        field.type = "password";
+                    } else if (typeof options.inputType === "string" && options.inputType.length > 0) {
+                        field.type = options.inputType;
+                    }
+                    field.enterKeyHint = typeof options.enterKeyHint === "string" && options.enterKeyHint.length > 0
+                        ? options.enterKeyHint
+                        : "done";
+                }
+
+                if (typeof options.inputMode === "string" && options.inputMode.length > 0) {
+                    field.inputMode = options.inputMode;
+                }
+                if (typeof options.placeholder === "string") {
+                    field.placeholder = options.placeholder;
+                }
+                if (typeof options.autoCapitalize === "string" && options.autoCapitalize.length > 0) {
+                    field.autocapitalize = options.autoCapitalize;
+                }
+                if (options.autoCorrect === false) {
+                    field.autocorrect = "off";
+                }
+                if (options.spellcheck === false) {
+                    field.spellcheck = false;
+                }
+                field.readOnly = !!options.readOnly;
+                field.value = payload.text || "";
+
+                field.addEventListener("input", state.handleInput);
+                field.addEventListener("keydown", function(event) {
+                    if (!event) {
+                        return;
+                    }
+                    if (event.key === "Escape") {
+                        event.preventDefault();
+                        state.close(false);
+                        return;
+                    }
+                    if (!multiline && event.key === "Enter") {
+                        event.preventDefault();
+                        state.close(true);
+                    }
+                });
+
+                state.elements.titleNode.textContent = payload.title || options.placeholder || "Edit text";
+                state.elements.noteNode.style.display = options.readOnly ? "none" : "block";
+                state.elements.acceptButton.textContent = options.readOnly ? (options.acceptText || "Close") : (options.acceptText || "Done");
+                state.elements.cancelButton.style.display = options.readOnly ? "none" : "inline-flex";
+                state.elements.body.innerHTML = "";
+                state.elements.body.appendChild(field);
+                state.elements.overlay.style.display = "flex";
+
+                state.active = true;
+                state.currentId = payload.id || "";
+                state.activeField = field;
+                syncGlobalState(true, state.currentId);
+
+                window.setTimeout(function() {
+                    try {
+                        field.focus({ preventScroll: true });
+                    } catch (e) {
+                        field.focus();
+                    }
+                    if (typeof field.setSelectionRange === "function") {
+                        if (options.selectAll !== false) {
+                            field.setSelectionRange(0, field.value.length);
+                        } else {
+                            const position = field.value.length;
+                            field.setSelectionRange(position, position);
+                        }
+                    } else if (typeof field.select === "function" && options.selectAll !== false) {
+                        field.select();
+                    }
+                }, 0);
+
+                state.handleInput();
+                return true;
+            };
+
+            syncGlobalState(false, "");
+            window.__grinffindorPlatformEditorManager = state;
+            return state;
+        };
+
+        const manager = ensureManager();
+        const parsedOptions = JSON.parse(UTF8ToString(optionsJson) || "{}");
+        return manager.open({
+            id: UTF8ToString(editorId),
+            title: UTF8ToString(title),
+            text: UTF8ToString(text),
+            options: parsedOptions
+        }) ? 1 : 0;
+    } catch (e) {
+        try {
+            console.error("grinffindor platform editor open failed", e);
+        } catch (ignored) {}
+    }
+    return 0;
+});
+
+EM_JS(void, browserCloseTextEditor, (int accept), {
+    try {
+        if (typeof window === "undefined" || !window.__grinffindorPlatformEditorManager) {
+            return;
+        }
+        window.__grinffindorPlatformEditorManager.close(!!accept);
+    } catch (e) {}
+});
 #endif
+
+bool GrinWalletPlatformHelpers::isWasm()
+{
+#ifdef Q_OS_WASM
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool GrinWalletPlatformHelpers::isMobileBrowser()
+{
+#ifdef Q_OS_WASM
+    return browserIsMobileBrowser() == 1;
+#else
+    return false;
+#endif
+}
+
+bool GrinWalletPlatformHelpers::supportsNativeTouchSelection()
+{
+#ifdef Q_OS_WASM
+    return browserSupportsNativeTouchSelection() == 1;
+#else
+    return false;
+#endif
+}
 
 /**
  * @brief GrinWalletPlatformHelpers::requestPasteText
@@ -262,6 +681,43 @@ bool GrinWalletPlatformHelpers::downloadTextFile(const QString &suggestedName, c
         return false;
     }
     return outputFile.commit();
+#endif
+}
+
+bool GrinWalletPlatformHelpers::openTextEditor(const QString &editorId,
+                                              const QString &title,
+                                              const QString &text,
+                                              const QVariantMap &options)
+{
+#ifdef Q_OS_WASM
+    if (!supportsNativeTouchSelection() || editorId.trimmed().isEmpty()) {
+        return false;
+    }
+
+    const QByteArray editorIdUtf8 = editorId.toUtf8();
+    const QByteArray titleUtf8 = title.toUtf8();
+    const QByteArray textUtf8 = text.toUtf8();
+    const QByteArray optionsUtf8 = QJsonDocument::fromVariant(options).toJson(QJsonDocument::Compact);
+
+    return browserOpenTextEditor(editorIdUtf8.constData(),
+                                 titleUtf8.constData(),
+                                 textUtf8.constData(),
+                                 optionsUtf8.constData()) == 1;
+#else
+    Q_UNUSED(editorId)
+    Q_UNUSED(title)
+    Q_UNUSED(text)
+    Q_UNUSED(options)
+    return false;
+#endif
+}
+
+void GrinWalletPlatformHelpers::closeTextEditor(bool accept)
+{
+#ifdef Q_OS_WASM
+    browserCloseTextEditor(accept ? 1 : 0);
+#else
+    Q_UNUSED(accept)
 #endif
 }
 

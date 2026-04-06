@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
 
 Item {
     id: settingsSection
@@ -65,11 +66,12 @@ Item {
                         Item { Layout.fillWidth: true }
                     }
 
-                    TextArea {
+                    AppComponents.AppTextArea {
                         id: settingsSeedArea
                         Layout.fillWidth: true
                         Layout.preferredHeight: grinWalletController.mnemonicPreview.length > 0 ? 116 : 0
                         visible: grinWalletController.mnemonicPreview.length > 0
+                        editorTitle: walletRoot.tf("browser_wallet_seed_manage_title", "Seed Phrase")
                         readOnly: true
                         font.pixelSize: walletRoot.controlTextSize
                         wrapMode: TextEdit.Wrap
@@ -78,10 +80,6 @@ Item {
                         persistentSelection: true
                         activeFocusOnPress: true
                         text: grinWalletController.mnemonicPreview
-                        onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(settingsSeedArea)
-                        onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(settingsSeedArea)
-                        onTextChanged: walletRoot.syncBrowserShortcutContext(settingsSeedArea)
-                        Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(settingsSeedArea, event) }
                     }
                 }
             }
@@ -182,19 +180,17 @@ Item {
                     id: nodeSettingsColumn
                     spacing: 8
 
-                    TextField {
+                    AppComponents.AppTextField {
                         id: nodeUrlField
                         Layout.fillWidth: true
+                        editorTitle: walletRoot.tf("browser_wallet_node_title", "External Node")
+                        inputMode: "url"
                         font.pixelSize: walletRoot.controlTextSize
                         text: walletRoot.nodeUrlDraft
                         placeholderText: walletRoot.tf("browser_wallet_node_input", "https://your-node.example/v2/foreign")
-                        onActiveFocusChanged: walletRoot.syncBrowserShortcutContext(nodeUrlField)
-                        onSelectedTextChanged: walletRoot.syncBrowserShortcutContext(nodeUrlField)
                         onTextChanged: {
                             walletRoot.nodeUrlDraft = text
-                            walletRoot.syncBrowserShortcutContext(nodeUrlField)
                         }
-                        Keys.onPressed: function(event) { walletRoot.handleTextControlKeyPress(nodeUrlField, event) }
                     }
 
                     Label {
