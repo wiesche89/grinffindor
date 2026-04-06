@@ -306,14 +306,22 @@ Item {
                                     ? walletRoot.tf("browser_wallet_restore", "Restore")
                                     : walletRoot.tf("browser_wallet_import_backup", "Import Backup")))
                         enabled: walletRoot.authMode === "unlock"
-                                 ? walletRoot.unlockPasswordDraft.length > 0
+                                 ? unlockPasswordField.text.length > 0
                                  : (walletRoot.authMode === "import_backup"
-                                    ? walletRoot.backupImportDraft.trim().length > 0
-                                    : (walletPageSettings.walletNameDraft.trim().length > 0
-                                       && walletRoot.passwordDraft.length > 0
-                                       && walletRoot.passwordDraft === walletRoot.passwordConfirmDraft
-                                       && (walletRoot.authMode !== "restore" || walletRoot.restoreMnemonicDraft.trim().length > 0)))
-                        onClicked: walletRoot.submitAuth()
+                                    ? importBackupArea.text.trim().length > 0
+                                    : (walletNameField.text.trim().length > 0
+                                       && createPasswordField.text.length > 0
+                                       && createPasswordField.text === confirmPasswordField.text
+                                       && (walletRoot.authMode !== "restore" || restoreMnemonicArea.text.trim().length > 0)))
+                        onClicked: {
+                            walletPageSettings.walletNameDraft = walletNameField.text
+                            walletRoot.unlockPasswordDraft = unlockPasswordField.text
+                            walletRoot.passwordDraft = createPasswordField.text
+                            walletRoot.passwordConfirmDraft = confirmPasswordField.text
+                            walletRoot.restoreMnemonicDraft = restoreMnemonicArea.text
+                            walletRoot.backupImportDraft = importBackupArea.text
+                            walletRoot.submitAuth()
+                        }
                     }
                 }
             }

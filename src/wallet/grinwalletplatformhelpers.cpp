@@ -285,6 +285,34 @@ EM_JS(int, browserOpenTextEditor, (const char *editorId,
                 return button;
             };
 
+            const copyFieldValue = function(field) {
+                try {
+                    const value = field ? (field.value || "") : "";
+                    if (!value.length) {
+                        return false;
+                    }
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(value);
+                        return true;
+                    }
+                } catch (e) {}
+
+                try {
+                    if (!field) {
+                        return false;
+                    }
+                    field.focus();
+                    if (typeof field.select === "function") {
+                        field.select();
+                    }
+                    if (typeof field.setSelectionRange === "function") {
+                        field.setSelectionRange(0, field.value.length);
+                    }
+                    return !!document.execCommand("copy");
+                } catch (e) {}
+                return false;
+            };
+
             const ensureElements = function() {
                 if (state.elements.overlay) {
                     return;
@@ -324,35 +352,41 @@ EM_JS(int, browserOpenTextEditor, (const char *editorId,
                 titleNode.style.fontWeight = "700";
                 titleNode.style.lineHeight = "1.2";
 
-                const noteNode = document.createElement("div");
-                noteNode.style.color = "#d7e9f4";
-                noteNode.style.fontSize = "14px";
-                noteNode.style.lineHeight = "1.45";
-                noteNode.textContent = "Use the browser-native input below for touch selection, clipboard, and keyboard handling.";
-
                 const body = document.createElement("div");
-                body.style.padding = "0 20px 20px";
+                body.style.padding = "10px 20px 20px";
                 body.style.display = "flex";
                 body.style.flex = "1 1 auto";
                 body.style.minHeight = "180px";
 
                 const footer = document.createElement("div");
                 footer.style.display = "flex";
-                footer.style.justifyContent = "flex-end";
+                footer.style.justifyContent = "space-between";
+                footer.style.alignItems = "center";
                 footer.style.gap = "10px";
                 footer.style.padding = "0 20px 20px";
 
+                const leftActions = document.createElement("div");
+                leftActions.style.display = "flex";
+                leftActions.style.gap = "10px";
+
+                const rightActions = document.createElement("div");
+                rightActions.style.display = "flex";
+                rightActions.style.gap = "10px";
+
+                const copyButton = createButton("Copy");
                 const cancelButton = createButton("Cancel");
                 const acceptButton = createButton("Done");
                 acceptButton.style.background = "#194866";
                 acceptButton.style.borderColor = "#2c6585";
 
-                footer.appendChild(cancelButton);
-                footer.appendChild(acceptButton);
+                leftActions.appendChild(copyButton);
+                rightActions.appendChild(cancelButton);
+                rightActions.appendChild(acceptButton);
                 header.appendChild(titleNode);
-                header.appendChild(noteNode);
                 panel.appendChild(header);
                 panel.appendChild(body);
+                footer.appendChild(leftActions);
+                footer.appendChild(rightActions);
                 panel.appendChild(footer);
                 overlay.appendChild(panel);
                 document.body.appendChild(overlay);
@@ -367,14 +401,18 @@ EM_JS(int, browserOpenTextEditor, (const char *editorId,
                     state.close(false);
                 });
 
+                copyButton.addEventListener("click", function() {
+                    copyFieldValue(state.activeField);
+                });
+
                 acceptButton.addEventListener("click", function() {
                     state.close(true);
                 });
 
                 state.elements.overlay = overlay;
                 state.elements.titleNode = titleNode;
-                state.elements.noteNode = noteNode;
                 state.elements.body = body;
+                state.elements.copyButton = copyButton;
                 state.elements.cancelButton = cancelButton;
                 state.elements.acceptButton = acceptButton;
             };
@@ -504,7 +542,7 @@ EM_JS(int, browserOpenTextEditor, (const char *editorId,
                 });
 
                 state.elements.titleNode.textContent = payload.title || options.placeholder || "Edit text";
-                state.elements.noteNode.style.display = options.readOnly ? "none" : "block";
+                state.elements.copyButton.style.display = field.value && field.value.length > 0 ? "inline-flex" : "inline-flex";
                 state.elements.acceptButton.textContent = options.readOnly ? (options.acceptText || "Close") : (options.acceptText || "Done");
                 state.elements.cancelButton.style.display = options.readOnly ? "none" : "inline-flex";
                 state.elements.body.innerHTML = "";

@@ -47,7 +47,15 @@ Item {
     anchors.fill: parent
 
     function tf(key, fallback) { return i18n ? i18n.tf(key, fallback) : fallback }
-    function syncAuthMode() { authMode = grinWalletController.walletExists ? "unlock" : "create" }
+    function syncAuthMode() {
+        if (grinWalletController.walletExists) {
+            authMode = "unlock"
+            return
+        }
+
+        if (authMode !== "create" && authMode !== "restore" && authMode !== "import_backup")
+            authMode = "create"
+    }
     function clearPasswordDrafts() {
         unlockPasswordDraft = ""
         passwordDraft = ""

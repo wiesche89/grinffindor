@@ -11,6 +11,14 @@ Item {
     property real spendableAmountValue: amountStringToValue(grinWalletController.spendableBalance)
     property string amountDialogMode: "send"
     property bool slatepackActionsBlocked: grinWalletController.fullRescanInFlight
+    property string processReviewMode: "-"
+    property string processReviewState: "-"
+    property string processReviewWorkflowId: "-"
+    property string processReviewAmount: "-"
+    property string processReviewNote: "-"
+    property string processReviewParticipant: "-"
+    property string processReviewKernel: "-"
+    property string processReviewMessage: ""
 
     implicitHeight: slatepackCard.implicitHeight
 
@@ -107,6 +115,135 @@ Item {
             grinWalletController.startSendWorkflow(amountField.text, "")
         walletRoot.syncWorkflowEditors()
         amountActionPopup.close()
+    }
+
+    function resetProcessReview() {
+        processReviewMode = "-"
+        processReviewState = "-"
+        processReviewWorkflowId = "-"
+        processReviewAmount = "-"
+        processReviewNote = "-"
+        processReviewParticipant = "-"
+        processReviewKernel = "-"
+        processReviewMessage = ""
+    }
+
+    function decodeSlatepackForReview() {
+        decodedBuffer.text = grinWalletController.decodeSlatepack(slatepackArea.text)
+        walletRoot.updateSlatepackStatus(decodedBuffer.text)
+        return decodedBuffer.text
+    }
+
+    function firstReviewValue() {
+        for (var index = 0; index < arguments.length; ++index) {
+            var candidate = arguments[index]
+            if (candidate === undefined || candidate === null)
+                continue
+            candidate = candidate.toString().trim()
+            if (candidate.length > 0)
+                return candidate
+        }
+        return "-"
+    }
+
+    function deriveReviewMode(parsed, stateCode) {
+        var explicitMode = firstReviewValue(parsed.body_type, parsed.mode)
+        if (explicitMode !== "-")
+            return explicitMode
+        if (stateCode.indexOf("I") === 0)
+            return "invoice"
+        if (stateCode.indexOf("S") === 0)
+            return "send"
+        return "-"
+    }
+
+    function deriveReviewParticipant(parsed) {
+        var proof = parsed.proof || {}
+        var senderAddress = firstReviewValue(parsed.sender,
+                                             parsed.sender_address,
+                                             parsed.senderAddress,
+                                             proof.saddr,
+                                             proof.sender,
+                                             proof.sender_address)
+        var receiverAddress = firstReviewValue(parsed.receiver,
+                                               parsed.receiver_address,
+                                               parsed.receiverAddress,
+                                               proof.raddr,
+                                               proof.receiver,
+                                               proof.receiver_address)
+
+        if (senderAddress !== "-" && receiverAddress !== "-")
+            return senderAddress + " -> " + receiverAddress
+        return firstReviewValue(senderAddress,
+                                receiverAddress,
+                                parsed.participant_id,
+                                parsed.participant,
+                                parsed.address)
+    }
+
+    function openProcessReviewDialog() {
+        if (slatepackActionsBlocked || slatepackArea.text.trim().length === 0)
+            return
+
+        resetProcessReview()
+        var decodedText = decodeSlatepackForReview()
+        var trimmed = decodedText ? decodedText.trim() : ""
+        if (trimmed.length === 0) {
+            walletRoot.showErrorDialog(walletRoot.tf("browser_wallet_slatepack_review_empty", "The Slatepack could not be decoded."))
+            return
+        }
+
+        try {
+            var parsed = JSON.parse(trimmed)
+            if (parsed.encrypted_slatepack) {
+                walletRoot.showErrorDialog(parsed.note || walletRoot.tf("browser_wallet_slatepack_status_encrypted", "Encrypted Slatepack detected. Unlock the matching wallet to decrypt it."))
+                return
+            }
+            if (parsed.external_slatepack) {
+                walletRoot.showErrorDialog(parsed.note || walletRoot.tf("browser_wallet_slatepack_status_invalid", "Slatepack payload could not be parsed."))
+                return
+            }
+
+            processReviewState = firstReviewValue(parsed.state, parsed.sta)
+            processReviewMode = deriveReviewMode(parsed, processReviewState)
+            processReviewWorkflowId = firstReviewValue(parsed.id, parsed.workflow_id)
+            processReviewAmount = firstReviewValue(parsed.amount,
+                                                   parsed.amount_display,
+                                                   parsed.invoice_amount,
+                                                   parsed.receiver_amount_display,
+                                                   parsed.amt)
+            processReviewNote = firstReviewValue(parsed.note,
+                                                 parsed.message,
+                                                 parsed.memo,
+                                                 parsed.msg)
+            processReviewParticipant = deriveReviewParticipant(parsed)
+            processReviewKernel = firstReviewValue(parsed.kernel_commitment,
+                                                   parsed.kernel_excess,
+                                                   parsed.excess,
+                                                   parsed.kern)
+            processReviewMessage = walletRoot.tf("browser_wallet_slatepack_review_ready", "Confirm the decoded Slatepack details before processing.")
+            processReviewPopup.open()
+            return
+        } catch (error) {
+            processReviewMessage = walletRoot.tf("browser_wallet_slatepack_review_text_only", "The Slatepack was decoded, but only as plain text. Review the decoded output before processing.")
+            processReviewNote = trimmed
+            processReviewPopup.open()
+        }
+    }
+
+    function processValidatedSlatepack() {
+        var previousWorkflowId = grinWalletController.workflowId
+        var previousWorkflowState = grinWalletController.workflowState
+        grinWalletController.processWorkflowSlatepack(slatepackArea.text)
+        walletRoot.syncWorkflowEditors()
+        processReviewPopup.close()
+        var currentWorkflowState = grinWalletController.workflowState
+        var currentWorkflowId = grinWalletController.workflowId
+        if ((currentWorkflowState === "S3" || currentWorkflowState === "I3")
+                && (currentWorkflowState !== previousWorkflowState
+                    || currentWorkflowId !== previousWorkflowId)) {
+            slatepackSection.clearSlatepackWorkspace()
+        }
     }
 
     Popup {
@@ -248,12 +385,114 @@ Item {
         }
     }
 
+    Popup {
+        id: processReviewPopup
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        width: Math.min(walletRoot.width - 28, 720)
+        padding: 0
+
+        background: Rectangle {
+            radius: 28
+            color: "#0f1b26"
+            border.color: "#2a4f64"
+        }
+
+        contentItem: ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 14
+
+            Label {
+                Layout.fillWidth: true
+                text: walletRoot.tf("browser_wallet_slatepack_review_title", "Validate Slatepack")
+                color: "#ffffff"
+                font.pixelSize: walletRoot.phoneMode ? 24 : 28
+                font.weight: Font.Bold
+                wrapMode: Text.WordWrap
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: processReviewMessage
+                color: "#d7e9f4"
+                font.pixelSize: walletRoot.bodyTextSize
+                wrapMode: Text.WordWrap
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 12
+                rowSpacing: 8
+
+                Label { text: walletRoot.tf("browser_wallet_slatepack_review_mode", "Mode"); color: "#8fb4c9"; font.pixelSize: walletRoot.compactTextSize }
+                Label { text: processReviewMode; color: "#ffffff"; font.pixelSize: walletRoot.compactTextSize; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+
+                Label { text: walletRoot.tf("browser_wallet_slatepack_review_state", "State"); color: "#8fb4c9"; font.pixelSize: walletRoot.compactTextSize }
+                Label { text: processReviewState; color: "#ffffff"; font.pixelSize: walletRoot.compactTextSize; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+
+                Label { text: walletRoot.tf("browser_wallet_slatepack_review_workflow", "Workflow ID"); color: "#8fb4c9"; font.pixelSize: walletRoot.compactTextSize }
+                Label { text: processReviewWorkflowId; color: "#ffffff"; font.pixelSize: walletRoot.compactTextSize; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+
+                Label { text: walletRoot.tf("browser_wallet_slatepack_review_amount", "Amount"); color: "#8fb4c9"; font.pixelSize: walletRoot.compactTextSize }
+                Label { text: processReviewAmount; color: "#ffffff"; font.pixelSize: walletRoot.compactTextSize; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+
+                Label { text: walletRoot.tf("browser_wallet_slatepack_review_participant", "Participant"); color: "#8fb4c9"; font.pixelSize: walletRoot.compactTextSize }
+                Label { text: processReviewParticipant; color: "#ffffff"; font.pixelSize: walletRoot.compactTextSize; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+
+                Label { text: walletRoot.tf("browser_wallet_slatepack_review_kernel", "Kernel"); color: "#8fb4c9"; font.pixelSize: walletRoot.compactTextSize }
+                Label { text: processReviewKernel; color: "#ffffff"; font.pixelSize: walletRoot.compactTextSize; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                visible: processReviewNote !== "-" && processReviewNote.length > 0
+                radius: 16
+                color: "#122231"
+                border.color: "#2a4f64"
+                implicitHeight: processReviewNoteLabel.implicitHeight + 20
+
+                Label {
+                    id: processReviewNoteLabel
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    text: walletRoot.tf("browser_wallet_slatepack_review_note", "Note") + ": " + processReviewNote
+                    color: "#d7e9f4"
+                    font.pixelSize: walletRoot.compactTextSize
+                    wrapMode: Text.WrapAnywhere
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+
+                Button {
+                    text: walletRoot.tf("browser_wallet_cancel", "Cancel")
+                    font.pixelSize: walletRoot.controlTextSize
+                    onClicked: processReviewPopup.close()
+                }
+
+                Button {
+                    text: walletRoot.tf("browser_wallet_process", "Process")
+                    font.pixelSize: walletRoot.controlTextSize
+                    onClicked: slatepackSection.processValidatedSlatepack()
+                }
+            }
+        }
+    }
+
     BrowserWalletSectionCard {
         id: slatepackCard
         width: parent.width
         contentPadding: 12
         title: walletRoot.tf("browser_wallet_nav_send_receive", "Send / Receive")
-        subtitle: walletRoot.tf("browser_wallet_slatepack_note", "Paste or decode a Slatepack, then start a send or receive flow from the same workspace.")
+        subtitle: walletRoot.tf("browser_wallet_slatepack_note", "Review a Slatepack in the shared editor, then start a send or receive flow from the same workspace.")
 
         ColumnLayout {
             id: slatepackColumn
@@ -269,9 +508,9 @@ Item {
                 Label {
                     id: slatepackRecoveryLabel
                     Layout.fillWidth: true
-                    text: walletRoot.nodeStatusMode() === "online"
-                          ? walletRoot.tf("browser_wallet_slatepack_recovery_pending", "Broadcast recovery is still in progress for one or more transactions. You can decode and process Slatepacks, but confirm node status before sending again.")
-                          : walletRoot.tf("browser_wallet_slatepack_recovery_offline", "Node connectivity is degraded. Decoding still works, but sending and broadcast recovery should wait for a successful refresh.")
+                      text: walletRoot.nodeStatusMode() === "online"
+                          ? walletRoot.tf("browser_wallet_slatepack_recovery_pending", "Broadcast recovery is still in progress for one or more transactions. You can validate and process Slatepacks, but confirm node status before sending again.")
+                          : walletRoot.tf("browser_wallet_slatepack_recovery_offline", "Node connectivity is degraded. Slatepack review still works, but sending and broadcast recovery should wait for a successful refresh.")
                     color: walletRoot.recoveryBannerColor()
                     font.pixelSize: walletRoot.bodyTextSize
                     wrapMode: Text.WordWrap
@@ -355,46 +594,11 @@ Item {
                 spacing: 10
 
                 Button {
-                    text: walletRoot.tf("browser_wallet_paste_slatepack", "Paste Slatepack")
-                    font.pixelSize: walletRoot.controlTextSize
-                    highlighted: false
-                    onClicked: {
-                        walletRoot.openPasteDialog(
-                            slatepackArea,
-                            walletRoot.tf("browser_wallet_paste_slatepack", "Paste Slatepack"),
-                            "BEGINSLATEPACK. ...")
-                    }
-                }
-
-                Button {
-                    text: walletRoot.tf("browser_wallet_decode", "Decode")
-                    font.pixelSize: walletRoot.controlTextSize
-                    enabled: slatepackArea.text.trim().length > 0
-                    highlighted: false
-                    onClicked: {
-                        decodedBuffer.text = grinWalletController.decodeSlatepack(slatepackArea.text)
-                        walletRoot.updateSlatepackStatus(decodedBuffer.text)
-                    }
-                }
-
-                Button {
-                    text: walletRoot.tf("browser_wallet_process", "Process")
+                    text: walletRoot.tf("browser_wallet_validate_process", "Validate and Process")
                     font.pixelSize: walletRoot.controlTextSize
                     enabled: slatepackArea.text.trim().length > 0 && !slatepackActionsBlocked
                     highlighted: false
-                    onClicked: {
-                        var previousWorkflowId = grinWalletController.workflowId
-                        var previousWorkflowState = grinWalletController.workflowState
-                        grinWalletController.processWorkflowSlatepack(slatepackArea.text)
-                        walletRoot.syncWorkflowEditors()
-                        var currentWorkflowState = grinWalletController.workflowState
-                        var currentWorkflowId = grinWalletController.workflowId
-                        if ((currentWorkflowState === "S3" || currentWorkflowState === "I3")
-                                && (currentWorkflowState !== previousWorkflowState
-                                    || currentWorkflowId !== previousWorkflowId)) {
-                            slatepackSection.clearSlatepackWorkspace()
-                        }
-                    }
+                    onClicked: slatepackSection.openProcessReviewDialog()
                 }
 
                 Button {
