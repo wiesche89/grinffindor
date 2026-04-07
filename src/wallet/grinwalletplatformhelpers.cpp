@@ -616,6 +616,15 @@ bool GrinWalletPlatformHelpers::isWasm()
 #endif
 }
 
+bool GrinWalletPlatformHelpers::isNativeMobilePlatform()
+{
+#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
+    return true;
+#else
+    return false;
+#endif
+}
+
 bool GrinWalletPlatformHelpers::isMobileBrowser()
 {
 #ifdef Q_OS_WASM
@@ -629,6 +638,8 @@ bool GrinWalletPlatformHelpers::supportsNativeTouchSelection()
 {
 #ifdef Q_OS_WASM
     return browserSupportsNativeTouchSelection() == 1;
+#elif defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
+    return true;
 #else
     return false;
 #endif

@@ -96,7 +96,8 @@ void PlatformBridge::requestFocus(const QString &id)
 
 bool PlatformBridge::isMobile() const
 {
-    return GrinWalletPlatformHelpers::isMobileBrowser();
+    return GrinWalletPlatformHelpers::isNativeMobilePlatform()
+        || GrinWalletPlatformHelpers::isMobileBrowser();
 }
 
 bool PlatformBridge::isWasm() const

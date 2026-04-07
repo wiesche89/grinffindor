@@ -8,13 +8,15 @@ import QtCore
 ApplicationWindow {
     id: root
     readonly property bool isWasm: Qt.platform.os === "wasm"
+    readonly property bool isNativeMobile: Qt.platform.os === "android" || Qt.platform.os === "ios"
+    readonly property bool isMobileRuntime: isWasm || isNativeMobile || (typeof PlatformBridge !== "undefined" && PlatformBridge.mobile)
     function assetPath(path) {
         return (typeof assetBaseUrl === "string" ? assetBaseUrl : "qrc:/res/") + path
     }
-    width: isWasm ? Screen.width : 960
-    height: isWasm ? Screen.height : 640
+    width: isMobileRuntime ? Screen.width : 960
+    height: isMobileRuntime ? Screen.height : 640
     visible: true
-    visibility: isWasm ? Window.Windowed : Window.Maximized
+    visibility: isNativeMobile ? Window.FullScreen : (isWasm ? Window.Windowed : Window.Maximized)
     flags: isWasm ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: i18n ? i18n.tf("app_title", "Grinffindor") : "Grinffindor"
     property string activeTilePage: ""

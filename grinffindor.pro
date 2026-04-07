@@ -2,6 +2,13 @@ QT += quick qml quickcontrols2 gui network
 
 CONFIG += c++17
 
+TARGET = grinffindor
+VERSION = 0.1.0
+
+QMAKE_TARGET_COMPANY = Grinffindor
+QMAKE_TARGET_PRODUCT = Grinffindor
+QMAKE_TARGET_DESCRIPTION = Grinffindor wallet and ecosystem client
+
 QT_WASM_INITIAL_MEMORY = 128MB
 
 SOURCES += src/main.cpp \
@@ -106,6 +113,18 @@ DEFINES += USE_NUM_NONE \
 
 RESOURCES += qml.qrc \
             res.qrc
+
+ANDROID_PACKAGE_NAME = org.wiesche89.grinffindor
+ANDROID_MIN_SDK_VERSION = 28
+ANDROID_TARGET_SDK_VERSION = 34
+
+android {
+    # ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+}
+
+ios {
+    QMAKE_INFO_PLIST = $$PWD/ios/Info.plist
+}
 
 
 #SUBMODULES

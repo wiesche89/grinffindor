@@ -12,6 +12,10 @@ public:
  */
     static bool isWasm();
 /**
+ * @brief Returns whether the runtime target is a native mobile platform.
+ */
+     static bool isNativeMobilePlatform();
+/**
  * @brief Returns whether the browser runtime should be treated as mobile.
  */
     static bool isMobileBrowser();
