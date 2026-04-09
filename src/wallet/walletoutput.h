@@ -20,6 +20,7 @@ public:
     bool spent = false;
     bool locked = false;
     bool pending = false;
+    bool reverted = false;
     QString workflowId;
 
 /**

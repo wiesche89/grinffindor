@@ -34,7 +34,8 @@ public:
      */
     static Result selectSpendableOutputs(const QList<WalletOutput> &outputs,
                                          quint64 amount,
-                                         qulonglong chainHeight);
+                                         qulonglong chainHeight,
+                                         qulonglong minimumConfirmations = 10);
 
     /**
      * @brief Estimates transaction fee from input/output/kernel counts.

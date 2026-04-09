@@ -102,7 +102,7 @@ void GrinWalletController::storeOutputsState(QJsonObject *document,
     // -------------------------------------------------------------------------------------------------------
     walletState->insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
 
-    walletState->insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
+    walletState->insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight, m_minimumConfirmations));
     if (nextChildIndex > static_cast<quint32>(walletState->value(QStringLiteral("next_child_index")).toInt())) {
         walletState->insert(QStringLiteral("next_child_index"), static_cast<int>(nextChildIndex));
     }
@@ -243,6 +243,7 @@ void GrinWalletController::refreshStateFromStorage()
     m_immatureBalance = state.immatureBalance;
     m_awaitingConfirmationBalance = state.awaitingConfirmationBalance;
     m_awaitingFinalizationBalance = state.awaitingFinalizationBalance;
+    m_revertedBalance = state.revertedBalance;
     refreshDerivedModels();
     emit walletSummaryChanged();
     emit statusChanged();

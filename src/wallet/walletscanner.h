@@ -39,7 +39,7 @@ public:
 /**
  * @brief Returns balances from outputs.
  */
-    static QJsonObject balancesFromOutputs(const QList<WalletOutput> &outputs, qulonglong chainHeight);
+    static QJsonObject balancesFromOutputs(const QList<WalletOutput> &outputs, qulonglong chainHeight, qulonglong minimumConfirmations = 10);
 };
 
 #endif // WALLETTSCANNER_H

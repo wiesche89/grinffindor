@@ -69,7 +69,7 @@ void GrinWalletNodeSyncService::requestWalletScan()
     const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     if (outputs.isEmpty()) {
         walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
-        walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
+        walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
         document.insert(QStringLiteral("wallet_state"), walletState);
         m_controller->saveDocumentForService(document);
         m_controller->refreshStateFromStorage();

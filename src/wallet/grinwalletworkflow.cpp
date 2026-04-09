@@ -173,6 +173,7 @@ bool GrinWalletWorkflow::finalizeOutputs(QJsonObject *document,
     const QJsonArray selectedCommitments = localContext.value(QStringLiteral("selected_input_commits")).toArray();
 
     const QString changeCommit = localContext.value(QStringLiteral("change_commit")).toString();
+    const QString receiverCommit = localContext.value(QStringLiteral("receiver_commit")).toString();
 
     for (int i = 0; i < outputs.size(); ++i) {
         for (int j = 0; j < selectedCommitments.size(); ++j) {
@@ -188,14 +189,15 @@ bool GrinWalletWorkflow::finalizeOutputs(QJsonObject *document,
         if (!changeCommit.isEmpty() && outputs[i].commitment == changeCommit) {
             outputs[i].workflowId = slate.workflowId();
             outputs[i].pending = true;
-            outputs[i].locked = !broadcasted;
+            outputs[i].locked = false;
         }
 
         for (int j = 0; j < slate.commitments.size(); ++j) {
-            if (outputs[i].commitment == slate.commitments.at(j).commitment) {
+            if (outputs[i].commitment == slate.commitments.at(j).commitment
+                && outputs[i].commitment != receiverCommit) {
                 outputs[i].workflowId = slate.workflowId();
                 outputs[i].pending = true;
-                outputs[i].locked = !broadcasted;
+                outputs[i].locked = false;
             }
         }
     }
@@ -239,8 +241,8 @@ bool GrinWalletWorkflow::finalizeBroadcastedWorkflow(QJsonObject *document,
 
         if (matchesSelectedInput) {
             outputs[i].pending = false;
-            outputs[i].locked = false;
-            outputs[i].spent = true;
+            outputs[i].locked = true;
+            outputs[i].spent = false;
             outputs[i].onChain = false;
             continue;
         }

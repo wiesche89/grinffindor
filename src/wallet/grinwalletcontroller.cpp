@@ -61,6 +61,8 @@ GrinWalletController::GrinWalletController(QObject *parent) :
     m_immatureBalance(QStringLiteral("0.000000000")),
     m_awaitingConfirmationBalance(QStringLiteral("0.000000000")),
     m_awaitingFinalizationBalance(QStringLiteral("0.000000000")),
+    m_revertedBalance(QStringLiteral("0.000000000")),
+    m_minimumConfirmations(10),
     m_scanHeight(0),
     m_autoLockOnAppDeactivate(false),
     m_walletScanInFlight(false),
@@ -172,6 +174,18 @@ QString GrinWalletController::awaitingConfirmationBalance() const { return m_awa
  * @return
  */
 QString GrinWalletController::awaitingFinalizationBalance() const { return m_awaitingFinalizationBalance; }
+
+/**
+ * @brief Returns the balance lost to chain reorganization.
+ * @return
+ */
+QString GrinWalletController::revertedBalance() const { return m_revertedBalance; }
+
+/**
+ * @brief Returns the minimum number of confirmations required for outputs to be spendable.
+ * @return
+ */
+int GrinWalletController::minimumConfirmations() const { return static_cast<int>(m_minimumConfirmations); }
 
 /**
  * @brief Returns the latest scanned chain height recorded for this wallet.

@@ -15,6 +15,7 @@ public:
         QString selectedNetwork;
         QString nodeUrl;
         bool autoLockOnDeactivate{false};
+        qulonglong minimumConfirmations{10};
     };
 
     struct RefreshedState
@@ -27,6 +28,7 @@ public:
         QString immatureBalance;
         QString awaitingConfirmationBalance;
         QString awaitingFinalizationBalance;
+        QString revertedBalance;
         bool documentChanged{false};
         bool balancesChanged{false};
     };

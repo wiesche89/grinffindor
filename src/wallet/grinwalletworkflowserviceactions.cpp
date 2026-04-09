@@ -104,7 +104,7 @@ void GrinWalletWorkflowService::cleanupLocalAndCancelledItems()
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"),
-                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
+                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
     walletState.insert(QStringLiteral("transactions"), transactions);
     document.insert(QStringLiteral("wallet_state"), walletState);
     m_controller->saveDocumentForService(document);
@@ -294,7 +294,7 @@ void GrinWalletWorkflowService::cancelTransaction(const QString &workflowId)
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"),
-                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
+                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
     walletState.insert(QStringLiteral("transactions"), transactions);
     document.insert(QStringLiteral("wallet_state"), walletState);
     QJsonObject contexts = document.value(QStringLiteral("workflow_contexts")).toObject();

@@ -153,7 +153,7 @@ bool GrinWalletNodeSyncService::persistFullRescanSession(quint64 restoreLeafInde
     FullRescanSessionState &session = *m_fullRescanSession;
     session.walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(session.tracked));
     session.walletState.insert(QStringLiteral("balances"),
-                               WalletScanner::balancesFromOutputs(session.tracked, m_controller->chainHeight()));
+                               WalletScanner::balancesFromOutputs(session.tracked, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
     session.walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
     session.walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(restoreLeafIndex));
     session.walletState.insert(QStringLiteral("next_child_index"), static_cast<int>(session.nextChildIndex));
@@ -438,7 +438,7 @@ void GrinWalletNodeSyncService::onNodeOutputsFinished(const Result<QList<OutputP
     tracked = WalletScanner::reconcileTrackedOutputs(tracked, chainOutputs);
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(tracked));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(tracked, m_controller->chainHeight()));
+    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(tracked, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
     walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
     walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("tracked-outputs"));
     walletState.insert(QStringLiteral("last_synced_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
@@ -672,6 +672,34 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
         }
     }
 
+    // Detect reverted outputs: previously confirmed unspent outputs that are no
+    // longer in the UTXO set after a complete seed scan indicate a chain reorg.
+    QSet<QString> discoveredCommitments;
+    for (int i = 0; i < seedScanDiscovered.size(); ++i) {
+        discoveredCommitments.insert(seedScanDiscovered.at(i).commitment);
+    }
+    for (int i = 0; i < tracked.size(); ++i) {
+        const WalletOutput &out = tracked.at(i);
+        if (discoveredCommitments.contains(out.commitment)) {
+            // Found in UTXO: clear any reverted/spent flags set by previous reorg detection.
+            tracked[i].reverted = false;
+            continue;
+        }
+        // Locked inputs not in UTXO: transaction confirmed on-chain, input is spent.
+        if (out.locked && !out.spent) {
+            tracked[i].spent = true;
+            tracked[i].locked = false;
+            tracked[i].pending = false;
+            tracked[i].onChain = false;
+            continue;
+        }
+        // Previously confirmed unspent outputs missing from UTXO: chain reorg.
+        if (out.onChain && !out.spent && !out.pending && !out.locked) {
+            tracked[i].reverted = true;
+            tracked[i].onChain = false;
+        }
+    }
+
     quint32 nextChildIndex = m_controller->nextChildIndexFromStateForService(walletState);
     for (int i = 0; i < tracked.size(); ++i) {
         if (tracked.at(i).childIndex + 1 > nextChildIndex) {
@@ -680,7 +708,7 @@ void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<Output
     }
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(tracked));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(tracked, m_controller->chainHeight()));
+    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(tracked, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
     walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
     walletState.insert(QStringLiteral("restore_leaf_index"),
                        QString::number(listing.lastRetrievedIndex() > 0

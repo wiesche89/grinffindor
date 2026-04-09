@@ -47,7 +47,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
         m_controller->chainHeight() > 0 ? m_controller->chainHeight() : m_controller->scanHeight();
     const WalletSelection::Result selection =
 
-        WalletSelection::selectSpendableOutputs(outputs, requestedAmount, effectiveHeight);
+        WalletSelection::selectSpendableOutputs(outputs, requestedAmount, effectiveHeight, static_cast<qulonglong>(m_controller->minimumConfirmations()));
     if (!selection.success) {
         m_controller->setLastError(selection.error);
         return;
@@ -67,7 +67,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"),
-                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight()));
+                       WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
     document.insert(QStringLiteral("wallet_state"), walletState);
     m_controller->saveDocumentForService(document);
     m_controller->refreshStateFromStorage();
@@ -216,6 +216,7 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
             localSlatepackAddress);
     }
     m_controller->persistWorkflowTransaction(slate, false);
+    m_controller->finalizeWorkflowOutputs(slate, false);
     m_controller->setWorkflow(slate.workflowId(),
                               slate.modeCode(),
                               slate.stateCode(),

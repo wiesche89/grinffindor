@@ -13,6 +13,7 @@ namespace {
 const int kSeedCipherVersion = 3;
 const char *kAppSettingsKey = "app_settings";
 const char *kAutoLockOnDeactivateKey = "auto_lock_on_app_deactivate";
+const char *kMinimumConfirmationsKey = "minimum_confirmations";
 
 } // namespace
 
@@ -367,6 +368,7 @@ void GrinWalletController::loadFromStorage()
     m_selectedNetwork = state.selectedNetwork;
     m_nodeUrl = state.nodeUrl;
     m_autoLockOnAppDeactivate = state.autoLockOnDeactivate;
+    m_minimumConfirmations = state.minimumConfirmations;
 
     emit walletChanged();
     emit nodeConfigChanged();
@@ -404,6 +406,28 @@ void GrinWalletController::setAutoLockOnAppDeactivate(bool enabled)
     setLastInfo(enabled
         ? QStringLiteral("Automatic wallet lock on app deactivation enabled.")
         : QStringLiteral("Automatic wallet lock on app deactivation disabled."));
+}
+
+void GrinWalletController::setMinimumConfirmations(int value)
+{
+    const qulonglong clamped = value > 0 ? static_cast<qulonglong>(value) : 10;
+    if (m_minimumConfirmations == clamped) {
+        return;
+    }
+
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    QJsonObject appSettings = document.value(QLatin1String(kAppSettingsKey)).toObject();
+    appSettings.insert(QLatin1String(kMinimumConfirmationsKey), static_cast<int>(clamped));
+    document.insert(QLatin1String(kAppSettingsKey), appSettings);
+    if (!GrinWalletStorage::saveDocument(document)) {
+        setLastError(QStringLiteral("Failed to persist app settings."));
+        return;
+    }
+
+    m_minimumConfirmations = clamped;
+    refreshStateFromStorage();
+    emit settingsChanged();
+    setLastError(QString());
 }
 
 /**

@@ -51,15 +51,15 @@ quint64 amountToNanogrin(const QString &amount)
  * @param chainHeight Current chain height.
  * @return True when the output is mature and not blocked by state flags.
  */
-bool isSpendable(const WalletOutput &output, qulonglong chainHeight)
+bool isSpendable(const WalletOutput &output, qulonglong chainHeight, qulonglong minimumConfirmations = 10)
 {
-    if (output.spent || output.locked || !output.onChain || output.pending) {
+    if (output.spent || output.locked || !output.onChain || output.pending || output.reverted) {
         return false;
     }
 
     if (output.height > 0) {
-        // Reference formula: 1 + (chainHeight - height) >= 10 => chainHeight >= height + 9
-        if (chainHeight > 0 && chainHeight < output.height + 9) {
+        const qulonglong minConf = minimumConfirmations > 0 ? minimumConfirmations : 10;
+        if (chainHeight > 0 && chainHeight < output.height + minConf - 1) {
             return false;
         }
         if (output.coinbase && chainHeight > 0 && chainHeight < output.height + 1000) {
@@ -227,7 +227,8 @@ quint64 WalletSelection::estimateFee(int numInputs, int numOutputs, int numKerne
  */
 WalletSelection::Result WalletSelection::selectSpendableOutputs(const QList<WalletOutput> &outputs,
                                                                 quint64 amount,
-                                                                qulonglong chainHeight)
+                                                                qulonglong chainHeight,
+                                                                qulonglong minimumConfirmations)
 {
     Result result;
     result.amount = amount;
@@ -237,7 +238,7 @@ WalletSelection::Result WalletSelection::selectSpendableOutputs(const QList<Wall
     // -------------------------------------------------------------------------------------------------------
     QList<WalletOutput> candidates;
     for (int i = 0; i < outputs.size(); ++i) {
-        if (isSpendable(outputs.at(i), chainHeight)) {
+        if (isSpendable(outputs.at(i), chainHeight, minimumConfirmations)) {
             candidates.append(outputs.at(i));
         }
     }

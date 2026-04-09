@@ -380,7 +380,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     const WalletSelection::Result selection =
 
-        WalletSelection::selectSpendableOutputs(outputs, requestedAmount, m_chainHeight);
+        WalletSelection::selectSpendableOutputs(outputs, requestedAmount, m_chainHeight, m_minimumConfirmations);
     if (!selection.success) {
         if (errorOut) {
             *errorOut = selection.error;
@@ -407,7 +407,7 @@ bool GrinWalletController::ensureWorkflowSelectionContext(const QString &workflo
     }
 
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight));
+    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_chainHeight, m_minimumConfirmations));
 
     document.insert(QStringLiteral("wallet_state"), walletState);
     if (!GrinWalletStorage::saveDocument(document)) {
@@ -938,6 +938,7 @@ void GrinWalletController::persistWorkflowTransaction(const SlateV4 &slate, bool
     QJsonObject document = GrinWalletStorage::loadDocument();
     if (GrinWalletWorkflow::persistTransaction(&document, slate, broadcasted)) {
         GrinWalletStorage::saveDocument(document);
+        refreshStateFromStorage();
     }
 }
 

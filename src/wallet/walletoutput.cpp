@@ -20,6 +20,7 @@ QJsonObject WalletOutput::toJson() const
     json.insert(QStringLiteral("spent"), spent);
     json.insert(QStringLiteral("locked"), locked);
     json.insert(QStringLiteral("pending"), pending);
+    json.insert(QStringLiteral("reverted"), reverted);
     json.insert(QStringLiteral("workflow_id"), workflowId);
     return json;
 }
@@ -45,6 +46,7 @@ WalletOutput WalletOutput::fromJson(const QJsonObject &json)
     output.spent = json.value(QStringLiteral("spent")).toBool();
     output.locked = json.value(QStringLiteral("locked")).toBool();
     output.pending = json.value(QStringLiteral("pending")).toBool();
+    output.reverted = json.value(QStringLiteral("reverted")).toBool();
     output.workflowId = json.value(QStringLiteral("workflow_id")).toString();
 
     // Backward-compatibility normalization for older/partial persisted states.
@@ -59,8 +61,16 @@ WalletOutput WalletOutput::fromJson(const QJsonObject &json)
         output.onChain = true;
     }
 
-    // Spent outputs should not remain in pending/locked workflow states.
+    // Spent outputs should not remain in pending/locked/reverted workflow states.
     if (output.spent) {
+        output.pending = false;
+        output.locked = false;
+        output.reverted = false;
+    }
+
+    // Reverted outputs are off-chain by definition.
+    if (output.reverted) {
+        output.onChain = false;
         output.pending = false;
         output.locked = false;
     }

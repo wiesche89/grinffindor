@@ -43,6 +43,7 @@ class GrinWalletController : public QObject
    Q_PROPERTY(QString immatureBalance READ immatureBalance NOTIFY walletSummaryChanged)
    Q_PROPERTY(QString awaitingConfirmationBalance READ awaitingConfirmationBalance NOTIFY walletSummaryChanged)
    Q_PROPERTY(QString awaitingFinalizationBalance READ awaitingFinalizationBalance NOTIFY walletSummaryChanged)
+   Q_PROPERTY(QString revertedBalance READ revertedBalance NOTIFY walletSummaryChanged)
    Q_PROPERTY(qulonglong scanHeight READ scanHeight NOTIFY walletSummaryChanged)
    Q_PROPERTY(bool fullRescanInFlight READ fullRescanInFlight NOTIFY nodeStatusChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
@@ -53,6 +54,7 @@ class GrinWalletController : public QObject
     Q_PROPERTY(QString workflowSlatepack READ workflowSlatepack NOTIFY workflowChanged)
     Q_PROPERTY(QString workflowDecoded READ workflowDecoded NOTIFY workflowChanged)
    Q_PROPERTY(bool autoLockOnAppDeactivate READ autoLockOnAppDeactivate WRITE setAutoLockOnAppDeactivate NOTIFY settingsChanged)
+   Q_PROPERTY(int minimumConfirmations READ minimumConfirmations WRITE setMinimumConfirmations NOTIFY settingsChanged)
    Q_PROPERTY(QVariantList walletOutputs READ walletOutputs NOTIFY walletOutputsChanged)
    Q_PROPERTY(QVariantList transactionHistory READ transactionHistory NOTIFY transactionHistoryChanged)
 
@@ -126,6 +128,14 @@ public:
  * @brief Returns awaiting finalization balance.
  */
     QString awaitingFinalizationBalance() const;
+/**
+ * @brief Returns minimum confirmations required for spendable outputs.
+ */
+    int minimumConfirmations() const;
+/**
+ * @brief Returns reverted balance (outputs lost to chain reorg).
+ */
+    QString revertedBalance() const;
 /**
  * @brief Returns scan height.
  */
@@ -213,6 +223,7 @@ public:
     Q_INVOKABLE void clearWorkflow();
     Q_INVOKABLE void cleanupLocalAndCancelledItems();
     Q_INVOKABLE void setAutoLockOnAppDeactivate(bool enabled);
+    Q_INVOKABLE void setMinimumConfirmations(int value);
     Q_INVOKABLE QString encodeSlatepack(const QString &slateJson, const QString &sender = QString()) const;
     Q_INVOKABLE QString decodeSlatepack(const QString &slatepack) const;
 
@@ -681,6 +692,8 @@ private:
     QString m_immatureBalance;
     QString m_awaitingConfirmationBalance;
     QString m_awaitingFinalizationBalance;
+    QString m_revertedBalance;
+    qulonglong m_minimumConfirmations;
     qulonglong m_scanHeight;
     QString m_lastError;
     QString m_lastInfo;

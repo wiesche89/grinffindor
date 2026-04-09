@@ -54,6 +54,7 @@ namespace {
 
 const char *kAppSettingsKey = "app_settings";
 const char *kAutoLockOnDeactivateKey = "auto_lock_on_app_deactivate";
+const char *kMinimumConfirmationsKey = "minimum_confirmations";
 const char *kWalletStorePath = "/grin-wallet/browser-wallet.json";
 #ifdef Q_OS_WASM
 const char *kWalletLocalStorageKey = "grinffindor.browserWallet";
@@ -750,11 +751,10 @@ GrinWalletStorage::LoadedState GrinWalletStorage::loadState(const QJsonObject &d
     state.nodeUrl = isNodeUrlAccepted(storedNodeUrl)
         ? storedNodeUrl
         : defaultNodeUrlForNetwork(state.selectedNetwork);
-    state.autoLockOnDeactivate = document
-        .value(QLatin1String(kAppSettingsKey))
-        .toObject()
-        .value(QLatin1String(kAutoLockOnDeactivateKey))
-        .toBool(false);
+    const QJsonObject appSettings = document.value(QLatin1String(kAppSettingsKey)).toObject();
+    state.autoLockOnDeactivate = appSettings.value(QLatin1String(kAutoLockOnDeactivateKey)).toBool(false);
+    const int storedMinConf = appSettings.value(QLatin1String(kMinimumConfirmationsKey)).toInt(10);
+    state.minimumConfirmations = storedMinConf > 0 ? static_cast<qulonglong>(storedMinConf) : 10;
 
     return state;
 }
@@ -890,7 +890,10 @@ GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject do
         state.documentChanged = true;
     }
 
-    const QJsonObject recalculatedBalances = WalletScanner::balancesFromOutputs(outputs, effectiveHeight);
+    const QJsonObject settingsForBalance = document.value(QLatin1String(kAppSettingsKey)).toObject();
+    const int minConfSetting = settingsForBalance.value(QLatin1String(kMinimumConfirmationsKey)).toInt(10);
+    const qulonglong minConf = minConfSetting > 0 ? static_cast<qulonglong>(minConfSetting) : 10;
+    const QJsonObject recalculatedBalances = WalletScanner::balancesFromOutputs(outputs, effectiveHeight, minConf);
 
     const QJsonObject balances = recalculatedBalances.isEmpty() ? storedBalances : recalculatedBalances;
 
@@ -907,6 +910,7 @@ GrinWalletStorage::RefreshedState GrinWalletStorage::refreshState(QJsonObject do
     state.immatureBalance = amountStringFromJson(balances, QStringLiteral("immature"));
     state.awaitingConfirmationBalance = amountStringFromJson(balances, QStringLiteral("awaiting_confirmation"));
     state.awaitingFinalizationBalance = amountStringFromJson(balances, QStringLiteral("awaiting_finalization"));
+    state.revertedBalance = amountStringFromJson(balances, QStringLiteral("reverted"));
 
     return state;
 }

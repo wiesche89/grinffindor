@@ -132,6 +132,7 @@ QList<WalletOutput> WalletScanner::reconcileTrackedOutputs(const QList<WalletOut
                 reconciled[j].spent = chainOutput.spent();
                 reconciled[j].height = chainOutput.blockHeight().toULongLong();
                 reconciled[j].pending = false;
+                reconciled[j].reverted = false;
                 reconciled[j].coinbase =
                     chainOutput.outputType() == OutputPrintable::OutputType::OutputTypeCoinbase;
             }
@@ -219,24 +220,31 @@ QList<WalletOutput> WalletScanner::discoverOwnedOutputs(const QList<OutputPrinta
  * @param chainHeight
  * @return
  */
-QJsonObject WalletScanner::balancesFromOutputs(const QList<WalletOutput> &outputs, qulonglong chainHeight)
+QJsonObject WalletScanner::balancesFromOutputs(const QList<WalletOutput> &outputs, qulonglong chainHeight, qulonglong minimumConfirmations)
 {
     // Balance categories following grin-wallet reference implementation.
     // Reference: grin-wallet/libwallet/src/internal/updater.rs::retrieve_info()
-    static const qulonglong kMinimumConfirmations = 10;
+    const qulonglong kMinimumConfirmations = minimumConfirmations > 0 ? minimumConfirmations : 10;
 
     quint64 spendable = 0;
     quint64 locked = 0;
     quint64 immature = 0;
     quint64 awaiting_confirmation = 0;
     quint64 awaiting_finalization = 0;
+    quint64 reverted = 0;
 
     for (int i = 0; i < outputs.size(); ++i) {
         const WalletOutput &output = outputs.at(i);
         const quint64 amount = amountToNanogrin(output.amount);
-        
+
         // Skip spent outputs - they don't count toward any balance
         if (output.spent) {
+            continue;
+        }
+
+        // Reverted outputs (chain reorg) are tracked separately, excluded from total.
+        if (output.reverted) {
+            reverted += amount;
             continue;
         }
 
@@ -305,6 +313,7 @@ QJsonObject WalletScanner::balancesFromOutputs(const QList<WalletOutput> &output
     balances.insert(QStringLiteral("immature"), formatNanogrin(immature));
     balances.insert(QStringLiteral("awaiting_confirmation"), formatNanogrin(awaiting_confirmation));
     balances.insert(QStringLiteral("awaiting_finalization"), formatNanogrin(awaiting_finalization));
+    balances.insert(QStringLiteral("reverted"), formatNanogrin(reverted));
 
     return balances;
 }

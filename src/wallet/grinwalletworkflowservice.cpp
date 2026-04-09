@@ -391,6 +391,11 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
             GrinWalletWorkflowHelpers::encodeSlatepackArmor(updatedDecoded, localSlatepackAddress);
     }
     m_controller->persistWorkflowTransaction(*slate, false);
+    if (localRoleTag == QStringLiteral("sender")
+        && mode == QStringLiteral("invoice")
+        && state == QStringLiteral("I1")) {
+        m_controller->finalizeWorkflowOutputs(*slate, false);
+    }
     m_controller->setWorkflow(workflowId, mode, nextState, updatedSlatepack, updatedDecoded);
 
     const bool autoBroadcastExternalFinal =
