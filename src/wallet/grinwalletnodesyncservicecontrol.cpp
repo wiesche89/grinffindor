@@ -33,7 +33,6 @@ void GrinWalletNodeSyncService::connectNodeClient()
     connect(nodeApi, &NodeForeignApi::getVersionFinished, this, &GrinWalletNodeSyncService::onNodeVersionFinished);
     connect(nodeApi, &NodeForeignApi::getOutputsFinished, this, &GrinWalletNodeSyncService::onNodeOutputsFinished);
     connect(nodeApi, &NodeForeignApi::getOutputCommitmentsFinished, this, &GrinWalletNodeSyncService::onNodeOutputCommitmentsFinished);
-    connect(nodeApi, &NodeForeignApi::getUnspentOutputsFinished, this, &GrinWalletNodeSyncService::onNodeUnspentOutputsFinished);
     connect(nodeApi, &NodeForeignApi::getUnconfirmedTransactionsFinished, this, &GrinWalletNodeSyncService::onNodeUnconfirmedTransactionsFinished);
     connect(nodeApi, &NodeForeignApi::getKernelFinished, this, &GrinWalletNodeSyncService::onNodeKernelFinished);
     connect(nodeApi, &NodeForeignApi::pushTransactionFinished, this, &GrinWalletNodeSyncService::onNodePushTransactionFinished);

@@ -37,8 +37,11 @@ QHash<QString, int> buildTrackedOutputIndex(const QList<WalletOutput> &tracked)
 
 void mergeDiscoveredOutput(QList<WalletOutput> &tracked,
                           QHash<QString, int> &trackedIndexByCommitment,
+                          QSet<QString> &discoveredCommitmentsInScan,
                           const WalletOutput &discovered)
 {
+    discoveredCommitmentsInScan.insert(discovered.commitment);
+
     const auto existing = trackedIndexByCommitment.constFind(discovered.commitment);
     if (existing != trackedIndexByCommitment.constEnd()) {
         const int index = existing.value();
@@ -159,6 +162,25 @@ bool GrinWalletNodeSyncService::persistFullRescanSession(quint64 restoreLeafInde
     session.walletState.insert(QStringLiteral("next_child_index"), static_cast<int>(session.nextChildIndex));
 
     if (completed) {
+        // Detect locked inputs that were consumed by a confirmed transaction:
+        // any tracked output with locked=true that was NOT found in the UTXO set
+        // during this scan has been spent on-chain.
+        for (int i = 0; i < session.tracked.size(); ++i) {
+            const WalletOutput &out = session.tracked.at(i);
+            if (out.locked && !out.spent
+                && !session.discoveredCommitmentsInScan.contains(out.commitment)) {
+                session.tracked[i].spent = true;
+                session.tracked[i].locked = false;
+                session.tracked[i].pending = false;
+                session.tracked[i].onChain = false;
+            }
+        }
+
+        // Recompute outputs and balances after spent-detection pass.
+        session.walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(session.tracked));
+        session.walletState.insert(QStringLiteral("balances"),
+                                   WalletScanner::balancesFromOutputs(session.tracked, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
+
         if (session.rebuildTransactions) {
             const QJsonArray rebuiltTransactions =
                 m_controller->rebuildTransactionHistoryFromOutputs(session.tracked, session.transactionRescanBackup);
@@ -251,7 +273,7 @@ void GrinWalletNodeSyncService::requestNextFullRescanBatch()
                 return QString();
             }
 
-            mergeDiscoveredOutput(session->tracked, session->trackedIndexByCommitment, discovered);
+            mergeDiscoveredOutput(session->tracked, session->trackedIndexByCommitment, session->discoveredCommitmentsInScan, discovered);
             if (discovered.childIndex + 1 > session->nextChildIndex) {
                 session->nextChildIndex = discovered.childIndex + 1;
             }
@@ -556,196 +578,6 @@ void GrinWalletNodeSyncService::onNodeOutputCommitmentsFinished(const Result<QLi
     m_controller->setPendingBroadcastTxSkeleton(QJsonObject());
     m_controller->setPendingBroadcastInputCommits(QJsonArray());
     m_controller->nodeApi()->pushTransactionAsync(tx, true);
-}
-
-/**
- * @brief GrinWalletNodeSyncService::onNodeUnspentOutputsFinished
- * @param result
- */
-void GrinWalletNodeSyncService::onNodeUnspentOutputsFinished(const Result<OutputListing> &result)
-{
-    if (result.hasError()) {
-        m_controller->setSyncStatusMessage(QStringLiteral("Seed scan failed"));
-        m_controller->notifyStatusChanged();
-        m_controller->setLastError(result.errorMessage());
-        m_controller->setSeedScanActive(false);
-        m_controller->setWalletScanInFlight(false);
-        m_controller->setFullRescanInFlight(false);
-        return;
-    }
-
-    if (!m_controller->seedScanActive() || !m_controller->hasUnlockedSession()) {
-        return;
-    }
-
-    m_controller->touchWalletSession();
-
-    WalletKeychain keychain(m_controller->sessionMnemonic());
-    if (!keychain.isValid()) {
-        m_controller->setLastError(QStringLiteral("Wallet keychain could not be derived for seed scan."));
-        m_controller->setSeedScanActive(false);
-        m_controller->setWalletScanInFlight(false);
-        m_controller->setFullRescanInFlight(false);
-        return;
-    }
-
-    const QList<WalletOutput> discovered = WalletScanner::discoverOwnedOutputs(result.value().outputs(), keychain);
-    for (int i = 0; i < discovered.size(); ++i) {
-        bool exists = false;
-        const QList<WalletOutput> seedScanDiscovered = m_controller->seedScanDiscovered();
-        for (int j = 0; j < seedScanDiscovered.size(); ++j) {
-            if (seedScanDiscovered.at(j).commitment == discovered.at(i).commitment) {
-                exists = true;
-                break;
-            }
-        }
-        if (!exists) {
-            m_controller->appendSeedScanDiscovered(discovered.at(i));
-        }
-    }
-
-    const OutputListing listing = result.value();
-    if (listing.lastRetrievedIndex() > 0 && listing.highestIndex() > 0
-
-        && listing.lastRetrievedIndex() < listing.highestIndex()) {
-        const int progressPercent = qBound(0,
-                                           static_cast<int>((listing.lastRetrievedIndex() * 100) / listing.highestIndex()),
-                                           99);
-        m_controller->setSeedScanNextIndex(listing.lastRetrievedIndex() + 1);
-        QJsonObject document = m_controller->loadDocumentForService();
-        QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-        walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(listing.lastRetrievedIndex()));
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        m_controller->saveDocumentForService(document);
-        m_controller->setSyncStatusMessage(QStringLiteral("Seed scan %1% (%2 / %3)")
-                                               .arg(QString::number(progressPercent))
-                                               .arg(QString::number(listing.lastRetrievedIndex()))
-                                               .arg(QString::number(listing.highestIndex())));
-        m_controller->notifyStatusChanged();
-        m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
-        return;
-    }
-    if (listing.lastRetrievedIndex() == 0 && discovered.size() >= kSeedScanBatchSize) {
-        m_controller->setSeedScanNextIndex(m_controller->seedScanNextIndex() + kSeedScanBatchSize);
-        QJsonObject document = m_controller->loadDocumentForService();
-        QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-        walletState.insert(QStringLiteral("restore_leaf_index"), QString::number(m_controller->seedScanNextIndex() - 1));
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        m_controller->saveDocumentForService(document);
-        m_controller->setSyncStatusMessage(QStringLiteral("Seed scan 0% (starting at leaf %1)")
-                               .arg(QString::number(m_controller->seedScanNextIndex())));
-        m_controller->notifyStatusChanged();
-        m_controller->nodeApi()->getUnspentOutputsAsync(static_cast<int>(m_controller->seedScanNextIndex()), -1, kSeedScanBatchSize, true);
-        return;
-    }
-
-    QJsonObject document = m_controller->loadDocumentForService();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
-    QList<WalletOutput> tracked = WalletScanner::outputsFromState(walletState);
-
-    const QList<WalletOutput> seedScanDiscovered = m_controller->seedScanDiscovered();
-    for (int i = 0; i < seedScanDiscovered.size(); ++i) {
-        bool exists = false;
-        for (int j = 0; j < tracked.size(); ++j) {
-            if (tracked.at(j).commitment == seedScanDiscovered.at(i).commitment) {
-                WalletOutput merged = tracked.at(j);
-                const WalletOutput discovered = seedScanDiscovered.at(i);
-                merged.proof = discovered.proof;
-                merged.amount = discovered.amount;
-                merged.keyPath = discovered.keyPath;
-                merged.blindingFactor = discovered.blindingFactor;
-                merged.childIndex = discovered.childIndex;
-                merged.height = discovered.height;
-                merged.coinbase = discovered.coinbase;
-                merged.onChain = discovered.onChain;
-                merged.spent = discovered.spent;
-                if (discovered.onChain && !discovered.spent) {
-                    merged.pending = false;
-                }
-                tracked[j] = merged;
-                exists = true;
-                break;
-            }
-        }
-        if (!exists) {
-            tracked.append(seedScanDiscovered.at(i));
-        }
-    }
-
-    // Detect reverted outputs: previously confirmed unspent outputs that are no
-    // longer in the UTXO set after a complete seed scan indicate a chain reorg.
-    QSet<QString> discoveredCommitments;
-    for (int i = 0; i < seedScanDiscovered.size(); ++i) {
-        discoveredCommitments.insert(seedScanDiscovered.at(i).commitment);
-    }
-    for (int i = 0; i < tracked.size(); ++i) {
-        const WalletOutput &out = tracked.at(i);
-        if (discoveredCommitments.contains(out.commitment)) {
-            // Found in UTXO: clear any reverted/spent flags set by previous reorg detection.
-            tracked[i].reverted = false;
-            continue;
-        }
-        // Locked inputs not in UTXO: transaction confirmed on-chain, input is spent.
-        if (out.locked && !out.spent) {
-            tracked[i].spent = true;
-            tracked[i].locked = false;
-            tracked[i].pending = false;
-            tracked[i].onChain = false;
-            continue;
-        }
-        // Previously confirmed unspent outputs missing from UTXO: chain reorg.
-        if (out.onChain && !out.spent && !out.pending && !out.locked) {
-            tracked[i].reverted = true;
-            tracked[i].onChain = false;
-        }
-    }
-
-    quint32 nextChildIndex = m_controller->nextChildIndexFromStateForService(walletState);
-    for (int i = 0; i < tracked.size(); ++i) {
-        if (tracked.at(i).childIndex + 1 > nextChildIndex) {
-            nextChildIndex = tracked.at(i).childIndex + 1;
-        }
-    }
-
-    walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(tracked));
-    walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(tracked, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
-    walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
-    walletState.insert(QStringLiteral("restore_leaf_index"),
-                       QString::number(listing.lastRetrievedIndex() > 0
-                                           ? listing.lastRetrievedIndex()
-                                           : (m_controller->seedScanNextIndex() > 0 ? m_controller->seedScanNextIndex() - 1 : 1)));
-    walletState.insert(QStringLiteral("next_child_index"), static_cast<int>(nextChildIndex));
-    const QString previousSyncMode = walletState.value(QStringLiteral("last_sync_mode")).toString();
-
-    const bool rebuildingTransactions = previousSyncMode == QStringLiteral("full-rescan");
-    if (rebuildingTransactions) {
-        const QJsonArray rebuiltTransactions =
-            m_controller->rebuildTransactionHistoryFromOutputs(tracked, walletState.value(QStringLiteral("transaction_rescan_backup")).toArray());
-        walletState.insert(QStringLiteral("transactions"), rebuiltTransactions);
-        document.insert(QStringLiteral("workflow_contexts"),
-                        m_controller->filterWorkflowContextsForTransactionsForService(
-                            document.value(QStringLiteral("workflow_contexts")).toObject(),
-                            rebuiltTransactions));
-    }
-    walletState.remove(QStringLiteral("transaction_rescan_backup"));
-    walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("seed-rewind"));
-    walletState.insert(QStringLiteral("last_synced_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-
-    document.insert(QStringLiteral("wallet_state"), walletState);
-
-    if (!m_controller->saveDocumentForService(document)) {
-        m_controller->setLastError(QStringLiteral("Failed to persist seed scan results."));
-        return;
-    }
-
-    m_controller->refreshStateFromStorage();
-    m_controller->setSyncStatusMessage(QStringLiteral("Seed scan 100% complete"));
-    m_controller->notifyStatusChanged();
-    m_controller->setLastError(QString());
-    m_controller->setLastInfo(QString());
-    m_controller->setSeedScanActive(false);
-    m_controller->setWalletScanInFlight(false);
-    m_controller->setFullRescanInFlight(false);
 }
 
 /**

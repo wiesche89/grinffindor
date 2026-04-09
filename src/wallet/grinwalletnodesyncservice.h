@@ -6,11 +6,11 @@
 #include <QJsonArray>
 #include <QHash>
 #include <QJsonObject>
+#include <QSet>
 #include <QString>
 
 #include "locatedtxkernel.h"
 #include "nodeversion.h"
-#include "outputlisting.h"
 #include "outputprintable.h"
 #include "poolentry.h"
 #include "result.h"
@@ -80,10 +80,6 @@ private slots:
  */
     void onNodeOutputCommitmentsFinished(const Result<QList<OutputPrintable> > &result);
 /**
- * @brief Handles completion of the unspent outputs request.
- */
-    void onNodeUnspentOutputsFinished(const Result<OutputListing> &result);
-/**
  * @brief Handles completion of the unconfirmed transaction request.
  */
     void onNodeUnconfirmedTransactionsFinished(const Result<QList<PoolEntry> > &result);
@@ -102,6 +98,7 @@ private:
         QJsonObject walletState;
         QList<WalletOutput> tracked;
         QHash<QString, int> trackedIndexByCommitment;
+        QSet<QString> discoveredCommitmentsInScan;
         WalletKeychain keychain;
         quint32 nextChildIndex{0};
         QJsonArray transactionRescanBackup;
@@ -110,7 +107,6 @@ private:
         int batchesSinceCheckpoint{0};
     };
 
-    static constexpr int kSeedScanBatchSize = 5000;
     static constexpr int kFullRescanBatchSize = 2000;
     static constexpr bool kFullRescanIncludeProof = true;
     static constexpr int kFullRescanCheckpointInterval = 1;
