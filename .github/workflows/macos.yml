@@ -1,0 +1,45 @@
+name: macOS Build
+
+on:
+  workflow_call:  # wird von build.yml aufgerufen
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-macos:
+    name: macOS
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'mac'
+          target: 'desktop'
+          cache: true
+          set-env: true
+
+      - name: Build
+        run: |
+          mkdir -p build-macos
+          cd build-macos
+          qmake ../grinffindor.pro CONFIG+=release
+          make -j$(sysctl -n hw.logicalcpu)
+
+      - name: macdeployqt
+        run: |
+          macdeployqt build-macos/grinffindor.app \
+            -qmldir=qml \
+            -dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-macos
+          path: build-macos/grinffindor.dmg
+          if-no-files-found: warn

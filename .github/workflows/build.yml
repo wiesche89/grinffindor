@@ -12,6 +12,13 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────
+  # macOS (eigene Workflow-Datei)
+  # ─────────────────────────────────────────────
+  build-macos:
+    uses: ./.github/workflows/macos.yml
+    secrets: inherit
+
+  # ─────────────────────────────────────────────
   # Android
   # ─────────────────────────────────────────────
   build-android:
@@ -307,7 +314,7 @@ jobs:
   notify:
     name: Telegram
     runs-on: ubuntu-latest
-    needs: [build-android, build-linux, build-windows, build-ios, build-wasm]
+    needs: [build-macos, build-android, build-linux, build-windows, build-ios, build-wasm]
     if: always()
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -316,6 +323,7 @@ jobs:
       - name: Send status message
         env:
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          R_MACOS: ${{ needs.build-macos.result }}
           R_ANDROID: ${{ needs.build-android.result }}
           R_LINUX: ${{ needs.build-linux.result }}
           R_WINDOWS: ${{ needs.build-windows.result }}
@@ -326,11 +334,12 @@ jobs:
           emoji() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
           COMMIT=$(echo "$COMMIT_MESSAGE" | head -1)
           OVERALL="success"
-          for s in "$R_ANDROID" "$R_LINUX" "$R_WINDOWS" "$R_IOS" "$R_WASM"; do
+          for s in "$R_MACOS" "$R_ANDROID" "$R_LINUX" "$R_WINDOWS" "$R_IOS" "$R_WASM"; do
             [ "$s" != "success" ] && OVERALL="failure"
           done
           [ "$OVERALL" = "success" ] && TOP="✅ <b>Build complete</b>" || TOP="❌ <b>Build failed</b>"
           MSG="${TOP}"$'\n\n'
+          MSG+="$(emoji $R_MACOS) 🍏 macOS: ${R_MACOS}"$'\n'
           MSG+="$(emoji $R_ANDROID) 🤖 Android: ${R_ANDROID}"$'\n'
           MSG+="$(emoji $R_LINUX) 🐧 Linux: ${R_LINUX}"$'\n'
           MSG+="$(emoji $R_WINDOWS) 🪟 Windows: ${R_WINDOWS}"$'\n'
