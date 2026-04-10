@@ -205,10 +205,55 @@ jobs:
           windeployqt --release --no-translations --qmldir qml ^
             build-windows\release\grinffindor.exe
 
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Read app version
+        id: app-version
+        shell: powershell
+        run: |
+          $versionLine = Select-String -Path grinffindor.pro -Pattern '^\s*VERSION\s*=\s*(.+?)\s*$' | Select-Object -First 1
+          if (-not $versionLine) {
+            throw "VERSION entry not found in grinffindor.pro."
+          }
+          $version = $versionLine.Matches[0].Groups[1].Value.Trim()
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Install WiX
+        shell: powershell
+        run: |
+          dotnet tool install --global wix --version 6.*
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Generate WiX fragment
+        shell: powershell
+        run: |
+          .\packaging\windows\Generate-WixFragment.ps1 `
+            -SourceDir .\build-windows\release `
+            -OutputFile .\build-windows\installer\GeneratedFiles.wxs
+
+      - name: Build MSI
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path .\build-windows\installer -Force | Out-Null
+          wix build `
+            .\packaging\windows\Grinffindor.Package.wxs `
+            .\build-windows\installer\GeneratedFiles.wxs `
+            -arch x64 `
+            -d Version=${{ steps.app-version.outputs.value }} `
+            -o .\build-windows\installer\Grinffindor-${{ steps.app-version.outputs.value }}-x64.msi
+
       - uses: actions/upload-artifact@v4
         with:
           name: grinffindor-windows
           path: build-windows/release/
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-windows-msi
+          path: build-windows/installer/*.msi
           if-no-files-found: warn
 
   # ─────────────────────────────────────────────

@@ -1,0 +1,24 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="Grinffindor"
+    Manufacturer="Grinffindor"
+    Version="$(Version)"
+    UpgradeCode="8F2CF7DA-9F8C-4C38-9F29-70959C5F1A29"
+    Language="1033"
+    Scope="perMachine"
+    InstallerVersion="500">
+    <SummaryInformation
+      Description="Grinffindor wallet and ecosystem client"
+      Manufacturer="Grinffindor" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Grinffindor" />
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="Grinffindor" Level="1">
+      <ComponentGroupRef Id="ApplicationFiles" />
+    </Feature>
+  </Package>
+</Wix>

@@ -13,6 +13,8 @@ Qt Quick / QML application for desktop and WebAssembly, including a containerize
 2. Open `grinffindor.pro` in Qt Creator or run `qmake grinffindor.pro`.
 3. Build with your target kit.
 
+The GitHub Actions Windows job now publishes both the deployed app directory and a `.msi` installer artifact built from that deployment tree.
+
 ## Android Build
 The project now includes an Android package template with network permissions and cleartext support for custom node endpoints.
 
