@@ -1,0 +1,85 @@
+name: WebAssembly Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-wasm:
+    name: WebAssembly
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Qt 6.8.1 + Emscripten 3.1.50 sind aufeinander abgestimmt.
+      # Lokale Builds nutzen 6.10.1 – sobald aqtinstall 6.10.1 anbietet,
+      # beide Versionen hier anpassen.
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '3.1.50'
+          actions-cache-folder: 'emsdk-cache'
+
+      # Qt Linux-Hosttools (qmake, moc, rcc …)
+      - name: Install Qt (Linux host tools)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+          set-env: true
+
+      # Qt WASM single-threaded Bibliotheken
+      - name: Install Qt (WebAssembly single-threaded)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'wasm_singlethread'
+          cache: true
+          set-env: false
+
+      - name: Build
+        run: |
+          # QT_ROOT_DIR zeigt auf gcc_64 (Host).
+          # WASM-qmake liegt im Nachbarverzeichnis wasm_singlethread.
+          QT_WASM_BIN="${{ env.QT_ROOT_DIR }}/../wasm_singlethread/bin"
+
+          mkdir -p build-wasm
+          cd build-wasm
+
+          "$QT_WASM_BIN/qmake" ../grinffindor.pro \
+            -spec wasm-emscripten \
+            CONFIG+=release \
+            CONFIG+=sdk_no_version_check
+
+          make -j$(nproc)
+
+      - name: Collect WASM artifacts
+        run: |
+          mkdir -p wasm-dist
+          cd build-wasm
+          cp grinffindor.html \
+             grinffindor.js \
+             grinffindor.wasm \
+             qtloader.js \
+             ../wasm-dist/ 2>/dev/null || true
+          # Mediendateien falls vorhanden
+          [ -d media ] && cp -r media ../wasm-dist/ || true
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-wasm-${{ github.sha }}
+          path: wasm-dist/
+          if-no-files-found: error

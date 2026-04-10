@@ -58,12 +58,14 @@ jobs:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          QT_ANDROID=${{ env.QT_ROOT_DIR }}/../android_arm64_v8a
+          # QT_ROOT_DIR zeigt auf gcc_64 (Desktop-Host).
+          # Android-qmake liegt im Nachbarverzeichnis android_arm64_v8a.
+          QT_ANDROID_BIN="${{ env.QT_ROOT_DIR }}/../android_arm64_v8a/bin"
 
           mkdir -p build-android
           cd build-android
 
-          qmake ../grinffindor.pro \
+          "$QT_ANDROID_BIN/qmake" ../grinffindor.pro \
             -spec android-clang \
             CONFIG+=release \
             ANDROID_ABIS=arm64-v8a \
