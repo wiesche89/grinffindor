@@ -40,7 +40,7 @@ jobs:
             CONFIG+=iphonesimulator \
             CONFIG+=simulator \
             CONFIG+=release \
-            QMAKE_IOS_DEPLOYMENT_TARGET=15.0 \
+            QMAKE_IOS_DEPLOYMENT_TARGET=16.0 \
             QMAKE_APPLE_DEVICE_ARCHS=arm64
 
       - name: Build for Simulator (kein Signing)
