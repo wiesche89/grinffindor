@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        method: Wähle je nach Ziel:
+          "development"  – Testen auf Entwicklergeräten
+          "ad-hoc"       – Testen auf registrierten Geräten ohne App Store
+          "app-store"    – Veröffentlichung im App Store / TestFlight
+    -->
+    <key>method</key>
+    <string>ad-hoc</string>
+
+    <key>teamID</key>
+    <string>APPLE_TEAM_ID_PLACEHOLDER</string>
+
+    <key>signingStyle</key>
+    <string>manual</string>
+
+    <key>stripSwiftSymbols</key>
+    <true/>
+
+    <key>compileBitcode</key>
+    <false/>
+
+    <key>thinning</key>
+    <string>&lt;none&gt;</string>
+</dict>
+</plist>
