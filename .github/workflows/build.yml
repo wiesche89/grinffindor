@@ -1,0 +1,354 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Android
+  # ─────────────────────────────────────────────
+  build-android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26c
+          add-to-path: true
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+          set-env: true
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'linux'
+          target: 'android'
+          arch: 'android_arm64_v8a'
+          cache: true
+          set-env: false
+
+      - name: qmake
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          mkdir -p build-android && cd build-android
+          "${{ env.QT_ROOT_DIR }}/../android_arm64_v8a/bin/qmake" ../grinffindor.pro \
+            -spec android-clang CONFIG+=release \
+            ANDROID_ABIS=arm64-v8a \
+            ANDROID_MIN_SDK_VERSION=28 \
+            ANDROID_TARGET_SDK_VERSION=34
+
+      - name: make
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: cd build-android && make -j$(nproc)
+
+      - name: make apk
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: cd build-android && make apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-android
+          path: build-android/android-build/build/outputs/apk/**/*.apk
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────
+  # Linux
+  # ─────────────────────────────────────────────
+  build-linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev libglib2.0-dev libfontconfig1-dev libfreetype-dev \
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-glx0-dev \
+            libxcb-keysyms1-dev libxcb-image0-dev libxcb-shm0-dev \
+            libxcb-icccm4-dev libxcb-sync-dev libxcb-xfixes0-dev \
+            libxcb-shape0-dev libxcb-randr0-dev libxcb-render-util0-dev \
+            libxcb-util-dev libxcb-xinerama0-dev libxcb-xkb-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev ninja-build
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+          set-env: true
+
+      - name: Build
+        run: |
+          mkdir -p build-linux && cd build-linux
+          qmake ../grinffindor.pro CONFIG+=release
+          make -j$(nproc)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-linux
+          path: build-linux/grinffindor
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────
+  # Windows
+  # ─────────────────────────────────────────────
+  build-windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          cache: true
+          set-env: true
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build
+        shell: cmd
+        run: |
+          mkdir build-windows
+          cd build-windows
+          qmake ..\grinffindor.pro CONFIG+=release
+          nmake
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-windows
+          path: build-windows/release/grinffindor.exe
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────
+  # iOS (Simulator)
+  # ─────────────────────────────────────────────
+  build-ios:
+    name: iOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'mac'
+          target: 'ios'
+          cache: true
+          set-env: true
+
+      - name: qmake
+        run: |
+          mkdir -p build-ios && cd build-ios
+          qmake ../grinffindor.pro \
+            -spec macx-ios-clang \
+            CONFIG+=iphonesimulator CONFIG+=simulator CONFIG+=release \
+            QMAKE_IOS_DEPLOYMENT_TARGET=16.0 \
+            QMAKE_APPLE_DEVICE_ARCHS=arm64
+
+      - name: xcodebuild
+        run: |
+          cd build-ios
+          XCODEPROJ=$(find . -name "*.xcodeproj" | head -1)
+          SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
+          xcodebuild \
+            -project "$XCODEPROJ" -scheme "$SCHEME" \
+            -sdk iphonesimulator -configuration Release \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" \
+            | xcpretty || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-ios
+          path: build-ios/**/*.app
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────
+  # WebAssembly
+  # ─────────────────────────────────────────────
+  build-wasm:
+    name: WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '3.1.50'
+          actions-cache-folder: 'emsdk-cache'
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+          set-env: true
+
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'wasm_singlethread'
+          cache: true
+          set-env: false
+
+      - name: Build
+        run: |
+          mkdir -p build-wasm && cd build-wasm
+          "${{ env.QT_ROOT_DIR }}/../wasm_singlethread/bin/qmake" ../grinffindor.pro \
+            -spec wasm-emscripten CONFIG+=release CONFIG+=sdk_no_version_check
+          make -j$(nproc)
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p wasm-dist
+          cd build-wasm
+          cp grinffindor.html grinffindor.js grinffindor.wasm qtloader.js \
+             ../wasm-dist/ 2>/dev/null || true
+          [ -d media ] && cp -r media ../wasm-dist/ || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-wasm
+          path: wasm-dist/
+          if-no-files-found: warn
+
+  # ─────────────────────────────────────────────
+  # Telegram – eine Nachricht für alle Plattformen
+  # ─────────────────────────────────────────────
+  notify:
+    name: Telegram
+    runs-on: ubuntu-latest
+    needs: [build-android, build-linux, build-windows, build-ios, build-wasm]
+    if: always()
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Send status message
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          R_ANDROID: ${{ needs.build-android.result }}
+          R_LINUX: ${{ needs.build-linux.result }}
+          R_WINDOWS: ${{ needs.build-windows.result }}
+          R_IOS: ${{ needs.build-ios.result }}
+          R_WASM: ${{ needs.build-wasm.result }}
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          emoji() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
+          COMMIT=$(echo "$COMMIT_MESSAGE" | head -1)
+          OVERALL="success"
+          for s in "$R_ANDROID" "$R_LINUX" "$R_WINDOWS" "$R_IOS" "$R_WASM"; do
+            [ "$s" != "success" ] && OVERALL="failure"
+          done
+          [ "$OVERALL" = "success" ] && TOP="✅ <b>Build complete</b>" || TOP="❌ <b>Build failed</b>"
+          MSG="${TOP}"$'\n\n'
+          MSG+="$(emoji $R_ANDROID) 🤖 Android: ${R_ANDROID}"$'\n'
+          MSG+="$(emoji $R_LINUX) 🐧 Linux: ${R_LINUX}"$'\n'
+          MSG+="$(emoji $R_WINDOWS) 🪟 Windows: ${R_WINDOWS}"$'\n'
+          MSG+="$(emoji $R_IOS) 🍎 iOS: ${R_IOS}"$'\n'
+          MSG+="$(emoji $R_WASM) 🌐 WebAssembly: ${R_WASM}"$'\n\n'
+          MSG+="🧑‍💻 <b>Actor:</b> ${{ github.actor }}"$'\n'
+          MSG+="📦 <b>Repository:</b> ${{ github.repository }}"$'\n'
+          MSG+="🏷️ <b>Branch:</b> ${{ github.ref_name }}"$'\n'
+          MSG+="🔨 <b>Commit:</b> ${COMMIT}"
+          jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MSG" \
+            '{chat_id: $chat_id, parse_mode: "HTML", text: $text}' | \
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" -d @-
+
+      - name: Upload Android APK to Telegram
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          APK=$(find artifacts/grinffindor-android -name "*.apk" 2>/dev/null | head -1)
+          [ -z "$APK" ] && exit 0
+          FILENAME="grinffindor-${{ github.ref_name }}-android.apk"
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"$APK;filename=${FILENAME}" \
+            -F caption="🤖 Android APK"
+
+      - name: Upload Linux binary to Telegram
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          BIN="artifacts/grinffindor-linux/grinffindor"
+          [ ! -f "$BIN" ] && exit 0
+          FILENAME="grinffindor-${{ github.ref_name }}-linux-x86_64.zip"
+          zip "$FILENAME" "$BIN"
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"${FILENAME}" \
+            -F caption="🐧 Linux Binary"
+
+      - name: Upload Windows EXE to Telegram
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          EXE="artifacts/grinffindor-windows/grinffindor.exe"
+          [ ! -f "$EXE" ] && exit 0
+          FILENAME="grinffindor-${{ github.ref_name }}-win-x86_64.zip"
+          zip "$FILENAME" "$EXE"
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"${FILENAME}" \
+            -F caption="🪟 Windows EXE"
+
+      - name: Upload WASM to Telegram
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          [ ! -d "artifacts/grinffindor-wasm" ] && exit 0
+          FILENAME="grinffindor-${{ github.ref_name }}-wasm.zip"
+          cd artifacts/grinffindor-wasm && zip -r "../../${FILENAME}" . && cd ../..
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"${FILENAME}" \
+            -F caption="🌐 WebAssembly Build"
