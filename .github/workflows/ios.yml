@@ -18,25 +18,17 @@ jobs:
         with:
           submodules: recursive
 
-      # Qt macOS-Hosttools (qmake, moc, rcc …)
-      - name: Install Qt (macOS host tools)
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.8.1'
-          host: 'mac'
-          target: 'desktop'
-          cache: true
-          set-env: true
-
-      # Qt iOS-Bibliotheken (Cross-Compile-Ziel)
-      - name: Install Qt (iOS target)
+      # iOS-Qt installieren. aqtinstall installiert via --autodesktop
+      # automatisch auch die macOS-Hosttools (qmake, moc, rcc …).
+      # set-env: true → iOS-qmake landet im PATH (kennt entrypoint-private etc.)
+      - name: Install Qt (iOS)
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.1'
           host: 'mac'
           target: 'ios'
           cache: true
-          set-env: false
+          set-env: true
 
       - name: Generate Xcode project with qmake
         run: |
