@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -298,7 +302,7 @@ jobs:
         run: |
           mkdir -p wasm-dist
           cd build-wasm
-          cp grinffindor.html grinffindor.js grinffindor.wasm qtloader.js \
+          cp grinffindor.html grinffindor.js grinffindor.wasm qtloader.js qtlogo.svg \
              ../wasm-dist/ 2>/dev/null || true
           [ -d media ] && cp -r media ../wasm-dist/ || true
 
@@ -307,6 +311,74 @@ jobs:
           name: grinffindor-wasm
           path: wasm-dist/
           if-no-files-found: warn
+
+      - name: Prepare image tags
+        id: image-vars
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          TAGS="$(printf '%s\n%s' \
+            "ghcr.io/${OWNER_LC}/grinffindor:latest" \
+            "ghcr.io/${OWNER_LC}/grinffindor:sha-${SHORT_SHA}")"
+
+          if [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
+            TAGS="${TAGS}"$'\n'"${DOCKERHUB_USERNAME}/grinffindor:latest"$'\n'"${DOCKERHUB_USERNAME}/grinffindor:sha-${SHORT_SHA}"
+            echo "dockerhub_enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "dockerhub_enabled=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          printf 'tags<<EOF\n%s\nEOF\n' "${TAGS}" >> "${GITHUB_OUTPUT}"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.image-vars.outputs.dockerhub_enabled == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Validate Docker image build
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          build-args: PREBUILT_DIR=wasm-dist
+          platforms: linux/amd64
+          push: false
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=grinffindor
+
+      - name: Build and push Docker image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          build-args: PREBUILT_DIR=wasm-dist
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image-vars.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=grinffindor
 
   # ─────────────────────────────────────────────
   # Telegram – eine Nachricht für alle Plattformen

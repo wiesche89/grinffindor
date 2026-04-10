@@ -54,6 +54,11 @@ docker compose up --build -d
 
 4. Open `http://localhost:8084`.
 
+On GitHub Actions, the `WebAssembly` job now also builds the container from `Dockerfile`. Pull requests validate the image build, and pushes to `main` publish:
+- `ghcr.io/<owner>/grinffindor:latest`
+- `ghcr.io/<owner>/grinffindor:sha-<commit>`
+- optionally `docker.io/<DOCKERHUB_USERNAME>/grinffindor:*` when `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are configured as repository secrets
+
 ## Docker Hub Image Build
 Before building the container image, create the Qt WebAssembly output locally.
 
