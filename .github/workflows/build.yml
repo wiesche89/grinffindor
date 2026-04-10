@@ -223,7 +223,8 @@ jobs:
       - name: Install WiX
         shell: powershell
         run: |
-          dotnet tool install --global wix --version 6.*
+          dotnet tool install --global wix --version 6.0.2
+          wix extension add -g WixToolset.UI.wixext/6.0.2
           "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Generate WiX fragment
@@ -241,6 +242,8 @@ jobs:
             .\packaging\windows\Grinffindor.Package.wxs `
             .\build-windows\installer\GeneratedFiles.wxs `
             -arch x64 `
+            -ext WixToolset.UI.wixext `
+            -bindvariable WixUILicenseRtf=.\\packaging\\windows\\License.rtf `
             -d Version=${{ steps.app-version.outputs.value }} `
             -o .\build-windows\installer\Grinffindor-${{ steps.app-version.outputs.value }}-x64.msi
 

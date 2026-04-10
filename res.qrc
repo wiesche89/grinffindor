@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/res">
+        <file>media/icons/IconGrinffindor.ico</file>
         <file>media/icons/IconX.svg</file>
         <file>media/icons/IconTelegram.svg</file>
         <file>media/icons/IconGrin.svg</file>

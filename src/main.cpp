@@ -1,6 +1,8 @@
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQuickWindow>
 #include <QQuickStyle>
 #include <QUrl>
 #include <QCoreApplication>
@@ -49,6 +51,8 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("Grinffindor"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("grinffindor.org"));
+    const QIcon appIcon(QStringLiteral(":/res/media/icons/IconGrinffindor.ico"));
+    app.setWindowIcon(appIcon);
     qputenv("QML_XHR_ALLOW_FILE_READ", "1");
 
     // -------------------------------------------------------------------------------------------------------
@@ -74,6 +78,12 @@ int main(int argc, char *argv[])
     // -------------------------------------------------------------------------------------------------------
     if (engine.rootObjects().isEmpty()) {
         return -1;
+    }
+
+    for (QObject *rootObject : engine.rootObjects()) {
+        if (auto *window = qobject_cast<QQuickWindow *>(rootObject)) {
+            window->setIcon(appIcon);
+        }
     }
 
     // -------------------------------------------------------------------------------------------------------

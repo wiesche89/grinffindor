@@ -68,6 +68,16 @@ function New-StableId {
     return "${Prefix}_${sanitized}_${hash}"
 }
 
+function Get-FileId {
+    param([string]$RelativePath)
+
+    if ($RelativePath -ieq "grinffindor.exe") {
+        return "GrinffindorExecutable"
+    }
+
+    return New-StableId -Prefix "fil" -RelativePath $RelativePath
+}
+
 $files = Get-ChildItem -LiteralPath $resolvedSourceDir -File -Recurse | Sort-Object FullName
 if (-not $files) {
     throw "No files found in '$resolvedSourceDir'."
@@ -151,7 +161,7 @@ function Write-DirectoryContent {
     if ($filesByDirectory.ContainsKey($DirectoryKey)) {
         foreach ($entry in ($filesByDirectory[$DirectoryKey] | Sort-Object RelativePath)) {
             $componentId = New-StableId -Prefix "cmp" -RelativePath $entry.RelativePath
-            $fileId = New-StableId -Prefix "fil" -RelativePath $entry.RelativePath
+            $fileId = Get-FileId -RelativePath $entry.RelativePath
             $componentIds.Add($componentId) | Out-Null
 
             Write-IndentedLine -StreamWriter $StreamWriter -IndentLevel $IndentLevel -Text "<Component Id=""$componentId"" Guid=""*"">"

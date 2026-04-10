@@ -1,4 +1,6 @@
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix
+  xmlns="http://wixtoolset.org/schemas/v4/wxs"
+  xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package
     Name="Grinffindor"
     Manufacturer="Grinffindor"
@@ -12,13 +14,51 @@
       Manufacturer="Grinffindor" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
+    <ui:WixUI Id="WixUI_Mondo" InstallDirectory="INSTALLFOLDER" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="Grinffindor" />
     </StandardDirectory>
 
-    <Feature Id="MainFeature" Title="Grinffindor" Level="1">
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Grinffindor" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="MainFeature" Title="Grinffindor" Level="1" AllowAdvertise="no">
       <ComponentGroupRef Id="ApplicationFiles" />
+      <ComponentRef Id="ApplicationShortcutComponent" />
     </Feature>
+
+    <Feature
+      Id="DesktopShortcutFeature"
+      Title="Desktop shortcut"
+      Description="Creates a shortcut on the desktop."
+      Level="4"
+      AllowAdvertise="no">
+      <ComponentRef Id="DesktopShortcutComponent" />
+    </Feature>
+
+    <Component Id="ApplicationShortcutComponent" Directory="ApplicationProgramsFolder" Guid="*">
+      <Shortcut
+        Id="StartMenuShortcut"
+        Name="Grinffindor"
+        Description="Grinffindor wallet and ecosystem client"
+        Target="[#GrinffindorExecutable]"
+        WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKLM" Key="Software\Grinffindor" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="DesktopShortcutComponent" Directory="DesktopFolder" Guid="*">
+      <Shortcut
+        Id="DesktopShortcut"
+        Name="Grinffindor"
+        Description="Grinffindor wallet and ecosystem client"
+        Target="[#GrinffindorExecutable]"
+        WorkingDirectory="INSTALLFOLDER" />
+      <RegistryValue Root="HKLM" Key="Software\Grinffindor" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
   </Package>
 </Wix>

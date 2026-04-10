@@ -126,6 +126,10 @@ ios {
     QMAKE_INFO_PLIST = $$PWD/ios/Info.plist
 }
 
+win32 {
+    RC_FILE = $$PWD/windows/grinffindor.rc
+}
+
 
 #SUBMODULES
 include(src/submodules/grin-common-api/grin-common-api.pri)
