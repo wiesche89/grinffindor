@@ -113,10 +113,44 @@ jobs:
           qmake ../grinffindor.pro CONFIG+=release
           make -j$(nproc)
 
+      - name: Create AppImage
+        run: |
+          # linuxdeploy + Qt-Plugin herunterladen
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy*.AppImage
+
+          # AppDir-Struktur
+          mkdir -p AppDir/usr/bin \
+                   AppDir/usr/share/applications \
+                   AppDir/usr/share/icons/hicolor/256x256/apps
+
+          cp build-linux/grinffindor AppDir/usr/bin/
+          cp media/tiles/tile_grinffindor.PNG \
+             AppDir/usr/share/icons/hicolor/256x256/apps/grinffindor.png
+
+          cat > AppDir/usr/share/applications/grinffindor.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Grinffindor
+          Exec=grinffindor
+          Icon=grinffindor
+          Type=Application
+          Categories=Finance;
+          EOF
+
+          # APPIMAGE_EXTRACT_AND_RUN umgeht FUSE-Anforderung in CI
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export QMAKE=$(which qmake)
+
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --plugin qt \
+            --output appimage
+
       - uses: actions/upload-artifact@v4
         with:
           name: grinffindor-linux
-          path: build-linux/grinffindor
+          path: Grinffindor-*.AppImage
           if-no-files-found: warn
 
   # ─────────────────────────────────────────────
@@ -151,10 +185,16 @@ jobs:
           qmake ..\grinffindor.pro CONFIG+=release
           nmake
 
+      - name: windeployqt
+        shell: cmd
+        run: |
+          windeployqt --release --no-translations --qmldir qml ^
+            build-windows\release\grinffindor.exe
+
       - uses: actions/upload-artifact@v4
         with:
           name: grinffindor-windows
-          path: build-windows/release/grinffindor.exe
+          path: build-windows/release/
           if-no-files-found: warn
 
   # ─────────────────────────────────────────────
@@ -219,6 +259,7 @@ jobs:
           version: '3.1.50'
           actions-cache-folder: 'emsdk-cache'
 
+      # Qt 6.7+ WASM-Pakete liegen unter host=all_os, target=wasm
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.7.2'
@@ -231,8 +272,8 @@ jobs:
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.7.2'
-          host: 'linux'
-          target: 'desktop'
+          host: 'all_os'
+          target: 'wasm'
           arch: 'wasm_singlethread'
           cache: true
           set-env: false
@@ -307,48 +348,58 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -H "Content-Type: application/json" -d @-
 
-      - name: Upload Android APK to Telegram
+      - name: Upload alle Artefakte als eine Telegram-Nachricht
         run: |
           [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          BRANCH="${{ github.ref_name }}"
+          CURL_ARGS=()
+          MEDIA='['
+          SEP=""
+
+          # Android APK
           APK=$(find artifacts/grinffindor-android -name "*.apk" 2>/dev/null | head -1)
-          [ -z "$APK" ] && exit 0
-          FILENAME="grinffindor-${{ github.ref_name }}-android.apk"
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"$APK;filename=${FILENAME}" \
-            -F caption="🤖 Android APK"
+          if [ -n "$APK" ]; then
+            cp "$APK" /tmp/grinffindor-${BRANCH}-android.apk
+            CURL_ARGS+=(-F "f_android=@/tmp/grinffindor-${BRANCH}-android.apk")
+            MEDIA+="${SEP}{\"type\":\"document\",\"media\":\"attach://f_android\",\"caption\":\"🤖 Android APK\"}"
+            SEP=","
+          fi
 
-      - name: Upload Linux binary to Telegram
-        run: |
-          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
-          BIN="artifacts/grinffindor-linux/grinffindor"
-          [ ! -f "$BIN" ] && exit 0
-          FILENAME="grinffindor-${{ github.ref_name }}-linux-x86_64.zip"
-          zip "$FILENAME" "$BIN"
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"${FILENAME}" \
-            -F caption="🐧 Linux Binary"
+          # Linux AppImage
+          APPIMAGE=$(find artifacts/grinffindor-linux -name "*.AppImage" 2>/dev/null | head -1)
+          if [ -n "$APPIMAGE" ]; then
+            APPIMAGE_NAME="grinffindor-${BRANCH}-linux-x86_64.AppImage"
+            cp "$APPIMAGE" /tmp/${APPIMAGE_NAME}
+            CURL_ARGS+=(-F "f_linux=@/tmp/${APPIMAGE_NAME}")
+            MEDIA+="${SEP}{\"type\":\"document\",\"media\":\"attach://f_linux\",\"caption\":\"🐧 Linux AppImage\"}"
+            SEP=","
+          fi
 
-      - name: Upload Windows EXE to Telegram
-        run: |
-          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
-          EXE="artifacts/grinffindor-windows/grinffindor.exe"
-          [ ! -f "$EXE" ] && exit 0
-          FILENAME="grinffindor-${{ github.ref_name }}-win-x86_64.zip"
-          zip "$FILENAME" "$EXE"
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"${FILENAME}" \
-            -F caption="🪟 Windows EXE"
+          # Windows (komplettes Deployment-Verzeichnis)
+          if [ -d "artifacts/grinffindor-windows" ]; then
+            WINZIP="/tmp/grinffindor-${BRANCH}-win-x86_64.zip"
+            (cd artifacts/grinffindor-windows && zip -r "$WINZIP" .)
+            CURL_ARGS+=(-F "f_windows=@${WINZIP}")
+            MEDIA+="${SEP}{\"type\":\"document\",\"media\":\"attach://f_windows\",\"caption\":\"🪟 Windows\"}"
+            SEP=","
+          fi
 
-      - name: Upload WASM to Telegram
-        run: |
-          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
-          [ ! -d "artifacts/grinffindor-wasm" ] && exit 0
-          FILENAME="grinffindor-${{ github.ref_name }}-wasm.zip"
-          cd artifacts/grinffindor-wasm && zip -r "../../${FILENAME}" . && cd ../..
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"${FILENAME}" \
-            -F caption="🌐 WebAssembly Build"
+          # WASM
+          if [ -d "artifacts/grinffindor-wasm" ]; then
+            (cd artifacts/grinffindor-wasm && \
+              zip -r /tmp/grinffindor-${BRANCH}-wasm.zip .)
+            CURL_ARGS+=(-F "f_wasm=@/tmp/grinffindor-${BRANCH}-wasm.zip")
+            MEDIA+="${SEP}{\"type\":\"document\",\"media\":\"attach://f_wasm\",\"caption\":\"🌐 WebAssembly\"}"
+            SEP=","
+          fi
+
+          MEDIA+=']'
+
+          # Nur senden wenn mindestens eine Datei vorhanden
+          if [ ${#CURL_ARGS[@]} -gt 0 ]; then
+            curl -s -X POST \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup" \
+              -F chat_id="$TELEGRAM_CHAT_ID" \
+              -F "media=${MEDIA}" \
+              "${CURL_ARGS[@]}"
+          fi
