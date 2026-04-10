@@ -1,0 +1,49 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.1'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          cache: true
+          set-env: true
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build
+        shell: cmd
+        run: |
+          mkdir build-windows
+          cd build-windows
+          qmake ..\grinffindor.pro CONFIG+=release
+          nmake
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grinffindor-windows-${{ github.sha }}
+          path: build-windows/release/grinffindor.exe
+          if-no-files-found: error
