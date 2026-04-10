@@ -25,7 +25,6 @@ jobs:
           version: '6.8.1'
           host: 'mac'
           target: 'desktop'
-          modules: 'qtquickcontrols2'
           cache: true
           set-env: true
 
@@ -36,7 +35,6 @@ jobs:
           version: '6.8.1'
           host: 'mac'
           target: 'ios'
-          modules: 'qtquickcontrols2'
           cache: true
           set-env: false
 
@@ -95,10 +93,10 @@ jobs:
   #         submodules: recursive
   #
   #     - uses: jurplel/install-qt-action@v4
-  #       with: { version: '6.8.1', host: mac, target: desktop, modules: qtquickcontrols2, cache: true }
+  #       with: { version: '6.8.1', host: mac, target: desktop, cache: true }
   #
   #     - uses: jurplel/install-qt-action@v4
-  #       with: { version: '6.8.1', host: mac, target: ios, modules: qtquickcontrols2, cache: true, set-env: false }
+  #       with: { version: '6.8.1', host: mac, target: ios, cache: true, set-env: false }
   #
   #     - name: Setup code signing
   #       env:
