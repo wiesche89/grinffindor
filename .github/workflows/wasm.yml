@@ -18,9 +18,9 @@ jobs:
         with:
           submodules: recursive
 
-      # Qt 6.8.1 + Emscripten 3.1.50 sind aufeinander abgestimmt.
-      # Lokale Builds nutzen 6.10.1 – sobald aqtinstall 6.10.1 anbietet,
-      # beide Versionen hier anpassen.
+      # Qt 6.7.2 ist die letzte Version mit belegtem wasm_singlethread-Paket
+      # in aqtinstall. Qt 6.8.x hat kein WASM-Paket im aqtinstall-Mirror.
+      # Emscripten 3.1.50 ist kompatibel mit Qt 6.7.x.
       - name: Install Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
@@ -31,7 +31,7 @@ jobs:
       - name: Install Qt (Linux host tools)
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.1'
+          version: '6.7.2'
           host: 'linux'
           target: 'desktop'
           arch: 'linux_gcc_64'
@@ -42,7 +42,7 @@ jobs:
       - name: Install Qt (WebAssembly single-threaded)
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.1'
+          version: '6.7.2'
           host: 'linux'
           target: 'desktop'
           arch: 'wasm_singlethread'
@@ -53,6 +53,7 @@ jobs:
         run: |
           # QT_ROOT_DIR zeigt auf gcc_64 (Host).
           # WASM-qmake liegt im Nachbarverzeichnis wasm_singlethread.
+          # QT_ROOT_DIR zeigt auf gcc_64 (6.7.2 Host).
           QT_WASM_BIN="${{ env.QT_ROOT_DIR }}/../wasm_singlethread/bin"
 
           mkdir -p build-wasm
@@ -83,3 +84,42 @@ jobs:
           name: grinffindor-wasm-${{ github.sha }}
           path: wasm-dist/
           if-no-files-found: error
+
+      - name: Telegram – Status
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          STATUS="${{ job.status }}"
+          [ "$STATUS" = "success" ] && EMOJI="✅" || EMOJI="❌"
+          COMMIT=$(echo "$COMMIT_MESSAGE" | head -1)
+          jq -n \
+            --arg chat_id "$TELEGRAM_CHAT_ID" \
+            --arg text "${EMOJI} <b>Workflow status:</b> ${STATUS}
+
+🌐 <b>Platform:</b> WebAssembly
+🧑‍💻 <b>Actor:</b> ${{ github.actor }}
+📦 <b>Repository:</b> ${{ github.repository }}
+🏹 <b>Workflow:</b> ${{ github.workflow }}
+🏷️ <b>Branch:</b> ${{ github.ref_name }}
+🔨 <b>Commit:</b> ${COMMIT}" \
+            '{chat_id: $chat_id, parse_mode: "HTML", text: $text}' | \
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" -d @-
+
+      - name: Telegram – WASM hochladen
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          FILENAME="grinffindor-${{ github.ref_name }}-wasm"
+          cd wasm-dist && zip -r "../${FILENAME}.zip" . && cd ..
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"${FILENAME}.zip" \
+            -F caption="🌐 WebAssembly Build"

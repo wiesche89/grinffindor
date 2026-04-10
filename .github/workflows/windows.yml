@@ -47,3 +47,44 @@ jobs:
           name: grinffindor-windows-${{ github.sha }}
           path: build-windows/release/grinffindor.exe
           if-no-files-found: error
+
+      - name: Telegram – Status
+        if: always()
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          STATUS="${{ job.status }}"
+          [ "$STATUS" = "success" ] && EMOJI="✅" || EMOJI="❌"
+          COMMIT=$(echo "$COMMIT_MESSAGE" | head -1)
+          jq -n \
+            --arg chat_id "$TELEGRAM_CHAT_ID" \
+            --arg text "${EMOJI} <b>Workflow status:</b> ${STATUS}
+
+🪟 <b>Platform:</b> Windows
+🧑‍💻 <b>Actor:</b> ${{ github.actor }}
+📦 <b>Repository:</b> ${{ github.repository }}
+🏹 <b>Workflow:</b> ${{ github.workflow }}
+🏷️ <b>Branch:</b> ${{ github.ref_name }}
+🔨 <b>Commit:</b> ${COMMIT}" \
+            '{chat_id: $chat_id, parse_mode: "HTML", text: $text}' | \
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" -d @-
+
+      - name: Telegram – EXE hochladen
+        if: success()
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          FILENAME="grinffindor-${{ github.ref_name }}-win-x86_64"
+          powershell -Command "Compress-Archive -Path 'build-windows/release/grinffindor.exe' -DestinationPath '${FILENAME}.zip'"
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"${FILENAME}.zip" \
+            -F caption="🪟 Windows EXE"

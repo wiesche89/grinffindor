@@ -55,11 +55,10 @@ jobs:
 
       - name: Generate Makefile with qmake
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          # QT_ROOT_DIR zeigt auf gcc_64 (Desktop-Host).
-          # Android-qmake liegt im Nachbarverzeichnis android_arm64_v8a.
+          # Qt 6 liest ANDROID_SDK_ROOT und ANDROID_NDK_ROOT aus der Umgebung.
+          # Auf dem Runner ist ANDROID_SDK_ROOT bereits gesetzt.
           QT_ANDROID_BIN="${{ env.QT_ROOT_DIR }}/../android_arm64_v8a/bin"
 
           mkdir -p build-android
@@ -70,14 +69,10 @@ jobs:
             CONFIG+=release \
             ANDROID_ABIS=arm64-v8a \
             ANDROID_MIN_SDK_VERSION=28 \
-            ANDROID_TARGET_SDK_VERSION=34 \
-            ANDROID_PACKAGE_SOURCE_DIR=$$PWD/../android \
-            QMAKE_ANDROID_SDK_ROOT="$ANDROID_SDK_ROOT" \
-            QMAKE_ANDROID_NDK_ROOT="$ANDROID_NDK_ROOT"
+            ANDROID_TARGET_SDK_VERSION=34
 
       - name: Build
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           cd build-android
@@ -85,7 +80,6 @@ jobs:
 
       - name: Build APK (debug – kein Keystore nötig)
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           cd build-android
@@ -97,6 +91,46 @@ jobs:
           name: grinffindor-android-${{ github.sha }}
           path: build-android/android-build/build/outputs/apk/**/*.apk
           if-no-files-found: error
+
+      - name: Telegram – Status
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          STATUS="${{ job.status }}"
+          [ "$STATUS" = "success" ] && EMOJI="✅" || EMOJI="❌"
+          COMMIT=$(echo "$COMMIT_MESSAGE" | head -1)
+          jq -n \
+            --arg chat_id "$TELEGRAM_CHAT_ID" \
+            --arg text "${EMOJI} <b>Workflow status:</b> ${STATUS}
+
+🤖 <b>Platform:</b> Android
+🧑‍💻 <b>Actor:</b> ${{ github.actor }}
+📦 <b>Repository:</b> ${{ github.repository }}
+🏹 <b>Workflow:</b> ${{ github.workflow }}
+🏷️ <b>Branch:</b> ${{ github.ref_name }}
+🔨 <b>Commit:</b> ${COMMIT}" \
+            '{chat_id: $chat_id, parse_mode: "HTML", text: $text}' | \
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" -d @-
+
+      - name: Telegram – APK hochladen
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          APK=$(find build-android/android-build/build/outputs/apk -name "*.apk" | head -1)
+          [ -z "$APK" ] && exit 0
+          FILENAME="grinffindor-${{ github.ref_name }}-android.apk"
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"$APK;filename=${FILENAME}" \
+            -F caption="🤖 Android APK"
 
   # -----------------------------------------------------------------------
   # Release-APK mit Keystore-Signierung (auskommentiert bis Keystore vorliegt)
