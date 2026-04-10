@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-ios-simulator:
-    name: Build (Simulator – kein Zertifikat nötig)
+    name: iOS
     runs-on: macos-latest
 
     steps:
@@ -40,12 +40,10 @@ jobs:
 
       - name: Generate Xcode project with qmake
         run: |
-          QT_HOST=$RUNNER_TOOL_CACHE/Qt/6.8.1/macos
-
           mkdir -p build-ios
           cd build-ios
 
-          "$QT_HOST/bin/qmake" ../grinffindor.pro \
+          qmake ../grinffindor.pro \
             -spec macx-ios-clang \
             CONFIG+=iphonesimulator \
             CONFIG+=simulator \
