@@ -13,6 +13,34 @@ Qt Quick / QML application for desktop and WebAssembly, including a containerize
 2. Open `grinffindor.pro` in Qt Creator or run `qmake grinffindor.pro`.
 3. Build with your target kit.
 
+## Android Build
+The project now includes an Android package template with network permissions and cleartext support for custom node endpoints.
+
+1. Install Qt 6 with the Android kit that matches your compiler ABI.
+2. Install Android Studio components or the standalone Android SDK, NDK, OpenJDK, and platform tools.
+3. In Qt Creator, configure the Android SDK, NDK, and JDK under the Qt settings.
+4. Open `grinffindor.pro` and select an Android kit such as `Android Qt 6.x Clang arm64-v8a`.
+5. Build the project.
+6. For a device install, enable USB debugging on the phone and use the Run target in Qt Creator.
+7. For an APK or AAB, use Qt Creator `Build` -> `Deploy` -> `Build Android APK` or `Build Android App Bundle`.
+
+Notes:
+- The manifest requests `INTERNET` because the wallet and node features call remote APIs.
+- `usesCleartextTraffic="true"` is enabled so existing custom `http://` node endpoints continue to work on Android. If you want to enforce HTTPS only, tighten the manifest and the URL validation together.
+
+## iPhone Build
+The project now includes an iOS `Info.plist` template and runs the main window in fullscreen on native mobile platforms.
+
+1. Build on macOS with Xcode installed. iPhone builds are not supported from Windows.
+2. Install Qt 6 for iOS and register the kit in Qt Creator.
+3. Open `grinffindor.pro` and select an iOS kit for simulator or device.
+4. Build and run from Qt Creator, or open the generated Xcode project if you need signing adjustments.
+5. Set your Apple development team and provisioning profile for device deployment.
+
+Notes:
+- The bundled `Info.plist` allows arbitrary network loads so user-configured `http://` node endpoints do not break under App Transport Security.
+- For App Store delivery, replace placeholder bundle identifiers, versioning, icons, and launch assets with production values.
+
 ## WebAssembly + Docker
 The Docker setup expects a prebuilt Qt WebAssembly output directory, analogous to `grin-node-docker`.
 

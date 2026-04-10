@@ -90,7 +90,6 @@ Item {
                 onEntered: btnArea.hovered = true
                 onExited: btnArea.hovered = false
                 onClicked: {
-                    console.log(tile.titleText + " clicked")
                     tile.activated()
                 }
             }
