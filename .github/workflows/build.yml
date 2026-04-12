@@ -486,7 +486,7 @@ jobs:
           MSG+="📦 <b>Repository:</b> ${{ github.repository }}"$'\n'
           MSG+="🏷️ <b>Branch:</b> ${{ github.ref_name }}"$'\n'
           MSG+="🔨 <b>Commit:</b> ${COMMIT}"$'\n\n'
-          MSG+="📎 <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Artefakte herunterladen</a>"
+          MSG+="📎 <a href=\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\">Download artifacts</a>"
           jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MSG" \
             '{chat_id: $chat_id, parse_mode: "HTML", text: $text, disable_web_page_preview: true}' | \
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
