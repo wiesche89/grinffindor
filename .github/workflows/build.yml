@@ -469,7 +469,7 @@ jobs:
         run: |
           [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
           emoji() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
-          COMMIT=$(echo "$COMMIT_MESSAGE" | head -1)
+          COMMIT="$COMMIT_MESSAGE"
           OVERALL="success"
           for s in "$R_MACOS" "$R_ANDROID" "$R_LINUX" "$R_WINDOWS" "$R_IOS" "$R_WASM"; do
             [ "$s" != "success" ] && OVERALL="failure"
