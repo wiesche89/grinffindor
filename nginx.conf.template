@@ -2,10 +2,15 @@ server {
     listen 80;
     server_name _;
 
-    root /usr/share/nginx/html;
+    root  /usr/share/nginx/html;
     index ${APP_INDEX};
-    gzip on;
-    gzip_vary on;
+
+    # ── Compression ──────────────────────────────────────────────────────────
+    # gzip_static: serve pre-compressed .gz files created by the Dockerfile.
+    # gzip:        dynamic fallback for anything without a .gz on disk.
+    gzip_static on;
+    gzip        on;
+    gzip_vary   on;
     gzip_min_length 1024;
     gzip_comp_level 6;
     gzip_types
@@ -17,29 +22,67 @@ server {
         text/javascript
         text/plain;
 
-    add_header Cross-Origin-Opener-Policy same-origin always;
-    add_header Cross-Origin-Embedder-Policy require-corp always;
-    add_header Cross-Origin-Resource-Policy same-origin always;
+    # ── Shared security headers macro (repeated in each location because
+    #    nginx does NOT inherit add_header directives when a location block
+    #    defines its own add_header directives) ────────────────────────────────
+    # Required for Qt WASM SharedArrayBuffer (even single-threaded builds
+    # benefit from these; multi-threaded builds require them).
 
-    location ~ \.wasm$ {
-        types { application/wasm wasm; }
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
-        try_files $uri =404;
-    }
-
-    location ~ \.(js|mjs|json|png|svg)$ {
-        add_header Cache-Control "public, max-age=604800, stale-while-revalidate=86400" always;
-        try_files $uri =404;
-    }
-
+    # ── 1. HTML entry point – never cache ────────────────────────────────────
     location = /${APP_INDEX} {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
-        add_header Pragma "no-cache" always;
-        add_header Expires "0" always;
+        add_header Pragma        "no-cache"                                        always;
+        add_header Expires       "0"                                                always;
+        add_header Cross-Origin-Opener-Policy   "same-origin"  always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Resource-Policy "same-origin"  always;
         try_files /${APP_INDEX} =404;
     }
 
+    # ── 2. Version manifest – never cache (live-update detection) ────────────
+    location = /version.json {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        add_header Pragma        "no-cache"                                        always;
+        add_header Expires       "0"                                                always;
+        add_header Cross-Origin-Opener-Policy   "same-origin"  always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        try_files /version.json =404;
+    }
+
+    # ── 3. WebAssembly – immutable 1-year cache (URL is versioned via ?v=) ───
+    location ~ \.wasm$ {
+        types { application/wasm wasm; }
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Cross-Origin-Opener-Policy   "same-origin"  always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        try_files $uri =404;
+    }
+
+    # ── 4. JavaScript – immutable 1-year cache (URL is versioned via ?v=) ────
+    location ~ \.(js|mjs)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Cross-Origin-Opener-Policy   "same-origin"  always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        try_files $uri =404;
+    }
+
+    # ── 5. Other static assets – 1-week cache with background revalidation ───
+    location ~ \.(json|png|PNG|svg|jpg|jpeg|gif|ico|css)$ {
+        add_header Cache-Control "public, max-age=604800, stale-while-revalidate=86400" always;
+        add_header Cross-Origin-Opener-Policy   "same-origin"  always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        try_files $uri =404;
+    }
+
+    # ── 6. SPA fallback – all unknown paths → HTML ───────────────────────────
     location / {
+        add_header Cross-Origin-Opener-Policy   "same-origin"  always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Resource-Policy "same-origin"  always;
         try_files $uri /${APP_INDEX};
     }
 }

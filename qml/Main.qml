@@ -195,6 +195,15 @@ ApplicationWindow {
                 contentHeight: contentInner.height + Math.max(12, Math.round(root.height * 0.015))
                 flickableDirection: Flickable.VerticalFlick
 
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: function(event) {
+                        contentFlick.contentY = Math.max(0,
+                            Math.min(contentFlick.contentHeight - contentFlick.height,
+                                     contentFlick.contentY - event.angleDelta.y))
+                    }
+                }
+
                 Item {
                 id: contentInner
                 width: Math.min(contentFlick.width * 0.92, 1120)
@@ -228,8 +237,8 @@ ApplicationWindow {
                     id: tilesRow
                     anchors.top: heroCard.bottom
                     anchors.topMargin: 10
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: parent.width
+                    x: -contentInner.x
+                    width: contentFlick.width
                     height: root.tileH + root.scrollBarH + root.rowPadding * 2 + 10
 
                     ListView {
@@ -260,6 +269,16 @@ ApplicationWindow {
                             anchors.right: parent.right
                             anchors.bottom: parent.bottom
                             height: root.scrollBarH
+                        }
+
+                        WheelHandler {
+                            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                            onWheel: function(event) {
+                                var delta = event.angleDelta.x !== 0 ? -event.angleDelta.x : -event.angleDelta.y
+                                tileList.contentX = Math.max(0,
+                                    Math.min(tileList.contentWidth - tileList.width,
+                                             tileList.contentX + delta))
+                            }
                         }
                     }
                 }

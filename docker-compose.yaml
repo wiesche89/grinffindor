@@ -3,7 +3,9 @@ services:
     build:
       context: .
       args:
-        PREBUILT_DIR: build/WebAssembly_Qt_6_10_1_single_threaded-Release
+        # Leave APP_VERSION empty to auto-read from grinffindor.pro (recommended).
+        # Set explicitly to override: APP_VERSION: "0.2.0"
+        APP_VERSION: ""
     image: wiesche89/grinffindor:latest
     container_name: grinffindor
     restart: unless-stopped
@@ -14,3 +16,13 @@ services:
       APP_INDEX: "grinffindor.html"
     volumes:
       - ./nginx-logs:/var/log/nginx
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup --label-enable

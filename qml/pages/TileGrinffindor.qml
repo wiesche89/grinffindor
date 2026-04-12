@@ -1,6 +1,6 @@
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Layouts
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
 
 Item {
     id: root
@@ -9,12 +9,9 @@ Item {
     function assetPath(path) {
         return (typeof assetBaseUrl === "string" ? assetBaseUrl : "qrc:/res/") + path
     }
-
     anchors.fill: parent
-
     readonly property bool compact: width < 760
     readonly property bool singleColumn: width < 980
-    readonly property bool handset: width < 520
     readonly property int pageGutter: compact ? 16 : 28
     readonly property color glassPanel: "#d9101722"
     readonly property color glassPanelSoft: "#cc131c28"
@@ -72,20 +69,10 @@ Item {
             color: "#55d6ff"
             opacity: 0.03
         }
-
-        Rectangle {
-            width: parent.width * 0.28
-            height: width
-            radius: width / 2
-            x: parent.width * 0.38
-            y: parent.height * 0.62
-            color: "#7b88ff"
-            opacity: 0.025
-        }
     }
 
     Rectangle {
-                id: topBar
+        id: topBar
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
@@ -101,7 +88,6 @@ Item {
             spacing: 14
 
             Rectangle {
-                id: backButton
                 implicitWidth: compact ? 88 : 108
                 implicitHeight: compact ? 38 : 42
                 radius: 14
@@ -125,9 +111,7 @@ Item {
                 }
             }
 
-            Item {
-                Layout.fillWidth: true
-            }
+            Item { Layout.fillWidth: true }
 
             Label {
                 text: i18n ? i18n.tf("grinffindor_page_eyebrow", "Gateway to Grin") : "Gateway to Grin"
@@ -139,7 +123,7 @@ Item {
     }
 
     Flickable {
-        id: flick
+        id: scrollView
         anchors.fill: parent
         anchors.topMargin: topBar.height
         clip: true
@@ -152,365 +136,151 @@ Item {
 
         Column {
             id: contentColumn
-            width: Math.min(flick.width - (compact ? 20 : 48), 1120)
-            x: Math.round((flick.width - width) / 2)
+            width: Math.min(scrollView.width - (compact ? 20 : 48), 1120)
+            x: Math.round((scrollView.width - width) / 2)
             y: compact ? 16 : 28
             spacing: compact ? 20 : 28
 
+            // ── Hero ─────────────────────────────────────────────────────────
             Rectangle {
                 width: parent.width
-                radius: 34
-                color: glassPanel
-                border.color: glassBorder
-                implicitHeight: heroLayout.implicitHeight + 56
+                radius: 30
+                color: "#111318b8"
+                border.color: "#6b738066"
+                border.width: 1
+                implicitHeight: heroColumn.implicitHeight + 34
 
-                Rectangle {
+                Column {
+                    id: heroColumn
                     anchors.fill: parent
-                    radius: parent.radius
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#104f6fff" }
-                        GradientStop { position: 0.5; color: "#0c55d6ff" }
-                        GradientStop { position: 1.0; color: "#00000000" }
-                    }
-                }
+                    anchors.margins: 22
+                    spacing: 12
 
-                GridLayout {
-                    id: heroLayout
-                    anchors.fill: parent
-                    anchors.margins: compact ? 18 : 30
-                    columns: root.singleColumn ? 1 : 2
-                    columnSpacing: compact ? 18 : 28
-                    rowSpacing: compact ? 16 : 22
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
-                        spacing: 18
-
-                        Rectangle {
-                            radius: 16
-                            color: "#12ffffff"
-                            border.color: glassBorder
-                            implicitWidth: heroBadge.implicitWidth + 22
-                            implicitHeight: 34
-
-                            Label {
-                                id: heroBadge
-                                anchors.centerIn: parent
-                                text: i18n ? i18n.tf("grinffindor_hero_badge", "Privacy • Infrastructure • Community") : "Privacy • Infrastructure • Community"
-                                color: "#e4ebfb"
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                            }
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: i18n ? i18n.tf("grinffindor_page_title", "Welcome to Grinffindor") : "Welcome to Grinffindor"
-                            color: "#ffffff"
-                            font.pixelSize: root.compact ? 34 : 58
-                            font.weight: Font.Bold
-                            wrapMode: Text.WordWrap
-                        }
-
-                        Label {
-                            Layout.preferredWidth: Math.min(parent.width, 650)
-                            text: i18n ? i18n.tf("grinffindor_page_intro", "Grinffindor is a modern gateway into the world of Grin and Mimblewimble — built to make privacy-focused cryptocurrency more accessible, more practical, and more visual.")
-                                       : "Grinffindor is a modern gateway into the world of Grin and Mimblewimble — built to make privacy-focused cryptocurrency more accessible, more practical, and more visual."
-                            color: "#d0d9ea"
-                            font.pixelSize: root.compact ? 17 : 20
-                            wrapMode: Text.WordWrap
-                        }
-
-                        Flow {
-                            Layout.fillWidth: true
-                            width: parent.width
-                            spacing: 12
-
-                            Rectangle {
-                                id: primaryCta
-                                implicitWidth: 176
-                                implicitHeight: 46
-                                radius: 15
-                                color: primaryMouse.containsMouse ? "#18ffffff" : "#10ffffff"
-                                border.color: glassBorder
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: i18n ? i18n.tf("grinffindor_cta_primary", "Explore Ecosystem") : "Explore Ecosystem"
-                                    color: "#ffffff"
-                                    font.pixelSize: 14
-                                    font.weight: Font.DemiBold
-                                }
-
-                                MouseArea {
-                                    id: primaryMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                }
-                            }
-
-                            Rectangle {
-                                id: secondaryCta
-                                implicitWidth: 136
-                                implicitHeight: 46
-                                radius: 15
-                                color: "#00000000"
-                                border.color: secondaryMouse.containsMouse ? "#34ffffff" : glassBorder
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: i18n ? i18n.tf("grinffindor_cta_secondary", "Run a Node") : "Run a Node"
-                                    color: "#d7deee"
-                                    font.pixelSize: 14
-                                    font.weight: Font.Medium
-                                }
-
-                                MouseArea {
-                                    id: secondaryMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                }
-                            }
-                        }
+                    Label {
+                        text: i18n ? i18n.tf("grinffindor_eyebrow", "Privacy · Infrastructure · Community") : "Privacy · Infrastructure · Community"
+                        color: "#b8becf"
+                        font.pixelSize: 14
+                        font.bold: true
                     }
 
-                    Rectangle {
-                        visible: !root.singleColumn
-                        Layout.fillWidth: false
-                        Layout.preferredWidth: Math.min(420, heroLayout.width * 0.36)
-                        Layout.preferredHeight: 290
-                        Layout.alignment: Qt.AlignLeft | Qt.AlignTop
-                        radius: 28
-                        color: glassPanelSoft
-                        border.color: glassBorder
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("grinffindor_page_title", "Welcome to Grinffindor") : "Welcome to Grinffindor"
+                        font.pixelSize: scrollView.width < 700 ? 30 : 42
+                        font.bold: true
+                        color: "#ffffff"
+                        wrapMode: Text.WordWrap
+                    }
 
-                        Column {
-                            anchors.fill: parent
-                            anchors.margins: 24
-                            spacing: 16
+                    Label {
+                        width: parent.width * 0.9
+                        text: i18n ? i18n.tf("grinffindor_page_intro", "Grinffindor is a modern gateway into the world of Grin and Mimblewimble — built to make privacy-focused cryptocurrency more accessible, more practical, and more visual.")
+                                   : "Grinffindor is a modern gateway into the world of Grin and Mimblewimble — built to make privacy-focused cryptocurrency more accessible, more practical, and more visual."
+                        color: "#e8ebff"
+                        font.pixelSize: 18
+                        wrapMode: Text.WordWrap
+                    }
 
-                            Label {
-                                text: i18n ? i18n.tf("grinffindor_sidecard_title", "Why Grinffindor?") : "Why Grinffindor?"
-                                color: "#ffffff"
-                                font.pixelSize: 25
-                                font.weight: Font.Bold
-                            }
-
-                            Repeater {
-                                model: [
-                                    i18n ? i18n.tf("grinffindor_side_1", "Seed nodes for Mainnet and Testnet") : "Seed nodes for Mainnet and Testnet",
-                                    i18n ? i18n.tf("grinffindor_side_2", "Guides for self-hosting with UmbrelOS") : "Guides for self-hosting with UmbrelOS",
-                                    i18n ? i18n.tf("grinffindor_side_3", "Faucet and tipping tools for onboarding") : "Faucet and tipping tools for onboarding",
-                                    i18n ? i18n.tf("grinffindor_side_4", "Infrastructure designed for builders and community") : "Infrastructure designed for builders and community"
-                                ]
-
-                                Row {
-                                    width: parent.width
-                                    spacing: 10
-
-                                    Rectangle {
-                                        width: 7
-                                        height: 7
-                                        radius: 3.5
-                                        y: 8
-                                        color: "#8b5cf6"
-                                    }
-
-                                    Label {
-                                        width: sideCardTextColumn.width
-                                        text: modelData
-                                        color: "#d4ddef"
-                                        font.pixelSize: 15
-                                        wrapMode: Text.WordWrap
-                                    }
-                                }
-                            }
-                        }
-
-                        Item {
-                            id: sideCardTextColumn
-                            width: parent.width - 58
-                            height: 1
-                            visible: false
-                        }
+                    Label {
+                        width: parent.width * 0.9
+                        text: i18n ? i18n.tf("grinffindor_page_sub", "From seed nodes and faucets to browser wallets and UmbrelOS integration — everything the Grin community needs in one place.")
+                                   : "From seed nodes and faucets to browser wallets and UmbrelOS integration — everything the Grin community needs in one place."
+                        color: "#d8ddff"
+                        font.pixelSize: 16
+                        wrapMode: Text.WordWrap
                     }
                 }
             }
 
+            // ── Ecosystem CTA ─────────────────────────────────────────────────
+            Rectangle {
+                width: parent.width
+                radius: 24
+                color: "#101014b0"
+                border.color: "#6b738066"
+                border.width: 1
+                implicitHeight: ctaColumn.implicitHeight + 30
+
+                Column {
+                    id: ctaColumn
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    spacing: 10
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("grinffindor_cta_title", "Explore the Grinffindor Ecosystem") : "Explore the Grinffindor Ecosystem"
+                        color: "#ffffff"
+                        font.pixelSize: 22
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("grinffindor_cta_note", "Use the tiles on the main screen to navigate wallets, faucets, nodes, exchange and more.") : "Use the tiles on the main screen to navigate wallets, faucets, nodes, exchange and more."
+                        color: "#c4cada"
+                        font.pixelSize: 14
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            // ── Feature grid ──────────────────────────────────────────────────
             GridLayout {
                 width: parent.width
-                columns: handset ? 1 : (root.compact ? 2 : 4)
+                columns: root.singleColumn ? 1 : 2
                 columnSpacing: 16
                 rowSpacing: 16
 
                 Repeater {
                     model: [
                         {
-                            value: "24/7",
-                            label: i18n ? i18n.tf("grinffindor_stat_1", "Infrastructure") : "Infrastructure"
+                            title: i18n ? i18n.tf("grinffindor_feature_wallet_title", "Browser Wallet") : "Browser Wallet",
+                            body:  i18n ? i18n.tf("grinffindor_feature_wallet_body", "A fully functional Grin wallet that runs directly in your browser — no installation, no app store. Powered by WebAssembly and built on the Slate V4 protocol.") : "A fully functional Grin wallet that runs directly in your browser — no installation, no app store. Powered by WebAssembly and built on the Slate V4 protocol."
                         },
                         {
-                            value: "Mainnet",
-                            label: i18n ? i18n.tf("grinffindor_stat_2", "Live Support") : "Live Support"
+                            title: i18n ? i18n.tf("grinffindor_feature_nodes_title", "Seed Nodes") : "Seed Nodes",
+                            body:  i18n ? i18n.tf("grinffindor_feature_nodes_body", "Stable Mainnet and Testnet seed node infrastructure that keeps the Grin network connected and reachable — always available for wallet and node operators.") : "Stable Mainnet and Testnet seed node infrastructure that keeps the Grin network connected and reachable — always available for wallet and node operators."
                         },
                         {
-                            value: "Testnet",
-                            label: i18n ? i18n.tf("grinffindor_stat_3", "Experimentation") : "Experimentation"
+                            title: i18n ? i18n.tf("grinffindor_feature_faucets_title", "Faucet & Tipping Bots") : "Faucet & Tipping Bots",
+                            body:  i18n ? i18n.tf("grinffindor_feature_faucets_body", "Mainnet and Testnet bots for distributing Grin and onboarding new users. Experiment safely on Testnet or bring Grin into real interactions on Mainnet.") : "Mainnet and Testnet bots for distributing Grin and onboarding new users. Experiment safely on Testnet or bring Grin into real interactions on Mainnet."
                         },
                         {
-                            value: "Community",
-                            label: i18n ? i18n.tf("grinffindor_stat_4", "Driven") : "Driven"
+                            title: i18n ? i18n.tf("grinffindor_feature_umbrel_title", "UmbrelOS Integration") : "UmbrelOS Integration",
+                            body:  i18n ? i18n.tf("grinffindor_feature_umbrel_body", "Run your own Grin node at home through the Grinffindor Community App Store for UmbrelOS. One-click install, no complex setup, full self-sovereignty.") : "Run your own Grin node at home through the Grinffindor Community App Store for UmbrelOS. One-click install, no complex setup, full self-sovereignty."
                         }
                     ]
 
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: statColumn.implicitHeight + 30
+                        implicitHeight: featureColumn.implicitHeight + 36
                         radius: 24
-                        color: glassPanelSoft
-                        border.color: glassBorder
-
-                        Column {
-                            id: statColumn
-                            anchors.centerIn: parent
-                            spacing: 7
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData.value
-                                color: "#ffffff"
-                                font.pixelSize: 29
-                                font.weight: Font.Bold
-                            }
-
-                            Label {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData.label
-                                color: "#bcc7da"
-                                font.pixelSize: 14
-                            }
-                        }
-                    }
-                }
-            }
-
-            Column {
-                width: parent.width
-                spacing: 12
-
-                Label {
-                    text: i18n ? i18n.tf("grinffindor_features_title", "Core Features") : "Core Features"
-                    color: "#f4f7ff"
-                    font.pixelSize: 36
-                    font.weight: Font.Bold
-                }
-
-                Label {
-                    width: parent.width
-                    text: i18n ? i18n.tf("grinffindor_features_subtitle", "A cleaner, easier and more practical way to discover and use the Grin ecosystem.")
-                               : "A cleaner, easier and more practical way to discover and use the Grin ecosystem."
-                    color: "#c9d3e4"
-                    font.pixelSize: 17
-                    wrapMode: Text.WordWrap
-                }
-            }
-
-            GridLayout {
-                width: parent.width
-                columns: root.width < 620 ? 1 : (root.singleColumn ? 2 : 3)
-                columnSpacing: 18
-                rowSpacing: 18
-
-                Repeater {
-                    model: [
-                        {
-                            accent: "#8b5cf6",
-                            title: i18n ? i18n.tf("grinffindor_feature_seed_title", "Reliable Seed Nodes") : "Reliable Seed Nodes",
-                            body: i18n ? i18n.tf("grinffindor_feature_seed_body", "Stable Mainnet and Testnet infrastructure that helps keep the network connected and reachable.") : "Stable Mainnet and Testnet infrastructure that helps keep the network connected and reachable."
-                        },
-                        {
-                            accent: "#22c55e",
-                            title: i18n ? i18n.tf("grinffindor_feature_umbrel_title", "UmbrelOS Guides") : "UmbrelOS Guides",
-                            body: i18n ? i18n.tf("grinffindor_feature_umbrel_body", "Learn how to run your own node with a clean, self-hosted setup and practical documentation.") : "Learn how to run your own node with a clean, self-hosted setup and practical documentation."
-                        },
-                        {
-                            accent: "#06b6d4",
-                            title: i18n ? i18n.tf("grinffindor_feature_testnet_title", "Testnet Faucet") : "Testnet Faucet",
-                            body: i18n ? i18n.tf("grinffindor_feature_testnet_body", "Experiment with Grin safely, test wallet flows, and explore the ecosystem without risk.") : "Experiment with Grin safely, test wallet flows, and explore the ecosystem without risk."
-                        },
-                        {
-                            accent: "#f59e0b",
-                            title: i18n ? i18n.tf("grinffindor_feature_mainnet_title", "Mainnet Tools") : "Mainnet Tools",
-                            body: i18n ? i18n.tf("grinffindor_feature_mainnet_body", "Bring Grin into real interactions through practical faucet and tipping experiences.") : "Bring Grin into real interactions through practical faucet and tipping experiences."
-                        },
-                        {
-                            accent: "#ef4444",
-                            title: i18n ? i18n.tf("grinffindor_feature_shop_title", "Upcoming Shop") : "Upcoming Shop",
-                            body: i18n ? i18n.tf("grinffindor_feature_shop_body", "A future place for curated tools, hardware and community items built around Grin.") : "A future place for curated tools, hardware and community items built around Grin."
-                        },
-                        {
-                            accent: "#a855f7",
-                            title: i18n ? i18n.tf("grinffindor_feature_ecosystem_title", "Built for Builders") : "Built for Builders",
-                            body: i18n ? i18n.tf("grinffindor_feature_ecosystem_body", "Whether you are testing, running infrastructure or building software, Grinffindor supports the whole journey.") : "Whether you are testing, running infrastructure or building software, Grinffindor supports the whole journey."
-                        }
-                    ]
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: featureColumn.implicitHeight + 44
-                        radius: 28
-                        color: glassPanelSoft
-                        border.color: glassBorder
-
-                        Rectangle {
-                            anchors.top: parent.top
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            height: 3
-                            radius: 2
-                            color: modelData.accent
-                            opacity: 0.95
-                        }
+                        color: "#111318b0"
+                        border.color: "#6b738066"
+                        border.width: 1
 
                         Column {
                             id: featureColumn
                             anchors.fill: parent
-                            anchors.margins: 22
-                            spacing: 14
-
-                            Rectangle {
-                                width: 54
-                                height: 54
-                                radius: 17
-                                color: "#10ffffff"
-                                border.color: glassBorder
-
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 14
-                                    height: 14
-                                    radius: 7
-                                    color: modelData.accent
-                                }
-                            }
+                            anchors.margins: 18
+                            spacing: 10
 
                             Label {
                                 width: parent.width
                                 text: modelData.title
                                 color: "#ffffff"
-                                font.pixelSize: 23
-                                font.weight: Font.Bold
+                                font.pixelSize: 21
+                                font.bold: true
                                 wrapMode: Text.WordWrap
                             }
 
                             Label {
                                 width: parent.width
                                 text: modelData.body
-                                color: "#d4ddef"
-                                font.pixelSize: 16
+                                color: "#d8ddff"
+                                font.pixelSize: 15
                                 wrapMode: Text.WordWrap
                             }
                         }
@@ -518,180 +288,99 @@ Item {
                 }
             }
 
+            // ── What Grinffindor stands for ────────────────────────────────────
             Rectangle {
                 width: parent.width
-                radius: 32
-                color: glassPanel
-                border.color: glassBorder
-                implicitHeight: journeyColumn.implicitHeight + 46
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: parent.radius
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#03ffffff" }
-                        GradientStop { position: 1.0; color: "#084f6fff" }
-                    }
-                }
+                radius: 26
+                color: "#101014b0"
+                border.color: "#6b738066"
+                border.width: 1
+                implicitHeight: valuesColumn.implicitHeight + 34
 
                 Column {
-                    id: journeyColumn
+                    id: valuesColumn
                     anchors.fill: parent
-                    anchors.margins: compact ? 18 : 24
-                    spacing: 18
+                    anchors.margins: 22
+                    spacing: 12
 
                     Label {
-                        text: i18n ? i18n.tf("grinffindor_journey_title", "Start Your Journey") : "Start Your Journey"
+                        width: parent.width
+                        text: i18n ? i18n.tf("grinffindor_values_title", "What Grinffindor Stands For") : "What Grinffindor Stands For"
                         color: "#ffffff"
-                        font.pixelSize: 33
-                        font.weight: Font.Bold
+                        font.pixelSize: 28
+                        font.bold: true
                     }
 
-                    GridLayout {
-                        width: parent.width
-                        columns: root.width < 620 ? 1 : (root.singleColumn ? 2 : 4)
-                        columnSpacing: 16
-                        rowSpacing: 16
+                    Repeater {
+                        model: [
+                            i18n ? i18n.tf("grinffindor_value_1", "Open infrastructure for Mainnet and Testnet") : "Open infrastructure for Mainnet and Testnet",
+                            i18n ? i18n.tf("grinffindor_value_2", "Privacy-first tools built around Mimblewimble") : "Privacy-first tools built around Mimblewimble",
+                            i18n ? i18n.tf("grinffindor_value_3", "Community-driven development and support") : "Community-driven development and support",
+                            i18n ? i18n.tf("grinffindor_value_4", "Self-hosting made practical with UmbrelOS") : "Self-hosting made practical with UmbrelOS"
+                        ]
 
-                        Repeater {
-                            model: [
-                                { step: "01", text: i18n ? i18n.tf("grinffindor_journey_step_1", "Run your node") : "Run your node" },
-                                { step: "02", text: i18n ? i18n.tf("grinffindor_journey_step_2", "Test your first transaction") : "Test your first transaction" },
-                                { step: "03", text: i18n ? i18n.tf("grinffindor_journey_step_3", "Tip someone") : "Tip someone" },
-                                { step: "04", text: i18n ? i18n.tf("grinffindor_journey_step_4", "Become part of the network") : "Become part of the network" }
-                            ]
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                implicitHeight: journeyStepColumn.implicitHeight + 36
-                                radius: 24
-                                color: glassPanelSoft
-                                border.color: glassBorder
-
-                                Column {
-                                    id: journeyStepColumn
-                                    anchors.fill: parent
-                                    anchors.margins: 18
-                                    spacing: 10
-
-                                    Label {
-                                        text: modelData.step
-                                        color: "#8b5cf6"
-                                        font.pixelSize: 26
-                                        font.weight: Font.Bold
-                                    }
-
-                                    Label {
-                                        width: parent.width
-                                        text: modelData.text
-                                        color: "#ffffff"
-                                        font.pixelSize: 20
-                                        font.weight: Font.Bold
-                                        wrapMode: Text.WordWrap
-                                    }
-                                }
-                            }
+                        Label {
+                            width: valuesColumn.width
+                            text: "\u2022  " + modelData
+                            color: "#f3f5ff"
+                            font.pixelSize: 18
+                            wrapMode: Text.WordWrap
                         }
+                    }
+
+                    Label {
+                        width: parent.width
+                        text: i18n ? i18n.tf("grinffindor_values_note", "Everything is open source, self-hostable, and designed to keep you in control of your funds and privacy.") : "Everything is open source, self-hostable, and designed to keep you in control of your funds and privacy."
+                        color: "#d7dbe6"
+                        font.pixelSize: 16
+                        wrapMode: Text.WordWrap
                     }
                 }
             }
 
+            // ── Privacy by design ──────────────────────────────────────────────
             Rectangle {
                 width: parent.width
-                radius: 32
-                color: glassPanel
-                border.color: glassBorder
-                implicitHeight: footerColumn.implicitHeight + 46
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: parent.radius
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "#0855d6ff" }
-                        GradientStop { position: 1.0; color: "#0a4f6fff" }
-                    }
+                radius: 26
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#17191eb8" }
+                    GradientStop { position: 1.0; color: "#0e1014b8" }
                 }
+                border.color: "#6b738066"
+                border.width: 1
+                implicitHeight: privacyColumn.implicitHeight + 34
 
                 Column {
-                    id: footerColumn
+                    id: privacyColumn
                     anchors.fill: parent
-                    anchors.margins: compact ? 18 : 24
-                    spacing: 14
+                    anchors.margins: 22
+                    spacing: 12
 
                     Label {
                         width: parent.width
-                        text: i18n ? i18n.tf("grinffindor_community_title", "Built for the Community") : "Built for the Community"
+                        text: i18n ? i18n.tf("grinffindor_privacy_title", "Privacy by Design. Yours.") : "Privacy by Design. Yours."
                         color: "#ffffff"
-                        font.pixelSize: 31
-                        font.weight: Font.Bold
-                        wrapMode: Text.WordWrap
+                        font.pixelSize: 28
+                        font.bold: true
                     }
 
-                    Label {
-                        width: parent.width
-                        text: i18n ? i18n.tf("grinffindor_community_body", "Grinffindor connects infrastructure, guides and practical tools in one place — focused on privacy, simplicity and decentralization.")
-                                   : "Grinffindor connects infrastructure, guides and practical tools in one place — focused on privacy, simplicity and decentralization."
-                        color: "#d2dbec"
-                        font.pixelSize: 17
-                        wrapMode: Text.WordWrap
-                    }
+                    Repeater {
+                        model: [
+                            i18n ? i18n.tf("grinffindor_privacy_1", "No accounts, no tracking, no KYC") : "No accounts, no tracking, no KYC",
+                            i18n ? i18n.tf("grinffindor_privacy_2", "Confidential transactions via Mimblewimble") : "Confidential transactions via Mimblewimble",
+                            i18n ? i18n.tf("grinffindor_privacy_3", "Full ownership of your keys and funds") : "Full ownership of your keys and funds",
+                            i18n ? i18n.tf("grinffindor_privacy_4", "Run everything locally on your own hardware") : "Run everything locally on your own hardware"
+                        ]
 
-                    Flow {
-                        width: parent.width
-                        spacing: 12
-
-                        Rectangle {
-                            implicitWidth: 176
-                            implicitHeight: 46
-                            radius: 15
-                            color: footerPrimaryMouse.containsMouse ? "#18ffffff" : "#10ffffff"
-                            border.color: glassBorder
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: i18n ? i18n.tf("grinffindor_footer_btn_1", "Join the Ecosystem") : "Join the Ecosystem"
-                                color: "#ffffff"
-                                font.pixelSize: 14
-                                font.weight: Font.DemiBold
-                            }
-
-                            MouseArea {
-                                id: footerPrimaryMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                            }
-                        }
-
-                        Rectangle {
-                            implicitWidth: 130
-                            implicitHeight: 46
-                            radius: 15
-                            color: "#00000000"
-                            border.color: footerSecondaryMouse.containsMouse ? "#34ffffff" : glassBorder
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: i18n ? i18n.tf("grinffindor_footer_btn_2", "Learn More") : "Learn More"
-                                color: "#d7deee"
-                                font.pixelSize: 14
-                                font.weight: Font.Medium
-                            }
-
-                            MouseArea {
-                                id: footerSecondaryMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                            }
+                        Label {
+                            width: privacyColumn.width
+                            text: "\u2022  " + modelData
+                            color: "#f3f5ff"
+                            font.pixelSize: 18
+                            wrapMode: Text.WordWrap
                         }
                     }
                 }
-            }
-
-            Item {
-                width: 1
-                height: 20
             }
         }
     }

@@ -360,21 +360,32 @@ jobs:
           path: wasm-dist/
           if-no-files-found: warn
 
+      - name: Read app version
+        id: app-version
+        run: |
+          VER="$(grep -E '^VERSION\s*=' grinffindor.pro \
+                 | sed 's/^VERSION\s*=\s*//' \
+                 | tr -d ' \r\n')"
+          [ -n "$VER" ] || { echo "ERROR: VERSION not found in grinffindor.pro" >&2; exit 1; }
+          echo "value=${VER}" >> "${GITHUB_OUTPUT}"
+
       - name: Prepare image tags
         id: image-vars
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          APP_VERSION: ${{ steps.app-version.outputs.value }}
         run: |
           OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           SHORT_SHA="${GITHUB_SHA::7}"
-          TAGS="$(printf '%s\n%s' \
+          TAGS="$(printf '%s\n%s\n%s' \
             "ghcr.io/${OWNER_LC}/grinffindor:latest" \
+            "ghcr.io/${OWNER_LC}/grinffindor:${APP_VERSION}" \
             "ghcr.io/${OWNER_LC}/grinffindor:sha-${SHORT_SHA}")"
 
           if [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
-            TAGS="${TAGS}"$'\n'"${DOCKERHUB_USERNAME}/grinffindor:latest"$'\n'"${DOCKERHUB_USERNAME}/grinffindor:sha-${SHORT_SHA}"
+            TAGS="${TAGS}"$'\n'"${DOCKERHUB_USERNAME}/grinffindor:latest"$'\n'"${DOCKERHUB_USERNAME}/grinffindor:${APP_VERSION}"$'\n'"${DOCKERHUB_USERNAME}/grinffindor:sha-${SHORT_SHA}"
             echo "dockerhub_enabled=true" >> "${GITHUB_OUTPUT}"
           else
             echo "dockerhub_enabled=false" >> "${GITHUB_OUTPUT}"
@@ -405,13 +416,16 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          build-args: PREBUILT_DIR=wasm-dist
+          build-args: |
+            PREBUILT_DIR=wasm-dist
+            APP_VERSION=${{ steps.app-version.outputs.value }}
           platforms: linux/amd64
           push: false
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.title=grinffindor
+            org.opencontainers.image.version=${{ steps.app-version.outputs.value }}
 
       - name: Build and push Docker image
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -419,7 +433,9 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          build-args: PREBUILT_DIR=wasm-dist
+          build-args: |
+            PREBUILT_DIR=wasm-dist
+            APP_VERSION=${{ steps.app-version.outputs.value }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.image-vars.outputs.tags }}
@@ -427,6 +443,7 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.title=grinffindor
+            org.opencontainers.image.version=${{ steps.app-version.outputs.value }}
 
   # ─────────────────────────────────────────────
   # Telegram – eine Nachricht für alle Plattformen

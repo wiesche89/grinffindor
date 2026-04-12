@@ -15,7 +15,11 @@ Rectangle {
     border.width: 0
 
     Label {
-        text: i18n ? i18n.tf("app_title", "Grinffindor") : "Grinffindor"
+        text: {
+            var base = i18n ? i18n.tf("app_title", "Grinffindor") : "Grinffindor"
+            var ver = Qt.application.version
+            return ver ? base + "  " + ver : base
+        }
         font.pixelSize: 24
         font.bold: true
         color: "#f8f8f8"

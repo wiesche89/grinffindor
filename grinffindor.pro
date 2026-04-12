@@ -3,7 +3,7 @@ QT += quick qml quickcontrols2 gui network
 CONFIG += c++17
 
 TARGET = grinffindor
-VERSION = 0.1.0
+VERSION = 0.1.1
 
 QMAKE_TARGET_COMPANY = Grinffindor
 QMAKE_TARGET_PRODUCT = Grinffindor
@@ -100,6 +100,7 @@ INCLUDEPATH += $$PWD/3rdparty/secp256k1-zkp \
                $$PWD/src
 
 DEFINES += GRIN_HAS_SLATEPACK_CRYPTO
+DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 DEFINES += USE_NUM_NONE \
            USE_FIELD_INV_BUILTIN \
