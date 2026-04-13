@@ -69,12 +69,14 @@ RUN set -e; \
     # Extract the inline <script> block into init.js so that the CSP can     \
     # drop 'unsafe-inline' entirely.  The onload="init()" body attribute is  \
     # replaced by an addEventListener inside init.js.                        \
-    sed -n '/<script type="text\/javascript">/,/<\/script>/{//!p}' \
-        grinffindor.html > init.js.tmp; \
-    printf 'window.addEventListener("load", init);\n' >> init.js.tmp; \
-    mv init.js.tmp init.js; \
-    # Remove the inline script block from HTML                               \
-    sed -i '/<script type="text\/javascript">/,/<\/script>/d' \
+    # Note: the pattern anchors on lines ending with just ">" (plus optional \
+    # whitespace) so the <script ... src="qtloader.js"> tag is NOT matched.  \
+    # awk is used instead of sed for BusyBox (Alpine) compatibility.         \
+    awk 'BEGIN{p=0} /<script type="text\/javascript">[[:space:]]*$/{p=1;next} p && /<\/script>/{p=0;next} p{print}' \
+        grinffindor.html > init.js; \
+    printf 'window.addEventListener("load", init);\n' >> init.js; \
+    # Remove the inline script block from HTML (anchor: line ends with ">")  \
+    sed -i '/<script type="text\/javascript">[[:space:]]*$/,/<\/script>/d' \
         grinffindor.html; \
     # Remove the onload attribute from <body>                                \
     sed -i 's|<body onload="init()">|<body>|g' grinffindor.html; \
