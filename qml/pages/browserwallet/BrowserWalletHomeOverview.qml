@@ -16,48 +16,171 @@ BrowserWalletSectionCard {
         return fixed.replace(/0+$/, "").replace(/\.$/, "")
     }
 
+    function syncPercent() {
+        var chain = grinWalletController.chainHeight
+        var scan  = grinWalletController.scanHeight
+        if (chain <= 0) return -1
+        return Math.min(100, Math.round(scan * 100 / chain))
+    }
+
     width: parent ? parent.width : 0
-    title: walletRoot.tf("browser_wallet_overview_title", "Overview")
-    fillColor: "#102131"
-    strokeColor: "#29516a"
+    title: ""
+    fillColor: "#0a1825"
+    strokeColor: "#152e42"
 
-    GridLayout {
+    ColumnLayout {
         Layout.fillWidth: true
-        width: parent.width
-        columns: width < 760 ? 1 : 3
-        rowSpacing: 12
-        columnSpacing: 12
+        spacing: 0
 
-        BrowserWalletMetricTile {
-            title: walletRoot.tf("browser_wallet_metric_network", "Network")
-            value: grinWalletController.selectedNetwork
+        // ── Balance hero ──────────────────────────────────────────────────
+        Item {
+            Layout.fillWidth: true
+            implicitHeight: balanceCol.implicitHeight + 8
+
+            Column {
+                id: balanceCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: 4
+
+                Label {
+                    text: walletRoot.tf("browser_wallet_metric_balance", "Spendable")
+                    color: "#2a5a72"
+                    font.pixelSize: 11
+                    font.letterSpacing: 1.2
+                }
+
+                Label {
+                    width: parent.width
+                    text: grinWalletController.spendableBalance + " GRIN"
+                    color: "#c0e8ff"
+                    font.pixelSize: walletRoot.veryPhoneMode ? 26 : (walletRoot.phoneMode ? 30 : (walletRoot.compactNavigation ? 34 : 40))
+                    font.weight: Font.Bold
+                    wrapMode: Text.WordWrap
+                }
+            }
         }
 
-        BrowserWalletMetricTile {
-            title: walletRoot.tf("browser_wallet_metric_chain", "Chain Height")
-            value: "" + grinWalletController.chainHeight
+        // ── Sub-balances row ──────────────────────────────────────────────
+        Item { Layout.fillWidth: true; implicitHeight: 10 }
+
+        GridLayout {
+            Layout.fillWidth: true
+            columns: width < 480 ? 2 : 3
+            rowSpacing: 10
+            columnSpacing: 10
+
+            Repeater {
+                model: [
+                    {
+                        label: walletRoot.tf("browser_wallet_awaiting", "Awaiting"),
+                        value: overviewCard.formatAmountValue(
+                            overviewCard.amountStringToValue(grinWalletController.awaitingConfirmationBalance)
+                            + overviewCard.amountStringToValue(grinWalletController.awaitingFinalizationBalance)) + " GRIN"
+                    },
+                    {
+                        label: walletRoot.tf("browser_wallet_locked", "Locked"),
+                        value: grinWalletController.lockedBalance + " GRIN"
+                    },
+                    {
+                        label: walletRoot.tf("browser_wallet_total", "Total"),
+                        value: grinWalletController.totalBalance + " GRIN"
+                    }
+                ]
+
+                Column {
+                    spacing: 2
+
+                    Label {
+                        text: modelData.label
+                        color: "#2a5a72"
+                        font.pixelSize: 11
+                        font.letterSpacing: 0.5
+                    }
+                    Label {
+                        text: modelData.value
+                        color: "#7aacca"
+                        font.pixelSize: walletRoot.veryPhoneMode ? 13 : 14
+                        font.weight: Font.DemiBold
+                    }
+                }
+            }
         }
 
-        BrowserWalletMetricTile {
-            title: walletRoot.tf("browser_wallet_metric_scan", "Scan Height")
-            value: "" + grinWalletController.scanHeight
+        // ── Divider ───────────────────────────────────────────────────────
+        Rectangle {
+            Layout.fillWidth: true
+            height: 1
+            color: "#0e2535"
+            Layout.topMargin: 14
+            Layout.bottomMargin: 14
         }
 
-        BrowserWalletMetricTile {
-            title: walletRoot.tf("browser_wallet_metric_balance", "Spendable")
-            value: grinWalletController.spendableBalance + " GRIN"
-        }
+        // ── Sync progress ─────────────────────────────────────────────────
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 6
 
-        BrowserWalletMetricTile {
-            title: walletRoot.tf("browser_wallet_awaiting", "Awaiting")
-            value: overviewCard.formatAmountValue(
-                       overviewCard.amountStringToValue(grinWalletController.awaitingConfirmationBalance)
-                       + overviewCard.amountStringToValue(grinWalletController.awaitingFinalizationBalance)) + " GRIN"
-        }
+            RowLayout {
+                Layout.fillWidth: true
 
-        BrowserWalletMetricTile {
-            title: walletRoot.tf("browser_wallet_locked", "Locked")
-            value: grinWalletController.lockedBalance + " GRIN"
+                Label {
+                    text: grinWalletController.syncStatus
+                    color: walletRoot.nodeStatusMode() === "offline"    ? "#dd6070"
+                         : walletRoot.nodeStatusMode() === "connecting" ? "#c89038"
+                         : "#FEF102"
+                    font.pixelSize: walletRoot.bodyTextSize
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+
+            }
+
+            // Progress bar
+            Rectangle {
+                Layout.fillWidth: true
+                height: 3
+                radius: 2
+                color: "#0c2030"
+                visible: overviewCard.syncPercent() >= 0 && overviewCard.syncPercent() < 100
+
+                Rectangle {
+                    width: parent.width * (overviewCard.syncPercent() / 100)
+                    height: parent.height
+                    radius: 2
+                    color: "#FEF102"
+                }
+            }
+
+            // Block heights
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 16
+
+                Repeater {
+                    model: [
+                        { label: walletRoot.tf("browser_wallet_metric_network", "Network"), value: grinWalletController.selectedNetwork },
+                        { label: walletRoot.tf("browser_wallet_metric_chain", "Chain"), value: "" + grinWalletController.chainHeight },
+                        { label: walletRoot.tf("browser_wallet_metric_scan", "Scan"), value: "" + grinWalletController.scanHeight }
+                    ]
+
+                    Row {
+                        spacing: 5
+
+                        Label {
+                            text: modelData.label + ":"
+                            color: "#2a5a72"
+                            font.pixelSize: 11
+                        }
+                        Label {
+                            text: modelData.value
+                            color: "#5a9ab8"
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                }
+            }
         }
     }
 }

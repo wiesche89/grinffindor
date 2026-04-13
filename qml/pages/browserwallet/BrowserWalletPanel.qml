@@ -10,18 +10,19 @@ Rectangle {
 
     property string title: ""
     property string description: ""
-    property color fillColor: "#132635"
-    property color strokeColor: "#2a4f64"
-    property color titleColor: "#ffffff"
-    property color descriptionColor: "#d7e9f4"
-    property int contentPadding: veryCompactWidth ? 8 : (compactWidth ? 10 : 12)
-    property int contentSpacing: veryCompactWidth ? 5 : (compactWidth ? 6 : 8)
+    property color fillColor: "#0f2030"
+    property color strokeColor: "#1a3448"
+    property color titleColor: "#c0d8ee"
+    property color descriptionColor: "#5a8eaa"
+    property int contentPadding: veryCompactWidth ? 10 : (compactWidth ? 12 : 14)
+    property int contentSpacing: veryCompactWidth ? 6 : (compactWidth ? 7 : 9)
 
     default property alias contentData: body.data
 
-    radius: veryCompactWidth ? 12 : (compactWidth ? 14 : 18)
+    radius: veryCompactWidth ? 11 : (compactWidth ? 12 : 14)
     color: fillColor
     border.color: strokeColor
+    border.width: 1
     implicitHeight: panelColumn.implicitHeight + contentPadding * 2
 
     ColumnLayout {
@@ -35,7 +36,8 @@ Rectangle {
             visible: panel.title.length > 0
             text: panel.title
             color: panel.titleColor
-            font.pixelSize: veryCompactWidth ? 13 : (compactWidth ? 14 : 16)
+            font.pixelSize: veryCompactWidth ? 13 : (compactWidth ? 13 : 14)
+            font.weight: Font.DemiBold
             wrapMode: Text.WordWrap
         }
 
@@ -44,7 +46,7 @@ Rectangle {
             visible: panel.description.length > 0
             text: panel.description
             color: panel.descriptionColor
-            font.pixelSize: veryCompactWidth ? 12 : (compactWidth ? 13 : 14)
+            font.pixelSize: veryCompactWidth ? 12 : (compactWidth ? 12 : 13)
             wrapMode: Text.WordWrap
         }
 

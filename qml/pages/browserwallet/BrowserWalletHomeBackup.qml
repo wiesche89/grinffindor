@@ -8,11 +8,12 @@ BrowserWalletSectionCard {
     property var walletRoot
 
     width: parent ? parent.width : 0
-    fillColor: "#143326"
-    strokeColor: "#2d7055"
+    fillColor: "#181200"
+    strokeColor: "#806800"
+    titleColor: "#FEF102"
+    subtitleColor: "#A09000"
     title: walletRoot.tf("browser_wallet_backup_title", "Write Down Your Seed Phrase Now")
     subtitle: walletRoot.tf("browser_wallet_backup_note", "This is the only time the seed phrase is shown automatically. Store it offline and keep it away from screenshots, chat logs, and cloud notes.")
-    subtitleColor: "#d9f8e9"
     visible: grinWalletController.mnemonicPreview.length > 0
 
     ColumnLayout {
@@ -23,7 +24,7 @@ BrowserWalletSectionCard {
         AppComponents.AppTextArea {
             id: mnemonicPreviewArea
             Layout.fillWidth: true
-            Layout.preferredHeight: 116
+            Layout.preferredHeight: 112
             editorTitle: walletRoot.tf("browser_wallet_backup_title", "Write Down Your Seed Phrase Now")
             readOnly: true
             font.pixelSize: walletRoot.controlTextSize
@@ -42,6 +43,17 @@ BrowserWalletSectionCard {
             Button {
                 text: walletRoot.tf("browser_wallet_backup_done", "I saved it")
                 font.pixelSize: walletRoot.controlTextSize
+                background: Rectangle {
+                    radius: 10
+                    color: !parent.enabled ? "#181200" : (parent.down ? "#201800" : (parent.hovered ? "#1a1500" : "#181200"))
+                    border.color: !parent.enabled ? "#181000" : (parent.down ? "#A08800" : (parent.hovered ? "#C09800" : "#806800"))
+                    border.width: 1
+                }
+                contentItem: Label {
+                    text: parent.text; font: parent.font
+                    color: parent.down ? "#FEF102" : (parent.hovered ? "#FEF102" : "#FEF102")
+                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: grinWalletController.dismissMnemonicPreview()
             }
         }

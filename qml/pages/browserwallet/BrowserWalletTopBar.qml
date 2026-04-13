@@ -24,70 +24,91 @@ Rectangle {
         return text
     }
 
+    function statusDotColor() {
+        if (walletRoot.nodeStatusMode() === "offline")    return "#dd4050"
+        if (walletRoot.nodeStatusMode() === "connecting") return "#e0a840"
+        return "#FEF102"
+    }
+
     signal menuRequested()
 
-    height: walletRoot.veryPhoneMode ? 54 : (walletRoot.phoneMode ? 60 : 72)
-    color: "#101822"
-    border.color: "#234b63"
+    height: walletRoot.veryPhoneMode ? 50 : (walletRoot.phoneMode ? 56 : 64)
+    color: "#070e18"
+    border.color: "#10253a"
+    border.width: 1
     z: 2
 
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: walletRoot.pageMargin
         anchors.rightMargin: walletRoot.pageMargin
-        spacing: walletRoot.veryPhoneMode ? 8 : (walletRoot.phoneMode ? 10 : 14)
+        spacing: walletRoot.veryPhoneMode ? 8 : 12
 
-        ToolButton {
-            id: menuButton
+        // Hamburger menu (compact / mobile)
+        Item {
             visible: walletRoot.compactNavigation && grinWalletController.walletUnlocked
-            text: walletRoot.tf("browser_wallet_menu", "Menu")
-            font.pixelSize: walletRoot.controlTextSize
-            padding: walletRoot.veryPhoneMode ? 6 : (walletRoot.phoneMode ? 8 : 10)
+            width: menuBtn.implicitWidth
+            height: parent.height
 
-            background: Rectangle {
-                radius: walletRoot.veryPhoneMode ? 8 : (walletRoot.phoneMode ? 10 : 12)
-                color: menuButton.down ? "#1a3448" : (menuButton.hovered ? "#173042" : "#122231")
-                border.color: "#2f607a"
-                border.width: 1
+            Rectangle {
+                id: menuBtn
+                anchors.verticalCenter: parent.verticalCenter
+                implicitWidth: walletRoot.veryPhoneMode ? 34 : 38
+                implicitHeight: walletRoot.veryPhoneMode ? 30 : 34
+                radius: 8
+                color: menuMa.pressed ? "#0e2030" : (menuMa.containsMouse ? "#0a1a28" : "transparent")
+                border.color: menuMa.containsMouse ? "#1e3a50" : "#102030"
+
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 4
+
+                    Repeater {
+                        model: 3
+                        Rectangle {
+                            width: walletRoot.veryPhoneMode ? 14 : 16
+                            height: 2
+                            radius: 1
+                            color: menuMa.containsMouse ? "#88c0d8" : "#4a7898"
+                        }
+                    }
+                }
+
+                MouseArea {
+                    id: menuMa
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: topBar.menuRequested()
+                }
             }
-
-            contentItem: Text {
-                text: menuButton.text
-                font: menuButton.font
-                color: "#d8f3ff"
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-            }
-
-            onClicked: topBar.menuRequested()
         }
 
         Item { Layout.fillWidth: true }
 
-        Rectangle {
-            visible: true
+        // Sync status chip
+        Row {
+            spacing: 7
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-            Layout.preferredWidth: Math.min(statusLabel.implicitWidth + 24,
-                                            Math.max(112, topBar.width - (menuButton.visible ? menuButton.implicitWidth + 68 : 36)))
-            Layout.maximumWidth: Math.max(112, topBar.width - (menuButton.visible ? menuButton.implicitWidth + 68 : 36))
-            radius: walletRoot.veryPhoneMode ? 10 : (walletRoot.phoneMode ? 12 : 14)
-            color: "#122231"
-            border.color: walletRoot.nodeStatusMode() === "offline" ? "#8a3f3f"
-                         : (walletRoot.nodeStatusMode() === "connecting" ? "#8a7440" : "#2f607a")
-            implicitHeight: walletRoot.veryPhoneMode ? 28 : (walletRoot.phoneMode ? 30 : 34)
+
+            // Status dot
+            Rectangle {
+                width: 7
+                height: 7
+                radius: 4
+                anchors.verticalCenter: parent.verticalCenter
+                color: topBar.statusDotColor()
+            }
 
             Label {
-                id: statusLabel
-                anchors.fill: parent
-                anchors.leftMargin: walletRoot.veryPhoneMode ? 10 : 12
-                anchors.rightMargin: walletRoot.veryPhoneMode ? 10 : 12
-                verticalAlignment: Text.AlignVCenter
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
+                anchors.verticalCenter: parent.verticalCenter
                 text: topBar.statusText()
-                color: "#d8f3ff"
+                color: walletRoot.nodeStatusMode() === "offline"    ? "#dd6070"
+                     : walletRoot.nodeStatusMode() === "connecting" ? "#c89038"
+                     : "#4a8ea8"
                 font.pixelSize: walletRoot.compactTextSize
+                elide: Text.ElideRight
+                maximumLineCount: 1
             }
         }
     }

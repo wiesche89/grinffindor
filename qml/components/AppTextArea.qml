@@ -131,6 +131,26 @@ FocusScope {
         anchors.fill: parent
         readOnly: root.readOnly || root.usingPlatformEditor
 
+        leftPadding: 12
+        rightPadding: 12
+        topPadding: 10
+        bottomPadding: 10
+
+        color: root.color && root.color.toString() !== "#000000" ? root.color : "#c8e4f8"
+        placeholderTextColor: "#2a5068"
+        selectionColor: root.selectionColor && root.selectionColor.toString() !== "#000000"
+                        ? root.selectionColor : "#1e5080"
+        selectedTextColor: root.selectedTextColor && root.selectedTextColor.toString() !== "#ffffff"
+                           ? root.selectedTextColor : "#ddeeff"
+
+        background: Rectangle {
+            radius: 10
+            color: control.activeFocus ? "#06111a" : "#05101a"
+            border.color: control.activeFocus ? "#2a6a88"
+                        : (control.hovered ? "#1e4058" : "#0e2a3a")
+            border.width: 1
+        }
+
         onActiveFocusChanged: root.syncShortcutContext()
         onSelectedTextChanged: root.syncShortcutContext()
         onTextChanged: root.syncShortcutContext()

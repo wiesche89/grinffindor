@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
+
 Rectangle {
     id: sidebar
     property var walletRoot
@@ -11,9 +13,10 @@ Rectangle {
 
     signal sectionSelected(string section)
 
-    color: compactMode ? "#0d1720" : "#0f1722"
-    radius: compactMode ? 0 : 28
-    border.color: compactMode ? "transparent" : "#26465b"
+    color: compactMode ? "#070e18" : "#080f1a"
+    radius: compactMode ? 0 : 20
+    border.color: compactMode ? "transparent" : "#12263a"
+    border.width: 1
 
     function walletDisplayName() {
         return grinWalletController.walletName.length > 0
@@ -35,208 +38,144 @@ Rectangle {
 
     Column {
         anchors.fill: parent
-        anchors.margins: veryNarrow ? 12 : (narrow ? 14 : (compactMode ? 18 : 22))
-        spacing: veryNarrow ? 10 : (narrow ? 12 : 16)
+        anchors.margins: compactMode ? 16 : 18
+        spacing: 4
 
-        Rectangle {
+        // Wallet header
+        Item {
             width: parent.width
-            radius: veryNarrow ? 16 : (narrow ? 18 : 24)
-            color: "#12202c"
-            border.color: "#24455a"
-            implicitHeight: veryNarrow ? 92 : (narrow ? 104 : (compactMode ? 128 : 142))
+            height: veryNarrow ? 70 : (narrow ? 80 : (compactMode ? 96 : 108))
 
-            Row {
+            Column {
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.leftMargin: veryNarrow ? 12 : (narrow ? 14 : 18)
-                anchors.rightMargin: veryNarrow ? 12 : (narrow ? 14 : 18)
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: veryNarrow ? 6 : (narrow ? 8 : 10)
+                spacing: 4
 
-                Rectangle {
-                    width: veryNarrow ? 34 : (narrow ? 38 : 44)
-                    height: veryNarrow ? 34 : (narrow ? 38 : 44)
-                    radius: veryNarrow ? 10 : (narrow ? 12 : 14)
-                    color: "#173247"
-                    border.color: "#2f607a"
-
-                    Label {
-                        anchors.centerIn: parent
-                        text: walletDisplayName().length > 0 ? walletDisplayName().charAt(0).toUpperCase() : "W"
-                        color: "#d8f3ff"
-                        font.pixelSize: veryNarrow ? 14 : (narrow ? 16 : 18)
-                        font.weight: Font.DemiBold
-                    }
+                Label {
+                    width: parent.width
+                    text: walletDisplayName()
+                    color: "#c8e4f8"
+                    font.pixelSize: veryNarrow ? 18 : (narrow ? 20 : (compactMode ? 22 : 26))
+                    font.weight: Font.Bold
+                    elide: Text.ElideRight
+                    maximumLineCount: 1
                 }
 
                 Label {
-                    width: parent.width - 54
-                    height: Math.max(parent.height, implicitHeight)
-                    text: walletDisplayName()
-                    color: "#ffffff"
-                    wrapMode: Text.WordWrap
-                    verticalAlignment: Text.AlignVCenter
-                    font.pixelSize: veryNarrow ? 17 : (narrow ? 20 : (compactMode ? 24 : 30))
-                    font.weight: Font.Bold
+                    visible: grinWalletController.selectedNetwork.length > 0
+                    text: grinWalletController.selectedNetwork
+                    color: "#FEF102"
+                    font.pixelSize: veryNarrow ? 11 : 12
+                    font.letterSpacing: 0.5
                 }
             }
         }
 
+        // Thin divider
+        Rectangle {
+            width: parent.width
+            height: 1
+            color: "#10273a"
+        }
+
+        Item { height: veryNarrow ? 6 : 10; width: 1 }
+
+        // Navigation label
         Label {
             width: parent.width
             text: walletRoot.tf("browser_wallet_nav_section_label", "Navigation")
-            color: "#7ea0b3"
-            font.pixelSize: veryNarrow ? 10 : (narrow ? 11 : 12)
-            font.letterSpacing: veryNarrow ? 0.5 : (narrow ? 0.8 : 1.2)
+            color: "#2a5068"
+            font.pixelSize: 10
+            font.letterSpacing: 1.4
+            font.weight: Font.Medium
         }
 
-        Button {
+        Item { height: 4; width: 1 }
+
+        // Nav items
+        AppComponents.AppNavItem {
             width: parent.width
             text: walletRoot.tf("browser_wallet_nav_home", "Home")
-            leftPadding: 18
-            rightPadding: 18
-            topPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            bottomPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            font.pixelSize: walletRoot.controlTextSize
-            highlighted: walletRoot.activeSection === "home"
-            background: Rectangle {
-                radius: veryNarrow ? 12 : (narrow ? 14 : 16)
-                color: parent.highlighted ? "#173247" : "#111c26"
-                border.color: parent.highlighted ? "#4d89aa" : "#223847"
-            }
-            contentItem: Label {
-                text: parent.text
-                color: parent.highlighted ? "#f7fbff" : "#b8cfdd"
-                font.pixelSize: walletRoot.controlTextSize
-                font.weight: parent.highlighted ? Font.DemiBold : Font.Medium
-                verticalAlignment: Text.AlignVCenter
-            }
+            active: walletRoot.activeSection === "home"
+            fontSize: walletRoot.controlTextSize
             onClicked: activateSection("home")
         }
 
-        Button {
+        AppComponents.AppNavItem {
             width: parent.width
             text: walletRoot.tf("browser_wallet_nav_utxos", "UTXOs")
-            leftPadding: 18
-            rightPadding: 18
-            topPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            bottomPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            font.pixelSize: walletRoot.controlTextSize
-            highlighted: walletRoot.activeSection === "utxos"
-            background: Rectangle {
-                radius: veryNarrow ? 12 : (narrow ? 14 : 16)
-                color: parent.highlighted ? "#173247" : "#111c26"
-                border.color: parent.highlighted ? "#4d89aa" : "#223847"
-            }
-            contentItem: Label {
-                text: parent.text
-                color: parent.highlighted ? "#f7fbff" : "#b8cfdd"
-                font.pixelSize: walletRoot.controlTextSize
-                font.weight: parent.highlighted ? Font.DemiBold : Font.Medium
-                verticalAlignment: Text.AlignVCenter
-            }
+            active: walletRoot.activeSection === "utxos"
+            fontSize: walletRoot.controlTextSize
             onClicked: activateSection("utxos")
         }
 
-        Button {
+        AppComponents.AppNavItem {
             width: parent.width
             text: walletRoot.tf("browser_wallet_nav_statement", "Statement of Account")
-            leftPadding: 18
-            rightPadding: 18
-            topPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            bottomPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            font.pixelSize: walletRoot.controlTextSize
-            highlighted: walletRoot.activeSection === "statement"
-            background: Rectangle {
-                radius: veryNarrow ? 12 : (narrow ? 14 : 16)
-                color: parent.highlighted ? "#173247" : "#111c26"
-                border.color: parent.highlighted ? "#4d89aa" : "#223847"
-            }
-            contentItem: Label {
-                text: parent.text
-                color: parent.highlighted ? "#f7fbff" : "#b8cfdd"
-                font.pixelSize: walletRoot.controlTextSize
-                font.weight: parent.highlighted ? Font.DemiBold : Font.Medium
-                verticalAlignment: Text.AlignVCenter
-            }
+            active: walletRoot.activeSection === "statement"
+            fontSize: walletRoot.controlTextSize
             onClicked: activateSection("statement")
         }
 
-        Button {
+        AppComponents.AppNavItem {
             width: parent.width
             text: walletRoot.tf("browser_wallet_nav_send_receive", "Send / Receive")
-            leftPadding: 18
-            rightPadding: 18
-            topPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            bottomPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            font.pixelSize: walletRoot.controlTextSize
-            highlighted: walletRoot.activeSection === "slatepack"
-            background: Rectangle {
-                radius: veryNarrow ? 12 : (narrow ? 14 : 16)
-                color: parent.highlighted ? "#173247" : "#111c26"
-                border.color: parent.highlighted ? "#4d89aa" : "#223847"
-            }
-            contentItem: Label {
-                text: parent.text
-                color: parent.highlighted ? "#f7fbff" : "#b8cfdd"
-                font.pixelSize: walletRoot.controlTextSize
-                font.weight: parent.highlighted ? Font.DemiBold : Font.Medium
-                verticalAlignment: Text.AlignVCenter
-            }
+            active: walletRoot.activeSection === "slatepack"
+            fontSize: walletRoot.controlTextSize
             onClicked: activateSection("slatepack")
         }
 
-        Button {
+        AppComponents.AppNavItem {
             width: parent.width
             text: walletRoot.tf("browser_wallet_nav_settings", "Settings")
-            leftPadding: 18
-            rightPadding: 18
-            topPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            bottomPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            font.pixelSize: walletRoot.controlTextSize
-            highlighted: walletRoot.activeSection === "settings"
-            background: Rectangle {
-                radius: veryNarrow ? 12 : (narrow ? 14 : 16)
-                color: parent.highlighted ? "#173247" : "#111c26"
-                border.color: parent.highlighted ? "#4d89aa" : "#223847"
-            }
-            contentItem: Label {
-                text: parent.text
-                color: parent.highlighted ? "#f7fbff" : "#b8cfdd"
-                font.pixelSize: walletRoot.controlTextSize
-                font.weight: parent.highlighted ? Font.DemiBold : Font.Medium
-                verticalAlignment: Text.AlignVCenter
-            }
+            active: walletRoot.activeSection === "settings"
+            fontSize: walletRoot.controlTextSize
             onClicked: activateSection("settings")
         }
 
-        Item {
-            width: 1
+        // Push lock to bottom
+        Item { height: veryNarrow ? 16 : 20; width: 1 }
+
+        // Thin divider
+        Rectangle {
+            width: parent.width
             height: 1
-            Layout.fillHeight: true
+            color: "#10273a"
         }
 
-        Button {
+        Item { height: 8; width: 1 }
+
+        // Back / Lock
+        Item {
             width: parent.width
-            text: walletRoot.tf("browser_wallet_back_lock", "Back (Lock)")
-            leftPadding: 18
-            rightPadding: 18
-            topPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            bottomPadding: veryNarrow ? 8 : (narrow ? 10 : 14)
-            font.pixelSize: walletRoot.controlTextSize
-            background: Rectangle {
-                radius: veryNarrow ? 12 : (narrow ? 14 : 16)
-                color: "#111c26"
-                border.color: "#223847"
+            height: 38
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 9
+                color: lockMa.pressed ? "#1a0a10" : (lockMa.containsMouse ? "#120810" : "transparent")
+                border.color: lockMa.containsMouse ? "#5a2030" : "transparent"
+
+                Label {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: walletRoot.tf("browser_wallet_back_lock", "Back (Lock)")
+                    color: lockMa.pressed ? "#cc3050" : (lockMa.containsMouse ? "#aa2840" : "#3a5060")
+                    font.pixelSize: walletRoot.controlTextSize
+                    elide: Text.ElideRight
+                }
+
+                MouseArea {
+                    id: lockMa
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: sidebar.handleBackLock()
+                }
             }
-            contentItem: Label {
-                text: parent.text
-                color: "#b8cfdd"
-                font.pixelSize: walletRoot.controlTextSize
-                font.weight: Font.Medium
-                verticalAlignment: Text.AlignVCenter
-            }
-            onClicked: handleBackLock()
         }
     }
 }

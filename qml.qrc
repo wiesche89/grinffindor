@@ -7,6 +7,8 @@
         <file>qml/Tile.qml</file>
         <file>qml/components/AppTextField.qml</file>
         <file>qml/components/AppTextArea.qml</file>
+        <file>qml/components/AppButton.qml</file>
+        <file>qml/components/AppNavItem.qml</file>
         <file>qml/translation/en.json</file>
         <file>qml/translation/de.json</file>
         <file>qml/pages/TileExchange.qml</file>

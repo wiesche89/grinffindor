@@ -7,10 +7,9 @@ BrowserWalletSectionCard {
     property var walletRoot
 
     width: parent ? parent.width : 0
-    fillColor: walletRoot.nodeStatusMode() === "offline" ? "#34191d"
-             : (walletRoot.pendingRecoveryCount() > 0 ? "#352816" : "#132635")
+    fillColor: walletRoot.nodeStatusMode() === "offline" ? "#1e0c10"
+             : (walletRoot.pendingRecoveryCount() > 0    ? "#1e1508" : "#0c1f2e")
     strokeColor: walletRoot.recoveryBannerColor()
-    title: walletRoot.tf("browser_wallet_recovery_title", "Operational Recovery")
     visible: walletRoot.recoveryBannerVisible()
 
     ColumnLayout {
@@ -30,34 +29,40 @@ BrowserWalletSectionCard {
             Layout.fillWidth: true
             visible: grinWalletController.lastError.length > 0 && walletRoot.nodeStatusMode() !== "online"
             text: grinWalletController.lastError
-            color: "#ffd3d3"
+            color: "#e08090"
             font.pixelSize: walletRoot.bodyTextSize
             wrapMode: Text.WordWrap
         }
 
-        RowLayout {
+        Flow {
             Layout.fillWidth: true
+            spacing: 8
 
-            Button {
-                text: walletRoot.tf("browser_wallet_refresh", "Refresh")
-                font.pixelSize: walletRoot.controlTextSize
-                onClicked: grinWalletController.refreshNodeStatus()
+            Repeater {
+                model: [
+                    { label: walletRoot.tf("browser_wallet_refresh",  "Refresh"),     enabled: true,                                     action: function() { grinWalletController.refreshNodeStatus() } },
+                    { label: walletRoot.tf("browser_wallet_rescan",   "Full Rescan"), enabled: walletRoot.nodeStatusMode() === "online",  action: function() { grinWalletController.rescanWallet() } },
+                    { label: walletRoot.tf("browser_wallet_nav_settings", "Settings"), enabled: true,                                    action: function() { walletRoot.activeSection = "settings" } }
+                ]
+
+                Button {
+                    text: modelData.label
+                    font.pixelSize: walletRoot.controlTextSize
+                    enabled: modelData.enabled
+                    background: Rectangle {
+                        radius: 10
+                        color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
+                        border.color: parent.hovered ? "#1e3a52" : "#152a3c"
+                        border.width: 1
+                    }
+                    contentItem: Label {
+                        text: parent.text; font: parent.font
+                        color: !parent.enabled ? "#283c50" : (parent.hovered ? "#88b8d8" : "#5a8eac")
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: modelData.action()
+                }
             }
-
-            Button {
-                text: walletRoot.tf("browser_wallet_rescan", "Full Rescan")
-                font.pixelSize: walletRoot.controlTextSize
-                enabled: walletRoot.nodeStatusMode() === "online"
-                onClicked: grinWalletController.rescanWallet()
-            }
-
-            Button {
-                text: walletRoot.tf("browser_wallet_nav_settings", "Settings")
-                font.pixelSize: walletRoot.controlTextSize
-                onClicked: walletRoot.activeSection = "settings"
-            }
-
-            Item { Layout.fillWidth: true }
         }
     }
 }

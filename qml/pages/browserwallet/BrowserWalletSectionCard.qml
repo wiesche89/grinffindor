@@ -10,19 +10,20 @@ Rectangle {
 
     property string title: ""
     property string subtitle: ""
-    property color fillColor: "#0f1b26"
-    property color strokeColor: "#26465b"
-    property color titleColor: "#ffffff"
-    property color subtitleColor: "#cbdbe4"
-    property int titleSize: veryCompactWidth ? 18 : (compactWidth ? 22 : 28)
-    property int contentSpacing: veryCompactWidth ? 8 : (compactWidth ? 10 : 12)
-    property int contentPadding: veryCompactWidth ? 12 : (compactWidth ? 14 : 18)
+    property color fillColor: "#0d1c2a"
+    property color strokeColor: "#182e40"
+    property color titleColor: "#ddeeff"
+    property color subtitleColor: "#5a8eaa"
+    property int titleSize: veryCompactWidth ? 17 : (compactWidth ? 20 : 24)
+    property int contentSpacing: veryCompactWidth ? 8 : (compactWidth ? 10 : 14)
+    property int contentPadding: veryCompactWidth ? 14 : (compactWidth ? 16 : 20)
 
     default property alias contentData: body.data
 
-    radius: veryCompactWidth ? 16 : (compactWidth ? 20 : 26)
+    radius: veryCompactWidth ? 16 : (compactWidth ? 18 : 22)
     color: fillColor
     border.color: strokeColor
+    border.width: 1
     implicitHeight: contentColumn.implicitHeight + contentPadding * 2
 
     ColumnLayout {
@@ -46,7 +47,7 @@ Rectangle {
             visible: card.subtitle.length > 0
             text: card.subtitle
             color: card.subtitleColor
-            font.pixelSize: veryCompactWidth ? 12 : (compactWidth ? 13 : 14)
+            font.pixelSize: veryCompactWidth ? 12 : (compactWidth ? 12 : 13)
             wrapMode: Text.WordWrap
         }
 

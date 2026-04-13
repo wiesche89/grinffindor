@@ -6,35 +6,39 @@ Rectangle {
     id: tile
 
     readonly property bool veryCompactWidth: width > 0 && width < 150
-    readonly property bool compactWidth: width > 0 && width < 180
+    readonly property bool compactWidth: width > 0 && width < 200
 
     property string title: ""
     property string value: ""
 
     Layout.fillWidth: true
-    radius: veryCompactWidth ? 14 : (compactWidth ? 16 : 20)
-    color: "#0e1b27"
-    border.color: "#26465b"
-    implicitHeight: veryCompactWidth ? 68 : (compactWidth ? 76 : 88)
+    radius: veryCompactWidth ? 12 : (compactWidth ? 13 : 14)
+    color: "#091825"
+    border.color: "#152c3e"
+    border.width: 1
+    implicitHeight: veryCompactWidth ? 62 : (compactWidth ? 68 : 76)
 
     Column {
         anchors.fill: parent
-        anchors.margins: veryCompactWidth ? 10 : (compactWidth ? 12 : 14)
+        anchors.leftMargin: veryCompactWidth ? 10 : (compactWidth ? 12 : 14)
+        anchors.rightMargin: veryCompactWidth ? 10 : (compactWidth ? 12 : 14)
+        anchors.topMargin: veryCompactWidth ? 10 : 12
         spacing: 4
 
         Label {
             text: tile.title
-            color: "#8fb4c9"
-            font.pixelSize: veryCompactWidth ? 11 : (compactWidth ? 12 : 13)
+            color: "#3e7090"
+            font.pixelSize: veryCompactWidth ? 10 : (compactWidth ? 11 : 11)
+            font.letterSpacing: 0.6
         }
 
         Label {
             width: parent.width
             text: tile.value
-            color: "#ffffff"
+            color: "#b8d8f0"
             wrapMode: Text.WordWrap
-            font.pixelSize: veryCompactWidth ? 16 : (compactWidth ? 18 : 22)
-            font.weight: Font.Bold
+            font.pixelSize: veryCompactWidth ? 14 : (compactWidth ? 15 : 16)
+            font.weight: Font.DemiBold
         }
     }
 }

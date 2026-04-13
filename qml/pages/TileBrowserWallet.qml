@@ -120,7 +120,7 @@ Item {
     }
     function storageStatusColor() {
         if (grinWalletController.storagePersistenceState === "persistent" || grinWalletController.storagePersistenceState === "native")
-            return "#8ff0c8"
+            return "#FEF102"
         if (grinWalletController.storagePersistenceState === "best-effort")
             return "#ffd280"
         return "#8fb4c9"
@@ -174,7 +174,7 @@ Item {
     }
     function txStatusColor(status) {
         if (status === "confirmed")
-            return "#8ff0c8"
+            return "#FEF102"
         if (status === "broadcast_failed" || status === "cancelled")
             return "#ffb4b4"
         if (status === "broadcast_pending" || status === "in_mempool" || status === "broadcasted")
@@ -229,7 +229,7 @@ Item {
             var state = parsed.state || parsed.sta || "-"
             var workflowId = parsed.id || parsed.workflow_id || "-"
             var mode = parsed.body_type || parsed.mode || ((state && state.indexOf("I") === 0) ? "invoice" : ((state && state.indexOf("S") === 0) ? "send" : "-"))
-            setSlatepackStatus(tf("browser_wallet_slatepack_status_ready", "Decoded Slatepack ready") + ": " + mode + " / " + state + " / " + workflowId, "#8ff0c8")
+            setSlatepackStatus(tf("browser_wallet_slatepack_status_ready", "Decoded Slatepack ready") + ": " + mode + " / " + state + " / " + workflowId, "#FEF102")
             return
         } catch (error) {
         }
@@ -288,14 +288,14 @@ Item {
         property string noteDraft: ""
     }
 
-    Rectangle { anchors.fill: parent; color: "#091018" }
+    Rectangle { anchors.fill: parent; color: "#060c14" }
 
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
-            GradientStop { position: 0.0; color: "#10273a" }
-            GradientStop { position: 0.45; color: "#091018" }
-            GradientStop { position: 1.0; color: "#05080d" }
+            GradientStop { position: 0.0;  color: "#0c1e2e" }
+            GradientStop { position: 0.45; color: "#060c14" }
+            GradientStop { position: 1.0;  color: "#04080f" }
         }
     }
 
@@ -313,14 +313,14 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.margins: root.pageMargin
-        spacing: Math.max(8, Math.round(10 * root.mobileScale))
+        spacing: Math.max(6, Math.round(8 * root.mobileScale))
         visible: grinWalletController.walletUnlocked
 
         Label {
             width: parent.width
             visible: grinWalletController.lastInfo.length > 0
             text: grinWalletController.lastInfo
-            color: "#8ff0c8"
+            color: "#FEF102"
             font.pixelSize: root.bodyTextSize
             wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
@@ -330,7 +330,7 @@ Item {
             width: parent.width
             visible: grinWalletController.lastError.length > 0
             text: grinWalletController.lastError
-            color: "#ffb4b4"
+            color: "#dd6070"
             font.pixelSize: root.bodyTextSize
             wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
@@ -411,7 +411,7 @@ Item {
         height: root.height
         topMargin: topBar.height
         background: Rectangle {
-            color: "#09121a"
+            color: "#070e18"
         }
 
         BrowserWalletParts.BrowserWalletSidebar {
@@ -423,7 +423,10 @@ Item {
     }
 
     BrowserWalletParts.BrowserWalletAuthPanel {
-        anchors.fill: parent
+        anchors.top: topBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
         visible: !grinWalletController.walletUnlocked
         z: 5
         walletRoot: root

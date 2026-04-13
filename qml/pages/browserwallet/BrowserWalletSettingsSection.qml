@@ -9,6 +9,13 @@ Item {
 
     implicitHeight: settingsCard.implicitHeight
 
+    // Reusable button style helpers
+    function ghostBtn(ctrl) {
+        return { bg: ctrl.down ? "#07111c" : (ctrl.hovered ? "#060e18" : "transparent"),
+                 border: ctrl.hovered ? "#1e3a52" : "#152a3c",
+                 text: !ctrl.enabled ? "#283c50" : (ctrl.hovered ? "#88b8d8" : "#5a8eac") }
+    }
+
     BrowserWalletSectionCard {
         id: settingsCard
         width: parent.width
@@ -17,42 +24,32 @@ Item {
         ColumnLayout {
             id: settingsColumn
             width: parent.width
-            spacing: 12
+            spacing: 8
 
-            BrowserWalletPanel {
-                Layout.fillWidth: true
-                title: walletRoot.tf("browser_wallet_network_title", "Wallet Network")
-                description: walletRoot.tf("browser_wallet_backup_export_note", "Export a password-encrypted wallet backup before moving devices or clearing browser storage. This backup keeps local history, scan state, and the encrypted seed together.")
-
-                ColumnLayout {
-                    id: overviewSettingsColumn
-                    spacing: 6
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: grinWalletController.selectedNetwork
-                        color: "#8ff0c8"
-                        font.pixelSize: walletRoot.bodyTextSize
-                        wrapMode: Text.WordWrap
-                    }
-                }
-            }
-
+            // Seed Phrase
             BrowserWalletPanel {
                 Layout.fillWidth: true
                 title: walletRoot.tf("browser_wallet_seed_manage_title", "Seed Phrase")
                 description: walletRoot.tf("browser_wallet_seed_manage_note", "Reveal the seed phrase only when you need to verify or back it up. Password confirmation is required every time.")
 
                 ColumnLayout {
-                    id: seedSettingsColumn
                     spacing: 8
 
-                    RowLayout {
+                    Flow {
                         Layout.fillWidth: true
+                        spacing: 8
 
                         Button {
                             text: walletRoot.tf("browser_wallet_seed_show", "Show Seed Phrase")
                             font.pixelSize: walletRoot.controlTextSize
+                            background: Rectangle {
+                                radius: 10; color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
+                                border.color: parent.hovered ? "#1e3a52" : "#152a3c"; border.width: 1
+                            }
+                            contentItem: Label {
+                                text: parent.text; font: parent.font; color: parent.hovered ? "#88b8d8" : "#5a8eac"
+                                horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                            }
                             onClicked: walletRoot.openRevealSeedPopup()
                         }
 
@@ -60,16 +57,23 @@ Item {
                             text: walletRoot.tf("browser_wallet_seed_hide", "Hide Seed Phrase")
                             font.pixelSize: walletRoot.controlTextSize
                             enabled: grinWalletController.mnemonicPreview.length > 0
+                            background: Rectangle {
+                                radius: 10; color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
+                                border.color: parent.hovered ? "#1e3a52" : "#152a3c"; border.width: 1
+                            }
+                            contentItem: Label {
+                                text: parent.text; font: parent.font
+                                color: !parent.enabled ? "#283c50" : (parent.hovered ? "#88b8d8" : "#5a8eac")
+                                horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                            }
                             onClicked: grinWalletController.dismissMnemonicPreview()
                         }
-
-                        Item { Layout.fillWidth: true }
                     }
 
                     AppComponents.AppTextArea {
                         id: settingsSeedArea
                         Layout.fillWidth: true
-                        Layout.preferredHeight: grinWalletController.mnemonicPreview.length > 0 ? 116 : 0
+                        Layout.preferredHeight: grinWalletController.mnemonicPreview.length > 0 ? 108 : 0
                         visible: grinWalletController.mnemonicPreview.length > 0
                         editorTitle: walletRoot.tf("browser_wallet_seed_manage_title", "Seed Phrase")
                         readOnly: true
@@ -84,38 +88,59 @@ Item {
                 }
             }
 
+            // Security
             BrowserWalletPanel {
                 Layout.fillWidth: true
                 title: walletRoot.tf("settings_security_title", "Security")
                 description: walletRoot.tf("settings_auto_lock_note", "Lock the wallet automatically when the app loses focus or is minimized.")
 
-                ColumnLayout {
-                    id: securitySettingsColumn
-                    spacing: 8
+                RowLayout {
+                    Layout.fillWidth: true
 
-                    Switch {
-                        Layout.alignment: Qt.AlignLeft
-                        checked: grinWalletController ? grinWalletController.autoLockOnAppDeactivate : false
-                        text: walletRoot.tf("settings_auto_lock_label", "Lock on app exit/focus loss")
-                        font.pixelSize: walletRoot.controlTextSize
+                    Label {
+                        Layout.fillWidth: true
+                        text: walletRoot.tf("settings_auto_lock_label", "Lock on app exit / focus loss")
+                        color: "#8ab8d0"
+                        font.pixelSize: walletRoot.bodyTextSize
+                    }
 
-                        onToggled: {
-                            if (grinWalletController)
-                                grinWalletController.setAutoLockOnAppDeactivate(checked)
+                    Rectangle {
+                        id: securityToggle
+                        width: 44
+                        height: 24
+                        radius: 12
+                        color: grinWalletController && grinWalletController.autoLockOnAppDeactivate ? "#181200" : "#0c1c28"
+                        border.color: grinWalletController && grinWalletController.autoLockOnAppDeactivate ? "#FEF102" : "#1a3448"
+                        border.width: 1
+
+                        Rectangle {
+                            width: 18; height: 18; radius: 9
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: grinWalletController && grinWalletController.autoLockOnAppDeactivate ? parent.width - width - 3 : 3
+                            color: grinWalletController && grinWalletController.autoLockOnAppDeactivate ? "#FEF102" : "#3a6080"
+
+                            Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.InOutQuad } }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (grinWalletController)
+                                    grinWalletController.setAutoLockOnAppDeactivate(!grinWalletController.autoLockOnAppDeactivate)
+                            }
                         }
                     }
                 }
             }
 
+            // Storage Durability
             BrowserWalletPanel {
                 Layout.fillWidth: true
                 title: walletRoot.tf("browser_wallet_storage_title", "Storage Durability")
-                fillColor: "#132635"
-                strokeColor: walletRoot.storageStatusColor()
 
                 ColumnLayout {
-                    id: storageColumn
-                    spacing: 6
+                    spacing: 8
 
                     Label {
                         Layout.fillWidth: true
@@ -125,59 +150,78 @@ Item {
                         wrapMode: Text.WordWrap
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Button {
-                            text: walletRoot.tf("browser_wallet_storage_request", "Request Persistent Storage")
-                            font.pixelSize: walletRoot.controlTextSize
-                            enabled: grinWalletController.storagePersistenceState !== "native"
-                                  && grinWalletController.storagePersistenceState !== "persistent"
-                            onClicked: grinWalletController.requestPersistentBrowserStorage()
+                    Button {
+                        text: walletRoot.tf("browser_wallet_storage_request", "Request Persistent Storage")
+                        font.pixelSize: walletRoot.controlTextSize
+                        enabled: grinWalletController.storagePersistenceState !== "native"
+                              && grinWalletController.storagePersistenceState !== "persistent"
+                        background: Rectangle {
+                            radius: 10; color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
+                            border.color: parent.hovered ? "#1e3a52" : "#152a3c"; border.width: 1
                         }
+                        contentItem: Label {
+                            text: parent.text; font: parent.font
+                            color: !parent.enabled ? "#283c50" : (parent.hovered ? "#88b8d8" : "#5a8eac")
+                            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: grinWalletController.requestPersistentBrowserStorage()
+                    }
 
-                        Item { Layout.fillWidth: true }
+                    Label {
+                        Layout.fillWidth: true
+                        visible: grinWalletController.storagePersistenceState === "native"
+                        text: walletRoot.tf("browser_wallet_storage_request_browser_only", "This option applies only to Browser/Wasm builds.")
+                        color: "#5a8eaa"
+                        font.pixelSize: walletRoot.compactTextSize
+                        wrapMode: Text.WordWrap
                     }
                 }
             }
 
+            // Encrypted Backup
             BrowserWalletPanel {
                 Layout.fillWidth: true
                 title: walletRoot.tf("browser_wallet_backup_export", "Encrypted Backup")
                 description: walletRoot.tf("browser_wallet_backup_download_note", "Download a fresh encrypted backup file for this wallet. Inline display and clipboard copy are intentionally not offered here.")
 
-                ColumnLayout {
-                    id: backupSettingsColumn
-                    spacing: 8
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Button {
-                            text: walletRoot.tf("browser_wallet_backup_download", "Download Backup")
-                            font.pixelSize: walletRoot.controlTextSize
-                            enabled: grinWalletController.storagePersistenceState !== "native"
-                            onClicked: {
-                                var backup = grinWalletController.exportEncryptedWalletBackup()
-                                if (backup.trim().length > 0) {
-                                    grinWalletController.downloadTextFile(
-                                        "grinffindor-wallet-backup-" + grinWalletController.selectedNetwork + ".json",
-                                        backup)
-                                }
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
+                Button {
+                    text: walletRoot.tf("browser_wallet_backup_download", "Download Backup")
+                    font.pixelSize: walletRoot.controlTextSize
+                    enabled: grinWalletController.storagePersistenceState !== "native"
+                    background: Rectangle {
+                        radius: 10; color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
+                        border.color: parent.hovered ? "#1e3a52" : "#152a3c"; border.width: 1
                     }
+                    contentItem: Label {
+                        text: parent.text; font: parent.font
+                        color: !parent.enabled ? "#283c50" : (parent.hovered ? "#88b8d8" : "#5a8eac")
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: {
+                        var backup = grinWalletController.exportEncryptedWalletBackup()
+                        if (backup.trim().length > 0)
+                            grinWalletController.downloadTextFile(
+                                "grinffindor-wallet-backup-" + grinWalletController.selectedNetwork + ".json",
+                                backup)
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    visible: grinWalletController.storagePersistenceState === "native"
+                    text: walletRoot.tf("browser_wallet_backup_download_browser_only", "Backup download from this section applies only to Browser/Wasm builds.")
+                    color: "#5a8eaa"
+                    font.pixelSize: walletRoot.compactTextSize
+                    wrapMode: Text.WordWrap
                 }
             }
 
+            // External Node
             BrowserWalletPanel {
                 Layout.fillWidth: true
                 title: walletRoot.tf("browser_wallet_node_title", "External Node")
 
                 ColumnLayout {
-                    id: nodeSettingsColumn
                     spacing: 8
 
                     AppComponents.AppTextField {
@@ -188,15 +232,15 @@ Item {
                         font.pixelSize: walletRoot.controlTextSize
                         text: walletRoot.nodeUrlDraft
                         placeholderText: walletRoot.tf("browser_wallet_node_input", "https://your-node.example/v2/foreign")
-                        onTextChanged: {
-                            walletRoot.nodeUrlDraft = text
-                        }
+                        onTextChanged: walletRoot.nodeUrlDraft = text
                     }
 
                     Label {
                         Layout.fillWidth: true
-                        text: walletRoot.tf("browser_wallet_node_title", "External Node") + " (" + grinWalletController.selectedNetwork + "): " + grinWalletController.nodeUrl
-                        color: "#d7e9f4"
+                        text: walletRoot.tf("browser_wallet_node_title", "External Node")
+                              + " (" + grinWalletController.selectedNetwork + "): "
+                              + grinWalletController.nodeUrl
+                        color: "#4a7898"
                         font.pixelSize: walletRoot.bodyTextSize
                         wrapMode: Text.WrapAnywhere
                     }
@@ -204,163 +248,97 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         text: walletRoot.tf("browser_wallet_node_note", "Use a Grin foreign API endpoint here. Switching the wallet network resets the node to the matching Grinffindor endpoint.")
-                        color: "#8fb4c9"
+                        color: "#2a5060"
                         font.pixelSize: walletRoot.bodyTextSize
                         wrapMode: Text.WordWrap
                     }
 
-                    RowLayout {
+                    Flow {
                         Layout.fillWidth: true
+                        spacing: 8
 
-                        Button {
-                            text: walletRoot.tf("browser_wallet_save_node", "Save Node")
-                            font.pixelSize: walletRoot.controlTextSize
-                            enabled: walletRoot.nodeUrlDraft.trim() !== grinWalletController.nodeUrl
-                                     && grinWalletController.isValidNodeUrl(walletRoot.nodeUrlDraft)
-                            onClicked: grinWalletController.setNodeUrl(walletRoot.nodeUrlDraft)
+                        Repeater {
+                            model: [
+                                { label: walletRoot.tf("browser_wallet_save_node", "Save Node"),   enabled: walletRoot.nodeUrlDraft.trim() !== grinWalletController.nodeUrl && grinWalletController.isValidNodeUrl(walletRoot.nodeUrlDraft), action: function() { grinWalletController.setNodeUrl(walletRoot.nodeUrlDraft) } },
+                                { label: walletRoot.tf("browser_wallet_reset_node", "Reset Node"), enabled: grinWalletController.nodeUrl !== walletRoot.defaultNetworkNodeUrl(), action: function() { grinWalletController.resetNodeUrl() } },
+                                { label: walletRoot.tf("browser_wallet_refresh", "Refresh"),       enabled: true, action: function() { grinWalletController.refreshNodeStatus() } },
+                                { label: walletRoot.tf("browser_wallet_rescan", "Full Rescan"),    enabled: walletRoot.nodeStatusMode() === "online", action: function() { grinWalletController.rescanWallet() } }
+                            ]
+
+                            Button {
+                                text: modelData.label
+                                font.pixelSize: walletRoot.controlTextSize
+                                enabled: modelData.enabled
+                                background: Rectangle {
+                                    radius: 10; color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
+                                    border.color: parent.hovered ? "#1e3a52" : "#152a3c"; border.width: 1
+                                }
+                                contentItem: Label {
+                                    text: parent.text; font: parent.font
+                                    color: !parent.enabled ? "#283c50" : (parent.hovered ? "#88b8d8" : "#5a8eac")
+                                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                }
+                                onClicked: modelData.action()
+                            }
                         }
-
-                        Button {
-                            text: walletRoot.tf("browser_wallet_reset_node", "Reset Node")
-                            font.pixelSize: walletRoot.controlTextSize
-                            enabled: grinWalletController.nodeUrl !== walletRoot.defaultNetworkNodeUrl()
-                            onClicked: grinWalletController.resetNodeUrl()
-                        }
-
-                        Button {
-                            text: walletRoot.tf("browser_wallet_refresh", "Refresh")
-                            font.pixelSize: walletRoot.controlTextSize
-                            onClicked: grinWalletController.refreshNodeStatus()
-                        }
-
-                        Button {
-                            text: walletRoot.tf("browser_wallet_rescan", "Full Rescan")
-                            font.pixelSize: walletRoot.controlTextSize
-                            enabled: walletRoot.nodeStatusMode() === "online"
-                            onClicked: grinWalletController.rescanWallet()
-                        }
-
-                        Item { Layout.fillWidth: true }
                     }
                 }
             }
 
-            BrowserWalletPanel {
-                Layout.fillWidth: true
-                fillColor: walletRoot.nodeStatusMode() === "offline" ? "#34191d"
-                         : (walletRoot.nodeStatusMode() === "connecting" ? "#2d2415" : "#132635")
-                strokeColor: walletRoot.recoveryBannerColor()
-                title: walletRoot.tf("browser_wallet_operational_status", "Operational Status")
-
-                ColumnLayout {
-                    id: settingsStatusColumn
-                    spacing: 6
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: grinWalletController.syncStatus
-                        color: "#ffffff"
-                        font.pixelSize: walletRoot.bodyTextSize
-                        wrapMode: Text.WordWrap
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: walletRoot.recoveryBannerText().length > 0
-                              ? walletRoot.recoveryBannerText()
-                              : walletRoot.tf("browser_wallet_operational_ok", "Node is reachable and no pending recovery actions are currently flagged.")
-                        color: walletRoot.recoveryBannerText().length > 0 ? walletRoot.recoveryBannerColor() : "#8ff0c8"
-                        font.pixelSize: walletRoot.bodyTextSize
-                        wrapMode: Text.WordWrap
-                    }
-                }
-            }
-
-            BrowserWalletPanel {
-                Layout.fillWidth: true
-                title: walletRoot.tf("browser_wallet_balances_title", "Wallet Balances")
-
-                ColumnLayout {
-                    id: balanceSettingsColumn
-                    spacing: 8
-
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: 2
-                        rowSpacing: 10
-                        columnSpacing: 12
-
-                        Label { text: walletRoot.tf("browser_wallet_total", "Total"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: grinWalletController.totalBalance + " GRIN"; color: "#ffffff"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: walletRoot.tf("browser_wallet_spendable", "Spendable"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: grinWalletController.spendableBalance + " GRIN"; color: "#ffffff"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: walletRoot.tf("browser_wallet_locked", "Locked"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: grinWalletController.lockedBalance + " GRIN"; color: "#ffffff"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: walletRoot.tf("browser_wallet_immature", "Immature"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: grinWalletController.immatureBalance + " GRIN"; color: "#ffffff"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: walletRoot.tf("browser_wallet_awaiting_confirmation", "Awaiting Confirmation"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: grinWalletController.awaitingConfirmationBalance + " GRIN"; color: "#ffffff"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: walletRoot.tf("browser_wallet_awaiting_finalization", "Awaiting Finalization"); color: "#8fb4c9"; font.pixelSize: walletRoot.bodyTextSize }
-                        Label { text: grinWalletController.awaitingFinalizationBalance + " GRIN"; color: "#ffffff"; font.pixelSize: walletRoot.bodyTextSize }
-                    }
-                }
-            }
-
+            // Wallet Maintenance
             BrowserWalletPanel {
                 Layout.fillWidth: true
                 title: walletRoot.tf("browser_wallet_maintenance_title", "Wallet Maintenance")
                 description: walletRoot.tf("browser_wallet_maintenance_note", "Remove local (off-chain) UTXOs and cancelled transactions to clean up your wallet.")
 
                 ColumnLayout {
-                    id: maintenanceSettingsColumn
                     spacing: 8
 
                     Label {
                         Layout.fillWidth: true
                         text: walletRoot.tf("browser_wallet_maintenance_warning", "This action is permanent. Confirmed UTXOs on the blockchain remain intact.")
-                        color: "#ffc8a8"
-                        wrapMode: Text.WordWrap
+                        color: "#8ab8d0"
                         font.pixelSize: walletRoot.bodyTextSize
+                        wrapMode: Text.WordWrap
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Button {
-                            text: walletRoot.tf("browser_wallet_maintenance_cleanup", "Clean Up Now")
-                            font.pixelSize: walletRoot.controlTextSize
-                            enabled: grinWalletController.walletUnlocked
-                            onClicked: grinWalletController.cleanupLocalAndCancelledItems()
+                    Button {
+                        text: walletRoot.tf("browser_wallet_maintenance_cleanup", "Clean Up Now")
+                        font.pixelSize: walletRoot.controlTextSize
+                        enabled: grinWalletController.walletUnlocked
+                        background: Rectangle {
+                            radius: 10; color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
+                            border.color: parent.hovered ? "#1e3a52" : "#152a3c"; border.width: 1
                         }
-
-                        Item { Layout.fillWidth: true }
+                        contentItem: Label {
+                            text: parent.text; font: parent.font
+                            color: !parent.enabled ? "#283c50" : (parent.hovered ? "#88b8d8" : "#5a8eac")
+                            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                        }
+                        onClicked: grinWalletController.cleanupLocalAndCancelledItems()
                     }
                 }
             }
 
+            // Danger Zone
             BrowserWalletPanel {
                 Layout.fillWidth: true
-                fillColor: "#34191d"
-                strokeColor: "#8b3c46"
                 title: walletRoot.tf("browser_wallet_danger_title", "Danger Zone")
                 description: walletRoot.tf("browser_wallet_delete_note", "Delete the currently selected wallet only if you have verified your backup and seed phrase.")
-                descriptionColor: "#ffd6d6"
 
-                ColumnLayout {
-                    id: dangerSettingsColumn
-                    spacing: 8
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Button {
-                            text: walletRoot.tf("browser_wallet_delete", "Delete Wallet")
-                            font.pixelSize: walletRoot.controlTextSize
-                            onClicked: walletRoot.deleteConfirmOpen = true
-                        }
-
-                        Item { Layout.fillWidth: true }
+                Button {
+                    text: walletRoot.tf("browser_wallet_delete", "Delete Wallet")
+                    font.pixelSize: walletRoot.controlTextSize
+                    background: Rectangle {
+                        radius: 10; color: parent.down ? "#1c0c10" : (parent.hovered ? "#160a0e" : "transparent")
+                        border.color: parent.hovered ? "#882838" : "#6a2030"; border.width: 1
                     }
+                    contentItem: Label {
+                        text: parent.text; font: parent.font
+                        color: parent.down ? "#ff5868" : (parent.hovered ? "#ee4a5a" : "#cc3050")
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: walletRoot.deleteConfirmOpen = true
                 }
             }
         }
