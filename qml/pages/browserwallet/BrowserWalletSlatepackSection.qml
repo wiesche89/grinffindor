@@ -403,6 +403,7 @@ Item {
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         width: Math.min(walletRoot.width - 28, 700)
+        height: Math.min(implicitHeight, walletRoot.height - 40)
         padding: 0
 
         background: Rectangle {
@@ -434,67 +435,80 @@ Item {
                 wrapMode: Text.WordWrap
             }
 
-            // Review fields
-            Rectangle {
+            // Scrollable review content for small screens
+            ScrollView {
                 Layout.fillWidth: true
-                radius: 12
-                color: "#091825"
-                border.color: "#132e42"
-                border.width: 1
-                implicitHeight: reviewGrid.implicitHeight + 20
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: availableWidth
 
-                GridLayout {
-                    id: reviewGrid
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    columns: 2
-                    columnSpacing: 14
-                    rowSpacing: 8
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 14
 
-                    Repeater {
-                        model: [
-                            { label: walletRoot.tf("browser_wallet_slatepack_review_mode",      "Mode"),        value: processReviewMode },
-                            { label: walletRoot.tf("browser_wallet_slatepack_review_state",     "State"),       value: processReviewState },
-                            { label: walletRoot.tf("browser_wallet_slatepack_review_workflow",  "Workflow ID"), value: processReviewWorkflowId },
-                            { label: walletRoot.tf("browser_wallet_slatepack_review_amount",    "Amount"),      value: processReviewAmount },
-                            { label: walletRoot.tf("browser_wallet_slatepack_review_participant","Participant"), value: processReviewParticipant },
-                            { label: walletRoot.tf("browser_wallet_slatepack_review_kernel",    "Kernel"),      value: processReviewKernel }
-                        ]
+                    // Review fields
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: 12
+                        color: "#091825"
+                        border.color: "#132e42"
+                        border.width: 1
+                        implicitHeight: reviewGrid.implicitHeight + 20
 
-                        Label {
-                            text: modelData.label
-                            color: "#2a5a72"
-                            font.pixelSize: walletRoot.compactTextSize
-                        }
-                        Label {
-                            text: modelData.value
-                            color: "#b0d0e8"
-                            font.pixelSize: walletRoot.compactTextSize
-                            wrapMode: Text.WrapAnywhere
-                            Layout.fillWidth: true
+                        GridLayout {
+                            id: reviewGrid
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            columns: 2
+                            columnSpacing: 14
+                            rowSpacing: 8
+
+                            Repeater {
+                                model: [
+                                    { label: walletRoot.tf("browser_wallet_slatepack_review_mode",      "Mode"),        value: processReviewMode },
+                                    { label: walletRoot.tf("browser_wallet_slatepack_review_state",     "State"),       value: processReviewState },
+                                    { label: walletRoot.tf("browser_wallet_slatepack_review_workflow",  "Workflow ID"), value: processReviewWorkflowId },
+                                    { label: walletRoot.tf("browser_wallet_slatepack_review_amount",    "Amount"),      value: processReviewAmount },
+                                    { label: walletRoot.tf("browser_wallet_slatepack_review_participant","Participant"), value: processReviewParticipant },
+                                    { label: walletRoot.tf("browser_wallet_slatepack_review_kernel",    "Kernel"),      value: processReviewKernel }
+                                ]
+
+                                Label {
+                                    text: modelData.label
+                                    color: "#2a5a72"
+                                    font.pixelSize: walletRoot.compactTextSize
+                                }
+                                Label {
+                                    text: modelData.value
+                                    color: "#b0d0e8"
+                                    font.pixelSize: walletRoot.compactTextSize
+                                    wrapMode: Text.WrapAnywhere
+                                    Layout.fillWidth: true
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            // Note
-            Rectangle {
-                Layout.fillWidth: true
-                visible: processReviewNote !== "-" && processReviewNote.length > 0
-                radius: 12
-                color: "#091825"
-                border.color: "#132e42"
-                border.width: 1
-                implicitHeight: processReviewNoteLabel.implicitHeight + 20
+                    // Note
+                    Rectangle {
+                        Layout.fillWidth: true
+                        visible: processReviewNote !== "-" && processReviewNote.length > 0
+                        radius: 12
+                        color: "#091825"
+                        border.color: "#132e42"
+                        border.width: 1
+                        implicitHeight: processReviewNoteLabel.implicitHeight + 20
 
-                Label {
-                    id: processReviewNoteLabel
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    text: walletRoot.tf("browser_wallet_slatepack_review_note", "Note") + ": " + processReviewNote
-                    color: "#5a8eaa"
-                    font.pixelSize: walletRoot.compactTextSize
-                    wrapMode: Text.WrapAnywhere
+                        Label {
+                            id: processReviewNoteLabel
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            text: walletRoot.tf("browser_wallet_slatepack_review_note", "Note") + ": " + processReviewNote
+                            color: "#5a8eaa"
+                            font.pixelSize: walletRoot.compactTextSize
+                            wrapMode: Text.WrapAnywhere
+                        }
+                    }
                 }
             }
 

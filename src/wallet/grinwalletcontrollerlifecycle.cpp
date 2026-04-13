@@ -236,9 +236,13 @@ void GrinWalletController::unlockWallet(const QString &password)
     m_sessionMnemonicBytes = sessionMnemonicBytes;
     GrinWalletStorage::setSensitiveDataKey(deriveSensitiveDataKey(sessionMnemonicBytes));
     m_mnemonicPreview.clear();
-    GrinWalletStorage::saveDocument(document);
+    // Re-load now that the key is available so wallet_states are decrypted
+    // properly. Saving the original document would encrypt redacted defaults
+    // and destroy the real wallet state (outputs, scan height, balances).
+    GrinWalletStorage::saveDocument(GrinWalletStorage::loadDocument());
     wipeByteArray(&sessionMnemonicBytes);
     emit walletChanged();
+    refreshStateFromStorage();
     touchWalletSession();
     setLastError(QString());
     setLastInfo(QStringLiteral("Wallet unlocked locally."));
