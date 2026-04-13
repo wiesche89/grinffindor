@@ -124,6 +124,7 @@ const int kSensitiveEnvelopeVersion = 1;
 const int kSensitiveMacBytes = 16;
 const char *kProtectedWalletStatesKey = "wallet_states_protected_v2";
 QByteArray g_sensitiveDataKey;
+QJsonObject g_cachedProtectedEnvelope;
 
 Q_LOGGING_CATEGORY(walletStorageLog, "grinffindor.wallet.storage")
 
@@ -258,6 +259,10 @@ void restoreProtectedWalletStates(QJsonObject *document)
         return;
     }
 
+    // Cache the encrypted envelope so saveDocument() can re-persist it
+    // without a second disk read when the sensitive key is unavailable.
+    g_cachedProtectedEnvelope = envelope;
+
     if (!GrinWalletStorage::hasSensitiveDataKey()) {
         return;
     }
@@ -287,20 +292,10 @@ void preserveProtectedWalletStatesEnvelope(QJsonObject *document)
         return;
     }
 
-    QFile file(storageFilePath());
-    if (!file.exists() || !file.open(QIODevice::ReadOnly)) {
-        return;
-    }
-
-    const QJsonDocument storedDoc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-    if (!storedDoc.isObject()) {
-        return;
-    }
-
-    const QJsonObject storedEnvelope = storedDoc.object().value(QString::fromUtf8(kProtectedWalletStatesKey)).toObject();
-    if (!storedEnvelope.isEmpty()) {
-        document->insert(QString::fromUtf8(kProtectedWalletStatesKey), storedEnvelope);
+    // Use the in-memory cached envelope instead of re-reading from disk.
+    // The cache is populated during loadDocument() → restoreProtectedWalletStates().
+    if (!g_cachedProtectedEnvelope.isEmpty()) {
+        document->insert(QString::fromUtf8(kProtectedWalletStatesKey), g_cachedProtectedEnvelope);
     }
 }
 
@@ -331,6 +326,8 @@ bool protectWalletStatesForPersistence(QJsonObject *document, const QString &net
 
     document->insert(QString::fromUtf8(kProtectedWalletStatesKey), envelope);
     document->insert(QStringLiteral("wallet_states"), redactedWalletStatesObject(walletStates));
+    // Keep the in-memory cache in sync with the freshly encrypted envelope.
+    g_cachedProtectedEnvelope = envelope;
     GrinWalletStorage::syncActiveNetworkView(document, networkName);
     return true;
 }
@@ -1174,6 +1171,7 @@ void GrinWalletStorage::setSensitiveDataKey(const QByteArray &key)
 void GrinWalletStorage::clearSensitiveDataKey()
 {
     wipeByteArray(&g_sensitiveDataKey);
+    g_cachedProtectedEnvelope = QJsonObject();
 }
 
 bool GrinWalletStorage::hasSensitiveDataKey()

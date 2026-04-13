@@ -33,8 +33,10 @@ server {
     # - 'self' only: the wallet should load code/assets from its own origin only.
     # - 'unsafe-inline' is kept for the current Qt-generated HTML bootstrap.
     # - 'wasm-unsafe-eval' is required for WebAssembly startup.
+    # - 'unsafe-eval' is required by Emscripten embind (craftInvokerFunction
+    #   uses new Function()). This is an upstream Emscripten limitation.
     # - connect-src is limited to the wallet origin plus the built-in project nodes.
-    set $wallet_csp "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self' https://mainnet.grinffindor.org https://testnet.grinffindor.org; worker-src 'self' blob:;";
+    set $wallet_csp "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self' https://mainnet.grinffindor.org https://testnet.grinffindor.org; worker-src 'self' blob:;";
 
     # ── 1. HTML entry point – never cache ────────────────────────────────────
     location = /${APP_INDEX} {

@@ -65,6 +65,23 @@ RUN set -e; \
     sed -i '0,/<strong>.*<\/strong>/s//<strong>Loading Grinffindor...<\/strong>/' \
         grinffindor.html; \
     \
+    # ── CSP hardening: externalize inline script ─────────────────────────── \
+    # Extract the inline <script> block into init.js so that the CSP can     \
+    # drop 'unsafe-inline' entirely.  The onload="init()" body attribute is  \
+    # replaced by an addEventListener inside init.js.                        \
+    sed -n '/<script type="text\/javascript">/,/<\/script>/{//!p}' \
+        grinffindor.html > init.js.tmp; \
+    printf 'window.addEventListener("load", init);\n' >> init.js.tmp; \
+    mv init.js.tmp init.js; \
+    # Remove the inline script block from HTML                               \
+    sed -i '/<script type="text\/javascript">/,/<\/script>/d' \
+        grinffindor.html; \
+    # Remove the onload attribute from <body>                                \
+    sed -i 's|<body onload="init()">|<body>|g' grinffindor.html; \
+    # Insert the external init.js reference before the other script tags     \
+    sed -i 's|<script src="grinffindor\.js"|<script src="init.js?v='"${VER}"'"></script>\n    <script src="grinffindor.js"|' \
+        grinffindor.html; \
+    \
     # ── HTML: cache-bust script src references ────────────────────────────── \
     sed -i "s|src=\"qtloader\.js\"|src=\"qtloader.js?v=${VER}\"|g" \
         grinffindor.html; \
@@ -92,6 +109,7 @@ RUN set -e; \
     gzip -kf -9 grinffindor.js; \
     gzip -kf -9 grinffindor.wasm; \
     gzip -kf -9 qtloader.js; \
+    gzip -kf -9 init.js; \
     gzip -kf -9 version-check.js; \
     gzip -kf -9 version.json; \
     \
