@@ -79,6 +79,11 @@ bool PlatformBridge::openTextEditor(const QString &title,
     return true;
 }
 
+bool PlatformBridge::copyToClipboard(const QString &text) const
+{
+    return writeClipboard(text);
+}
+
 QString PlatformBridge::readClipboard() const
 {
     return GrinWalletPlatformHelpers::requestPasteText();

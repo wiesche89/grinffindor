@@ -19,6 +19,7 @@ public:
     Q_INVOKABLE bool openTextEditor(const QString &title,
                                     const QString &text,
                                     const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE bool copyToClipboard(const QString &text) const;
     Q_INVOKABLE QString readClipboard() const;
     Q_INVOKABLE bool writeClipboard(const QString &text) const;
     Q_INVOKABLE void requestFocus(const QString &id);

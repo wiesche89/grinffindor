@@ -7,6 +7,7 @@
         <file>qml/Tile.qml</file>
         <file>qml/components/AppTextField.qml</file>
         <file>qml/components/AppTextArea.qml</file>
+        <file>qml/components/CopyableLabel.qml</file>
         <file>qml/components/AppButton.qml</file>
         <file>qml/components/AppNavItem.qml</file>
         <file>qml/translation/en.json</file>

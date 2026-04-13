@@ -112,9 +112,10 @@ BrowserWalletSectionCard {
                         }
 
                         // Row 3: workflow id (muted)
-                        Label {
+                        AppComponents.CopyableLabel {
                             Layout.fillWidth: true
                             text: modelData.workflow_id || ""
+                            copiedValue: modelData.workflow_id || ""
                             color: "#254055"
                             wrapMode: Text.WrapAnywhere
                             font.pixelSize: walletRoot.compactTextSize - 1
@@ -228,10 +229,11 @@ BrowserWalletSectionCard {
                                 wrapMode: Text.WordWrap
                             }
 
-                            Label {
+                            AppComponents.CopyableLabel {
                                 Layout.fillWidth: true
                                 visible: (modelData.kernel_excess || "").length > 0
                                 text: walletRoot.tf("browser_wallet_history_kernel", "Kernel") + ": " + (modelData.kernel_excess || "")
+                                copiedValue: modelData.kernel_excess || ""
                                 color: "#2e5060"
                                 wrapMode: Text.WrapAnywhere
                                 font.pixelSize: walletRoot.compactTextSize

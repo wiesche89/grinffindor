@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../../components" as AppComponents
 
 Item {
     id: utxoSection
@@ -180,9 +181,11 @@ Item {
                                     wrapMode: Text.WrapAnywhere
                                 }
 
-                                Label {
+                                AppComponents.CopyableLabel {
                                     Layout.fillWidth: true
                                     text: walletRoot.tf("browser_wallet_utxo_commitment", "Commitment") + ": " + (modelData.commitment || "-")
+                                    copiedValue: modelData.commitment || ""
+                                    copyEnabled: (modelData.commitment || "").length > 0
                                     color: "#204050"
                                     wrapMode: Text.WrapAnywhere
                                     font.pixelSize: walletRoot.compactTextSize
