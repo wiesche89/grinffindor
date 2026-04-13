@@ -273,7 +273,7 @@ Item {
                     color: index % 2 === 0 ? "#091825" : "#080f1c"
                     border.color: "#112030"
                     border.width: 1
-                    implicitHeight: entryCol.implicitHeight + 20
+                    implicitHeight: entryCol.implicitHeight + entryCol.anchors.topMargin + entryCol.anchors.bottomMargin
                     Layout.fillWidth: true
 
                     // Left accent bar for signed amount
@@ -289,10 +289,14 @@ Item {
 
                     ColumnLayout {
                         id: entryCol
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
                         anchors.left: parent.left
                         anchors.right: parent.right
-                        anchors.margins: 14
-                        anchors.leftMargin: 16
+                        anchors.margins: 18
+                        anchors.leftMargin: 22
+                        anchors.topMargin: 22
+                        anchors.bottomMargin: 30
                         spacing: 0
 
                         GridLayout {

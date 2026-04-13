@@ -81,10 +81,6 @@ BrowserWalletSectionCard {
                     {
                         label: walletRoot.tf("browser_wallet_locked", "Locked"),
                         value: grinWalletController.lockedBalance + " GRIN"
-                    },
-                    {
-                        label: walletRoot.tf("browser_wallet_total", "Total"),
-                        value: grinWalletController.totalBalance + " GRIN"
                     }
                 ]
 
@@ -121,39 +117,9 @@ BrowserWalletSectionCard {
             Layout.fillWidth: true
             spacing: 6
 
-            RowLayout {
-                Layout.fillWidth: true
-
-                Label {
-                    text: grinWalletController.syncStatus
-                    color: walletRoot.nodeStatusMode() === "offline"    ? "#dd6070"
-                         : walletRoot.nodeStatusMode() === "connecting" ? "#c89038"
-                         : "#FEF102"
-                    font.pixelSize: walletRoot.bodyTextSize
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-
-            }
-
             // Progress bar
-            Rectangle {
-                Layout.fillWidth: true
-                height: 3
-                radius: 2
-                color: "#0c2030"
-                visible: overviewCard.syncPercent() >= 0 && overviewCard.syncPercent() < 100
-
-                Rectangle {
-                    width: parent.width * (overviewCard.syncPercent() / 100)
-                    height: parent.height
-                    radius: 2
-                    color: "#FEF102"
-                }
-            }
-
             // Block heights
-            RowLayout {
+            Flow {
                 Layout.fillWidth: true
                 spacing: 16
 

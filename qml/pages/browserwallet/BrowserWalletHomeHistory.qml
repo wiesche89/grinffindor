@@ -38,12 +38,14 @@ BrowserWalletSectionCard {
 
                     ColumnLayout {
                         id: txCol
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.margins: 18
                         anchors.leftMargin: 26
-                        anchors.topMargin: 26
-                        anchors.bottomMargin: 16
+                        anchors.topMargin: 22
+                        anchors.bottomMargin: 22
                         spacing: 8
 
                         // Row 1: direction + status / amount

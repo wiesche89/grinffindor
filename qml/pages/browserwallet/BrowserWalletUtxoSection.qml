@@ -55,16 +55,18 @@ Item {
                         color: "#091825"
                         border.color: "#132e42"
                         border.width: 1
-                        implicitHeight: utxoCol.implicitHeight + 22
+                        implicitHeight: utxoCol.implicitHeight + utxoCol.anchors.topMargin + utxoCol.anchors.bottomMargin
 
                         ColumnLayout {
                             id: utxoCol
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.margins: 18
                             anchors.leftMargin: 26
                             anchors.topMargin: 26
-                            anchors.bottomMargin: 16
+                            anchors.bottomMargin: 32
                             spacing: 8
 
                             // Amount + status

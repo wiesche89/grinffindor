@@ -11,9 +11,9 @@ FocusScope {
     property alias validator: control.validator
     property alias inputMethodHints: control.inputMethodHints
     property alias font: control.font
-    property alias color: control.color
-    property alias selectionColor: control.selectionColor
-    property alias selectedTextColor: control.selectedTextColor
+    property color color: "#c8e4f8"
+    property color selectionColor: "#1e5080"
+    property color selectedTextColor: "#ddeeff"
     property alias selectByMouse: control.selectByMouse
     property alias persistentSelection: control.persistentSelection
     property alias activeFocusOnPress: control.activeFocusOnPress
@@ -142,12 +142,10 @@ FocusScope {
         topPadding: 9
         bottomPadding: 9
 
-        color: root.color && root.color.toString() !== "#000000" ? root.color : "#c8e4f8"
+        color: root.color
         placeholderTextColor: "#2a5068"
-        selectionColor: root.selectionColor && root.selectionColor.toString() !== "#000000"
-                        ? root.selectionColor : "#1e5080"
-        selectedTextColor: root.selectedTextColor && root.selectedTextColor.toString() !== "#ffffff"
-                           ? root.selectedTextColor : "#ddeeff"
+        selectionColor: root.selectionColor
+        selectedTextColor: root.selectedTextColor
 
         background: Rectangle {
             radius: 10
