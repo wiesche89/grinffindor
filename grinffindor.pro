@@ -3,7 +3,7 @@ QT += quick qml quickcontrols2 gui network
 CONFIG += c++17
 
 TARGET = grinffindor
-VERSION = 0.1.3
+VERSION = 0.1.4
 
 QMAKE_TARGET_COMPANY = Grinffindor
 QMAKE_TARGET_PRODUCT = Grinffindor

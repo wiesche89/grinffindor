@@ -228,7 +228,7 @@ Item {
         background: Rectangle {
             radius: 22
             color: "#0d1c2a"
-            border.color: amountDialogMode === "receive" ? "#605000" : "#1e3d55"
+            border.color: "#1e3d55"
             border.width: 1
         }
 
@@ -374,13 +374,13 @@ Item {
                     enabled: amountField.text.trim().length > 0
                     background: Rectangle {
                         radius: 10
-                        color: !parent.enabled ? "#181200" : (parent.down ? "#201800" : (parent.hovered ? "#1a1500" : "#181200"))
-                        border.color: !parent.enabled ? "#181000" : (parent.down ? "#A08800" : (parent.hovered ? "#C09800" : "#806800"))
+                        color: !parent.enabled ? "transparent" : (parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent"))
+                        border.color: !parent.enabled ? "#152a3c" : (parent.down ? "#254460" : (parent.hovered ? "#1e3a52" : "#152a3c"))
                         border.width: 1
                     }
                     contentItem: Label {
                         text: parent.text; font: parent.font
-                        color: !parent.enabled ? "#605000" : (parent.down ? "#FEF102" : (parent.hovered ? "#FEF102" : "#FEF102"))
+                        color: !parent.enabled ? "#355468" : (parent.down ? "#a8d0e8" : (parent.hovered ? "#88b8d8" : "#4a7898"))
                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: slatepackSection.confirmAmountDialog()
