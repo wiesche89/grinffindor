@@ -1,6 +1,7 @@
 ﻿#include "grinwalletworkflowhelpers.h"
 
 #include "binaryslatev4reader.h"
+#include "grinwalletstorage.h"
 
 #include <QCryptographicHash>
 #include <QJsonDocument>
@@ -256,8 +257,16 @@ WalletCryptoBackend::ParticipantContext GrinWalletWorkflowHelpers::participantCo
 {
     WalletCryptoBackend::ParticipantContext context;
     context.role = role;
-    context.blindSecret = json.value(QStringLiteral("sec_key")).toString();
-    context.nonceSecret = json.value(QStringLiteral("sec_nonce")).toString();
+    QJsonObject sensitive;
+    if (GrinWalletStorage::unprotectSensitiveObject(json.value(QStringLiteral("protected_v1")).toObject(), &sensitive)) {
+        context.blindSecret = sensitive.value(QStringLiteral("sec_key")).toString();
+        context.nonceSecret = sensitive.value(QStringLiteral("sec_nonce")).toString();
+        context.nonceEntropy = sensitive.value(QStringLiteral("nonce_entropy")).toString();
+    } else {
+        context.blindSecret = json.value(QStringLiteral("sec_key")).toString();
+        context.nonceSecret = json.value(QStringLiteral("sec_nonce")).toString();
+        context.nonceEntropy = json.value(QStringLiteral("nonce_entropy")).toString();
+    }
     context.blindPublic = json.value(QStringLiteral("pub_key")).toString();
     context.noncePublic = json.value(QStringLiteral("pub_nonce")).toString();
     return context;
@@ -272,10 +281,21 @@ QJsonObject GrinWalletWorkflowHelpers::participantContextToJson(
     const WalletCryptoBackend::ParticipantContext &context)
 {
     QJsonObject json;
-    json.insert(QStringLiteral("sec_key"), context.blindSecret);
-    json.insert(QStringLiteral("sec_nonce"), context.nonceSecret);
     json.insert(QStringLiteral("pub_key"), context.blindPublic);
     json.insert(QStringLiteral("pub_nonce"), context.noncePublic);
+    const QJsonObject sensitive = {
+        { QStringLiteral("sec_key"), context.blindSecret },
+        { QStringLiteral("sec_nonce"), context.nonceSecret },
+        { QStringLiteral("nonce_entropy"), context.nonceEntropy }
+    };
+    const QJsonObject envelope = GrinWalletStorage::protectSensitiveObject(sensitive);
+    if (!envelope.isEmpty()) {
+        json.insert(QStringLiteral("protected_v1"), envelope);
+    } else {
+        json.insert(QStringLiteral("sec_key"), context.blindSecret);
+        json.insert(QStringLiteral("sec_nonce"), context.nonceSecret);
+        json.insert(QStringLiteral("nonce_entropy"), context.nonceEntropy);
+    }
     return json;
 }
 

@@ -29,6 +29,8 @@ public:
  * @brief Returns wallet keychain.
  */
     explicit WalletKeychain(const QString &mnemonic = QString());
+    explicit WalletKeychain(const QByteArray &mnemonicUtf8);
+    ~WalletKeychain();
 
 /**
  * @brief Returns whether valid.
@@ -52,7 +54,7 @@ public:
     OutputSecrets deriveOutputSecrets(quint32 childIndex, quint64 amount) const;
 
 private:
-    QString m_mnemonic;
+    void initializeFromMnemonicUtf8(const QByteArray &mnemonicUtf8);
     QByteArray m_masterSecret;
     QByteArray m_masterChainCode;
     QByteArray m_masterPublicKey;

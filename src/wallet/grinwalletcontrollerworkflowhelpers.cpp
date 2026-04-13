@@ -18,11 +18,11 @@
  */
 QString GrinWalletController::currentSlatepackAddress() const
 {
-    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!hasUnlockedSession()) {
         return QString();
     }
 
-    const WalletKeychain keychain(m_sessionMnemonic);
+    const WalletKeychain keychain = sessionKeychain();
     return keychain.isValid() ? WalletCryptoBackend::slatepackAddress(keychain, m_selectedNetwork) : QString();
 }
 
@@ -32,11 +32,11 @@ QString GrinWalletController::currentSlatepackAddress() const
  */
 QString GrinWalletController::currentPaymentProofAddress() const
 {
-    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!hasUnlockedSession()) {
         return QString();
     }
 
-    const WalletKeychain keychain(m_sessionMnemonic);
+    const WalletKeychain keychain = sessionKeychain();
     return keychain.isValid() ? WalletCryptoBackend::paymentProofAddress(keychain) : QString();
 }
 
@@ -46,11 +46,11 @@ QString GrinWalletController::currentPaymentProofAddress() const
  */
 QByteArray GrinWalletController::currentSlatepackSecret() const
 {
-    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!hasUnlockedSession()) {
         return QByteArray();
     }
 
-    const WalletKeychain keychain(m_sessionMnemonic);
+    const WalletKeychain keychain = sessionKeychain();
     return keychain.isValid() ? keychain.slatepackSecretKey() : QByteArray();
 }
 
@@ -509,8 +509,8 @@ bool GrinWalletController::prepareInvoiceSenderContext(
     const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
 
     QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
-    if (!m_sessionMnemonic.trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_sessionMnemonic);
+    if (hasUnlockedSession()) {
+        const WalletKeychain keychain = sessionKeychain();
         if (keychain.isValid()) {
             for (int i = 0; i < trackedOutputs.size(); ++i) {
                 trackedOutputs[i] = GrinWalletControllerHelpers::normalizedTrackedOutput(trackedOutputs.at(i), keychain);
@@ -654,8 +654,8 @@ bool GrinWalletController::prepareStandardSenderContext(
     const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
 
     QList<WalletOutput> trackedOutputs = WalletScanner::outputsFromState(walletState);
-    if (!m_sessionMnemonic.trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_sessionMnemonic);
+    if (hasUnlockedSession()) {
+        const WalletKeychain keychain = sessionKeychain();
         if (keychain.isValid()) {
             for (int i = 0; i < trackedOutputs.size(); ++i) {
                 trackedOutputs[i] = GrinWalletControllerHelpers::normalizedTrackedOutput(trackedOutputs.at(i), keychain);

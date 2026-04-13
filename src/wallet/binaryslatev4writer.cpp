@@ -5,7 +5,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageAuthenticationCode>
-#include <QRandomGenerator>
 #include <QStringList>
 #include <QVector>
 #include <QDebug>
@@ -17,6 +16,7 @@ extern "C" {
 #endif
 
 #include "slatev4.h"
+#include "walletsecurerandom.h"
 
 namespace {
 
@@ -247,11 +247,7 @@ QString formatArmored(const QString &data)
  */
 QByteArray randomBytes(int size)
 {
-    QByteArray data(size, Qt::Uninitialized);
-    for (int i = 0; i < size; ++i) {
-        data[i] = static_cast<char>(QRandomGenerator::global()->bounded(256));
-    }
-    return data;
+    return WalletSecureRandom::bytes(size);
 }
 
 /**

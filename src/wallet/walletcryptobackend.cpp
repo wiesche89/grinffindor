@@ -7,9 +7,9 @@
 #include "walletcryptokernelhelpers.h"
 #include "walletcryptosignaturehelpers.h"
 #include "walletcryptoslatepackhelpers.h"
+#include "walletsecurerandom.h"
 
 #include <QCryptographicHash>
-#include <QRandomGenerator>
 #include <QStringList>
 
 // -------------------------------------------------------------------------------------------------------
@@ -39,10 +39,14 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipant(c
     ParticipantContext context;
     const QString entropy = walletFingerprint + QLatin1Char(':') + workflowId + QLatin1Char(':') + roleTag;
     const QByteArray blindSecret = WalletCryptoHelpers::deriveSigningBaseSecret(walletFingerprint, workflowId, roleTag);
+    context.nonceEntropy = randomHex(16);
 
-    QByteArray nonceSecret = WalletCryptoHelpers::deriveAggsigSecnonce(walletFingerprint, workflowId, roleTag);
+    QByteArray nonceSecret =
+        WalletCryptoHelpers::deriveAggsigSecnonce(walletFingerprint, workflowId, roleTag, context.nonceEntropy);
     if (nonceSecret.size() != 32) {
-        nonceSecret = WalletCryptoHelpers::deriveValidSecretBytes(QStringLiteral("nonce"), walletFingerprint, entropy);
+        nonceSecret = WalletCryptoHelpers::deriveValidSecretBytes(QStringLiteral("nonce"),
+                                                                 walletFingerprint,
+                                                                 entropy + QLatin1Char(':') + context.nonceEntropy);
     }
     context.role = roleTag;
     context.blindSecret = QString::fromUtf8(blindSecret.toHex());
@@ -65,7 +69,8 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipantFr
     const QString &blindSecretHex,
     const QString &walletFingerprint,
     const QString &workflowId,
-    const QString &roleTag)
+    const QString &roleTag,
+    const QString &nonceEntropy)
 {
     ParticipantContext context;
     const QByteArray blindSecret = WalletCryptoHelpers::fromHex(blindSecretHex.trimmed());
@@ -77,10 +82,16 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createParticipantFr
     }
 
     const QString entropy = walletFingerprint + QLatin1Char(':') + workflowId + QLatin1Char(':') + roleTag;
+    context.nonceEntropy = nonceEntropy.trimmed();
 
-    QByteArray nonceSecret = WalletCryptoHelpers::deriveAggsigSecnonce(walletFingerprint, workflowId, roleTag);
+    QByteArray nonceSecret =
+        WalletCryptoHelpers::deriveAggsigSecnonce(walletFingerprint, workflowId, roleTag, context.nonceEntropy);
     if (nonceSecret.size() != 32) {
-        nonceSecret = WalletCryptoHelpers::deriveValidSecretBytes(QStringLiteral("nonce"), walletFingerprint, entropy);
+        nonceSecret = WalletCryptoHelpers::deriveValidSecretBytes(QStringLiteral("nonce"),
+                                                                 walletFingerprint,
+                                                                 context.nonceEntropy.isEmpty()
+                                                                     ? entropy
+                                                                     : (entropy + QLatin1Char(':') + context.nonceEntropy));
     }
 
     context.role = roleTag;
@@ -103,16 +114,21 @@ WalletCryptoBackend::ParticipantContext WalletCryptoBackend::createRandomPartici
     const QByteArray blindSecret =
         WalletCryptoHelpers::deriveValidSecretBytes(QStringLiteral("random-blind"), entropy, QStringLiteral("blind"));
 
-    QByteArray nonceSecret = WalletCryptoHelpers::deriveAggsigSecnonce(QStringLiteral("random"), entropy, roleTag);
+    const QString nonceEntropy = randomHex(16);
+    QByteArray nonceSecret =
+        WalletCryptoHelpers::deriveAggsigSecnonce(QStringLiteral("random"), entropy, roleTag, nonceEntropy);
     if (nonceSecret.size() != 32) {
         nonceSecret =
-            WalletCryptoHelpers::deriveValidSecretBytes(QStringLiteral("random-nonce"), entropy, QStringLiteral("nonce"));
+            WalletCryptoHelpers::deriveValidSecretBytes(QStringLiteral("random-nonce"),
+                                                        entropy,
+                                                        QStringLiteral("nonce:") + nonceEntropy);
     }
 
     ParticipantContext context;
     context.role = roleTag;
     context.blindSecret = QString::fromUtf8(blindSecret.toHex());
     context.nonceSecret = QString::fromUtf8(nonceSecret.toHex());
+    context.nonceEntropy = nonceEntropy;
     context.blindPublic = WalletCryptoHelpers::createCompressedPubkeyHex(blindSecret);
     context.noncePublic = WalletCryptoHelpers::createCompressedPubkeyHex(nonceSecret);
     context.address = hashHex(QStringLiteral("addr:") + entropy);
@@ -557,11 +573,7 @@ QString WalletCryptoBackend::describeBackend()
  */
 QString WalletCryptoBackend::randomHex(int bytes)
 {
-
-    QByteArray data(bytes, Qt::Uninitialized);
-    for (int i = 0; i < bytes; ++i) {
-        data[i] = static_cast<char>(QRandomGenerator::global()->bounded(256));
-    }
+    const QByteArray data = WalletSecureRandom::bytes(bytes);
     return QString::fromUtf8(data.toHex());
 }
 

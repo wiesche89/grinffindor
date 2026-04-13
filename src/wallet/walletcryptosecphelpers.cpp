@@ -1,7 +1,9 @@
 ﻿#include "walletcryptohelpers.h"
 
-#include <QRandomGenerator>
 #include <QStringList>
+#include <cstring>
+
+#include "walletsecurerandom.h"
 
 namespace
 {
@@ -15,9 +17,11 @@ public:
     {
         m_context = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
         if (m_context) {
+            const QByteArray seedBytes = WalletSecureRandom::bytes(32);
             unsigned char seed[32];
-            for (int i = 0; i < 32; ++i) {
-                seed[i] = static_cast<unsigned char>(QRandomGenerator::global()->bounded(256));
+            std::memset(seed, 0, sizeof(seed));
+            if (seedBytes.size() == 32) {
+                std::memcpy(seed, seedBytes.constData(), sizeof(seed));
             }
             const int randomized = secp256k1_context_randomize(m_context, seed);
             Q_UNUSED(randomized);
@@ -109,8 +113,8 @@ QByteArray deriveValidSecretBytes(const QString &domain, const QString &left, co
 
     QByteArray fallback(32, Qt::Uninitialized);
     do {
-        for (int i = 0; i < fallback.size(); ++i) {
-            fallback[i] = static_cast<char>(QRandomGenerator::global()->bounded(256));
+        if (!WalletSecureRandom::fill(&fallback)) {
+            return QByteArray();
         }
     } while (!context
              || secp256k1_ec_seckey_verify(context, reinterpret_cast<const unsigned char *>(fallback.constData())) != 1);
@@ -142,11 +146,12 @@ QByteArray deriveSigningBaseSecret(const QString &walletFingerprint,
  */
 QByteArray deriveAggsigSecnonce(const QString &walletFingerprint,
                                 const QString &workflowId,
-                                const QString &roleTag)
+                                const QString &roleTag,
+                                const QString &nonceEntropy)
 {
     const QByteArray seed = hashBytes(
-        QStringLiteral("nonce-seed:%1:%2:%3")
-            .arg(walletFingerprint, workflowId, roleTag)
+        QStringLiteral("nonce-seed:%1:%2:%3:%4")
+            .arg(walletFingerprint, workflowId, roleTag, nonceEntropy.trimmed())
             .toUtf8());
     if (seed.size() != 32) {
         return QByteArray();

@@ -34,8 +34,8 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
     QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
 
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
-    if (!m_controller->sessionMnemonic().trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_controller->sessionMnemonic());
+    if (m_controller->hasUnlockedSession()) {
+        const WalletKeychain keychain = m_controller->sessionKeychain();
         if (keychain.isValid()) {
             for (int i = 0; i < outputs.size(); ++i) {
                 outputs[i] = GrinWalletWorkflowHelpers::normalizedTrackedOutput(outputs.at(i), keychain);
@@ -68,8 +68,13 @@ void GrinWalletWorkflowService::startSendWorkflow(const QString &amount, const Q
     walletState.insert(QStringLiteral("outputs"), WalletScanner::outputsToJson(outputs));
     walletState.insert(QStringLiteral("balances"),
                        WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    m_controller->saveDocumentForService(document);
+    m_controller->updateDocumentForService([&walletState](QJsonObject *document) {
+        if (!document) {
+            return false;
+        }
+        document->insert(QStringLiteral("wallet_state"), walletState);
+        return true;
+    });
     m_controller->refreshStateFromStorage();
 
     const WalletCryptoBackend::ParticipantContext senderContext =

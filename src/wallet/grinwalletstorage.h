@@ -111,6 +111,11 @@ public:
  * @brief Returns workflow context.
  */
     static QJsonObject workflowContext(const QJsonObject &document, const QString &workflowId);
+    static void setSensitiveDataKey(const QByteArray &key);
+    static void clearSensitiveDataKey();
+    static bool hasSensitiveDataKey();
+    static QJsonObject protectSensitiveObject(const QJsonObject &sensitive);
+    static bool unprotectSensitiveObject(const QJsonObject &envelope, QJsonObject *sensitiveOut);
 };
 
 #endif

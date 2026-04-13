@@ -1,8 +1,9 @@
 ﻿#include "walletcryptohelpers.h"
 
 #include <QCryptographicHash>
-#include <QRandomGenerator>
 #include <cstring>
+
+#include "walletsecurerandom.h"
 
 namespace WalletCryptoHelpers
 {
@@ -102,10 +103,12 @@ bool createPartialSignature(const QByteArray &messageHash,
     }
 
     unsigned char sig64[64];
-    unsigned char seed[32];
-    for (int i = 0; i < 32; ++i) {
-        seed[i] = static_cast<unsigned char>(QRandomGenerator::global()->bounded(256));
+    const QByteArray seedBytes = WalletSecureRandom::bytes(32);
+    if (seedBytes.size() != 32) {
+        return false;
     }
+    unsigned char seed[32];
+    std::memcpy(seed, seedBytes.constData(), sizeof(seed));
 
     const int ok = secp256k1_aggsig_sign_single(
         walletSecpContext(),

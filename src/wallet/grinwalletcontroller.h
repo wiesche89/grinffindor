@@ -2,6 +2,7 @@
 #define GRINWALLETCONTROLLER_H
 
 #include <QObject>
+#include <QByteArray>
 #include <QJsonObject>
 #include <QString>
 #include <QVariantList>
@@ -196,7 +197,7 @@ public:
     Q_INVOKABLE void clearLastError();
     Q_INVOKABLE void dismissMnemonicPreview();
     Q_INVOKABLE bool revealSeedPhrase(const QString &password);
-    Q_INVOKABLE void deleteWallet();
+    Q_INVOKABLE bool deleteWallet(const QString &password);
     Q_INVOKABLE bool setSelectedNetwork(const QString &networkName);
     Q_INVOKABLE bool setNodeUrl(const QString &nodeUrl);
     Q_INVOKABLE void resetNodeUrl();
@@ -228,9 +229,9 @@ public:
     // Internal service API kept explicit so workflow/node-sync services do not
     // require friend access to controller internals.
 /**
- * @brief Returns session mnemonic.
+ * @brief Returns derived session keychain.
  */
-    QString sessionMnemonic() const;
+    WalletKeychain sessionKeychain() const;
 /**
  * @brief Returns whether unlocked session.
  */
@@ -552,6 +553,7 @@ public:
  * @brief Saves document for service.
  */
     bool saveDocumentForService(const QJsonObject &document) const;
+    bool updateDocumentForService(const std::function<bool(QJsonObject *)> &updater) const;
 /**
  * @brief Returns next child index from state for service.
  */
@@ -675,7 +677,7 @@ private:
     bool m_walletExists;
     bool m_walletUnlocked;
     QString m_walletName;
-    QString m_sessionMnemonic;
+    QByteArray m_sessionMnemonicBytes;
     QString m_mnemonicPreview;
     QString m_seedFingerprint;
     QString m_selectedNetwork;

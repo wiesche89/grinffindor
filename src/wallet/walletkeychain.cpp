@@ -9,6 +9,8 @@
 #include <QTextStream>
 #include <QVector>
 
+#include "../3rdparty/monocypher/monocypher.h"
+
 extern "C" {
 #include "secp256k1.h"
 #include "secp256k1_bulletproofs.h"
@@ -70,6 +72,18 @@ KeychainSecpHolder &walletKeychainSecp()
 {
     static KeychainSecpHolder holder;
     return holder;
+}
+
+void wipeByteArray(QByteArray *value)
+{
+    if (!value) {
+        return;
+    }
+    if (!value->isEmpty()) {
+        crypto_wipe(value->data(), static_cast<size_t>(value->size()));
+    }
+    value->clear();
+    value->squeeze();
 }
 
 /**
@@ -358,6 +372,7 @@ bool deriveChildPrivateKey(const QByteArray &parentSecret,
 
     *childSecretOut = childSecret;
     *childChainCodeOut = hmac.mid(32, 32);
+    wipeByteArray(&childSecret);
     return true;
 }
 
@@ -388,30 +403,58 @@ QByteArray buildEnhancedProofMessage(const QVector<quint32> &path)
  * @param mnemonic Mnemonic phrase.
  */
 WalletKeychain::WalletKeychain(const QString &mnemonic)
-    : m_mnemonic(mnemonic.trimmed())
 {
-    if (m_mnemonic.isEmpty()) {
+    initializeFromMnemonicUtf8(mnemonic.toUtf8());
+}
+
+WalletKeychain::WalletKeychain(const QByteArray &mnemonicUtf8)
+{
+    initializeFromMnemonicUtf8(mnemonicUtf8);
+}
+
+WalletKeychain::~WalletKeychain()
+{
+    wipeByteArray(&m_masterSecret);
+    wipeByteArray(&m_masterChainCode);
+    wipeByteArray(&m_masterPublicKey);
+    wipeByteArray(&m_bulletProofNonce);
+    wipeByteArray(&m_rewindNonceHash);
+}
+
+void WalletKeychain::initializeFromMnemonicUtf8(const QByteArray &mnemonicUtf8)
+{
+    QString mnemonicText = QString::fromUtf8(mnemonicUtf8);
+    QString normalizedMnemonic = mnemonicText.trimmed();
+    mnemonicText.fill(QChar(u'\0'));
+    mnemonicText.clear();
+    if (normalizedMnemonic.isEmpty()) {
         return;
     }
 
     // -------------------------------------------------------------------------------------------------------
     // Validating Mnemonic And Deriving Master Secret Material
     // -------------------------------------------------------------------------------------------------------
-    const QByteArray entropy = entropyFromMnemonic(m_mnemonic);
+    QByteArray entropy = entropyFromMnemonic(normalizedMnemonic);
+    normalizedMnemonic.fill(QChar(u'\0'));
+    normalizedMnemonic.clear();
     if (entropy.size() != 32) {
+        wipeByteArray(&entropy);
         return;
     }
 
-    const QByteArray hmac = QMessageAuthenticationCode::hash(
+    QByteArray hmac = QMessageAuthenticationCode::hash(
         entropy,
         QByteArrayLiteral("IamVoldemort"),
         QCryptographicHash::Sha512);
+    wipeByteArray(&entropy);
     if (hmac.size() != 64) {
+        wipeByteArray(&hmac);
         return;
     }
 
     m_masterSecret = hmac.left(32);
     m_masterChainCode = hmac.mid(32, 32);
+    wipeByteArray(&hmac);
 
     // -------------------------------------------------------------------------------------------------------
     // Preparing Derived Public Data And Rewind Nonces
@@ -570,10 +613,18 @@ WalletKeychain::OutputSecrets WalletKeychain::deriveOutputSecrets(quint32 childI
         QByteArray childSecret;
         QByteArray childChainCode;
         if (!deriveChildPrivateKey(secret, chainCode, path.at(i), &childSecret, &childChainCode)) {
+            wipeByteArray(&secret);
+            wipeByteArray(&chainCode);
+            wipeByteArray(&childSecret);
+            wipeByteArray(&childChainCode);
             return secrets;
         }
+        wipeByteArray(&secret);
+        wipeByteArray(&chainCode);
         secret = childSecret;
         chainCode = childChainCode;
+        wipeByteArray(&childSecret);
+        wipeByteArray(&childChainCode);
     }
 
     secrets.success = true;
@@ -587,5 +638,7 @@ WalletKeychain::OutputSecrets WalletKeychain::deriveOutputSecrets(quint32 childI
     if (secrets.blindingFactor.size() != 32 || secrets.proofMessage.size() != 20) {
         secrets.success = false;
     }
+    wipeByteArray(&secret);
+    wipeByteArray(&chainCode);
     return secrets;
 }

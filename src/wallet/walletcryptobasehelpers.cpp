@@ -1,7 +1,6 @@
 ﻿#include "walletcryptohelpers.h"
 
 #include <QCryptographicHash>
-#include <QRandomGenerator>
 
 namespace
 {

@@ -16,6 +16,7 @@ Item {
     property string restoreMnemonicDraft: ""
     property string revealSeedPasswordDraft: ""
     property string unlockPasswordDraft: ""
+    property string deletePasswordDraft: ""
     property string passwordDraft: ""
     property string passwordConfirmDraft: ""
     property string nodeUrlDraft: ""
@@ -57,6 +58,7 @@ Item {
     }
     function clearPasswordDrafts() {
         unlockPasswordDraft = ""
+        deletePasswordDraft = ""
         passwordDraft = ""
         passwordConfirmDraft = ""
     }
@@ -243,8 +245,10 @@ Item {
         updateSlatepackStatus(decodedEditor ? decodedEditor.text : grinWalletController.workflowDecoded)
     }
     function beginRestoreReset() {
+        if (!grinWalletController.deleteWallet(deletePasswordDraft))
+            return
+        deletePasswordDraft = ""
         deleteConfirmOpen = false
-        grinWalletController.deleteWallet()
         authMode = "restore"
         restoreMnemonicDraft = ""
         clearPasswordDrafts()

@@ -4,12 +4,12 @@
 #include <QCryptographicHash>
 #include <QFile>
 #include <QJsonObject>
-#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QStringList>
 #include <QTextStream>
 
 #include "../3rdparty/monocypher/monocypher.h"
+#include "walletsecurerandom.h"
 
 namespace {
 
@@ -40,11 +40,7 @@ void wipeByteArray(QByteArray *value)
  */
 QByteArray randomBytes(int size)
 {
-    QByteArray data(size, Qt::Uninitialized);
-    for (int i = 0; i < size; ++i) {
-        data[i] = static_cast<char>(QRandomGenerator::global()->bounded(256));
-    }
-    return data;
+    return WalletSecureRandom::bytes(size);
 }
 
 /**

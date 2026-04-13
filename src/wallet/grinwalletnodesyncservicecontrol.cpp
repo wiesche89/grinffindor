@@ -61,16 +61,20 @@ void GrinWalletNodeSyncService::requestWalletScan()
         return;
     }
 
-    QJsonObject document = m_controller->loadDocumentForService();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    QJsonObject walletState = m_controller->loadDocumentForService().value(QStringLiteral("wallet_state")).toObject();
     const qulonglong restoreLeafIndex = walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toULongLong();
 
     const QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
     if (outputs.isEmpty()) {
         walletState.insert(QStringLiteral("scan_height"), static_cast<int>(m_controller->chainHeight()));
         walletState.insert(QStringLiteral("balances"), WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
-        document.insert(QStringLiteral("wallet_state"), walletState);
-        m_controller->saveDocumentForService(document);
+        m_controller->updateDocumentForService([&walletState](QJsonObject *document) {
+            if (!document) {
+                return false;
+            }
+            document->insert(QStringLiteral("wallet_state"), walletState);
+            return true;
+        });
         m_controller->refreshStateFromStorage();
         if (restoreLeafIndex > 0) {
             m_controller->setLastInfo(QStringLiteral("Wallet has no tracked outputs yet. Continuing seed scan from leaf %1.")

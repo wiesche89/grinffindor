@@ -119,7 +119,7 @@ bool GrinWalletNodeSyncService::ensureFullRescanSession(QString *errorMessage)
     session->walletState = walletState;
     session->tracked = WalletScanner::outputsFromState(walletState);
     session->trackedIndexByCommitment = buildTrackedOutputIndex(session->tracked);
-    session->keychain = WalletKeychain(m_controller->sessionMnemonic());
+    session->keychain = m_controller->sessionKeychain();
     session->nextChildIndex = m_controller->nextChildIndexFromStateForService(walletState);
     session->transactionRescanBackup = walletState.value(QStringLiteral("transaction_rescan_backup")).toArray();
     session->fullRescanMode = walletState.value(QStringLiteral("last_sync_mode")).toString() == QStringLiteral("full-rescan")
@@ -204,8 +204,16 @@ bool GrinWalletNodeSyncService::persistFullRescanSession(quint64 restoreLeafInde
         }
     }
 
-    session.document.insert(QStringLiteral("wallet_state"), session.walletState);
-    if (!m_controller->saveDocumentForService(session.document)) {
+    const QJsonObject walletStateToPersist = session.walletState;
+    const QJsonObject workflowContextsToPersist = session.document.value(QStringLiteral("workflow_contexts")).toObject();
+    if (!m_controller->updateDocumentForService([&walletStateToPersist, &workflowContextsToPersist](QJsonObject *document) {
+            if (!document) {
+                return false;
+            }
+            document->insert(QStringLiteral("wallet_state"), walletStateToPersist);
+            document->insert(QStringLiteral("workflow_contexts"), workflowContextsToPersist);
+            return true;
+        })) {
         if (errorMessage != nullptr) {
             *errorMessage = completed
                 ? QStringLiteral("Failed to persist full-rescan results.")
@@ -432,8 +440,7 @@ void GrinWalletNodeSyncService::onNodeOutputsFinished(const Result<QList<OutputP
         return;
     }
 
-    QJsonObject document = m_controller->loadDocumentForService();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    QJsonObject walletState = m_controller->loadDocumentForService().value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> tracked = WalletScanner::outputsFromState(walletState);
     const QList<OutputPrintable> chainOutputs = result.value();
 
@@ -465,9 +472,13 @@ void GrinWalletNodeSyncService::onNodeOutputsFinished(const Result<QList<OutputP
     walletState.insert(QStringLiteral("last_sync_mode"), QStringLiteral("tracked-outputs"));
     walletState.insert(QStringLiteral("last_synced_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
 
-    document.insert(QStringLiteral("wallet_state"), walletState);
-
-    if (!m_controller->saveDocumentForService(document)) {
+    if (!m_controller->updateDocumentForService([&walletState](QJsonObject *document) {
+            if (!document) {
+                return false;
+            }
+            document->insert(QStringLiteral("wallet_state"), walletState);
+            return true;
+        })) {
         m_controller->setLastError(QStringLiteral("Failed to persist wallet scan results."));
         return;
     }
@@ -604,8 +615,7 @@ void GrinWalletNodeSyncService::onNodeUnconfirmedTransactionsFinished(const Resu
         }
     }
 
-    QJsonObject document = m_controller->loadDocumentForService();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    QJsonObject walletState = m_controller->loadDocumentForService().value(QStringLiteral("wallet_state")).toObject();
     QJsonArray transactions = walletState.value(QStringLiteral("transactions")).toArray();
 
     m_controller->clearKernelStatusQueue();
@@ -643,8 +653,13 @@ void GrinWalletNodeSyncService::onNodeUnconfirmedTransactionsFinished(const Resu
     }
 
     walletState.insert(QStringLiteral("transactions"), transactions);
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    m_controller->saveDocumentForService(document);
+    m_controller->updateDocumentForService([&walletState](QJsonObject *document) {
+        if (!document) {
+            return false;
+        }
+        document->insert(QStringLiteral("wallet_state"), walletState);
+        return true;
+    });
     m_controller->refreshStateFromStorage();
     startNextKernelStatusCheck();
 }

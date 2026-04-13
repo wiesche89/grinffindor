@@ -46,8 +46,7 @@ void GrinWalletWorkflowService::cleanupLocalAndCancelledItems()
         return;
     }
 
-    QJsonObject document = m_controller->loadDocumentForService();
-    QJsonObject walletState = document.value(QStringLiteral("wallet_state")).toObject();
+    QJsonObject walletState = m_controller->loadDocumentForService().value(QStringLiteral("wallet_state")).toObject();
     QList<WalletOutput> outputs = WalletScanner::outputsFromState(walletState);
 
     const QJsonArray existingTransactions = walletState.value(QStringLiteral("transactions")).toArray();
@@ -106,8 +105,13 @@ void GrinWalletWorkflowService::cleanupLocalAndCancelledItems()
     walletState.insert(QStringLiteral("balances"),
                        WalletScanner::balancesFromOutputs(outputs, m_controller->chainHeight(), static_cast<qulonglong>(m_controller->minimumConfirmations())));
     walletState.insert(QStringLiteral("transactions"), transactions);
-    document.insert(QStringLiteral("wallet_state"), walletState);
-    m_controller->saveDocumentForService(document);
+    m_controller->updateDocumentForService([&walletState](QJsonObject *document) {
+        if (!document) {
+            return false;
+        }
+        document->insert(QStringLiteral("wallet_state"), walletState);
+        return true;
+    });
     m_controller->refreshStateFromStorage();
 
     m_controller->setLastInfo(
@@ -300,7 +304,14 @@ void GrinWalletWorkflowService::cancelTransaction(const QString &workflowId)
     QJsonObject contexts = document.value(QStringLiteral("workflow_contexts")).toObject();
     contexts.remove(workflowId);
     document.insert(QStringLiteral("workflow_contexts"), contexts);
-    m_controller->saveDocumentForService(document);
+    m_controller->updateDocumentForService([&walletState, &contexts](QJsonObject *current) {
+        if (!current) {
+            return false;
+        }
+        current->insert(QStringLiteral("wallet_state"), walletState);
+        current->insert(QStringLiteral("workflow_contexts"), contexts);
+        return true;
+    });
 
     m_controller->refreshStateFromStorage();
 

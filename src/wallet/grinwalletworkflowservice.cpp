@@ -261,7 +261,7 @@ void GrinWalletWorkflowService::continueProcessWorkflowSlatepack(SlateV4 *slate,
     if (localRoleTag == QStringLiteral("receiver")
 
         && m_controller->hasUnlockedSession()) {
-        const WalletKeychain keychain(m_controller->sessionMnemonic());
+        const WalletKeychain keychain = m_controller->sessionKeychain();
         if (keychain.isValid()
             && !WalletCryptoBackend::signPaymentProof(slate, keychain, &cryptoError)
             && slate->hasPaymentProof) {

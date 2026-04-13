@@ -15,7 +15,10 @@ Popup {
     width: Math.min(walletRoot.width - 28, 520)
     padding: 0
 
-    onClosed: walletRoot.deleteConfirmOpen = false
+    onClosed: {
+        walletRoot.deleteConfirmOpen = false
+        walletRoot.deletePasswordDraft = ""
+    }
 
     background: Rectangle {
         radius: 22
@@ -58,6 +61,14 @@ Popup {
             }
         }
 
+        TextField {
+            Layout.fillWidth: true
+            echoMode: TextInput.Password
+            placeholderText: walletRoot.tf("browser_wallet_unlock_password", "Wallet password")
+            text: walletRoot.deletePasswordDraft
+            onTextChanged: walletRoot.deletePasswordDraft = text
+        }
+
         RowLayout {
             Layout.fillWidth: true
             spacing: 10
@@ -82,6 +93,7 @@ Popup {
                 text: walletRoot.tf("browser_wallet_delete_and_restore", "Delete and Restore")
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
+                enabled: walletRoot.deletePasswordDraft.length > 0
                 background: Rectangle {
                     radius: 10; color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
                     border.color: parent.down ? "#254460" : (parent.hovered ? "#1e3a52" : "#152a3c")
@@ -93,7 +105,6 @@ Popup {
                     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: {
-                    deleteWalletPopup.close()
                     walletRoot.beginRestoreReset()
                 }
             }

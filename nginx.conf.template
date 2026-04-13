@@ -1,6 +1,8 @@
 server {
     listen 80;
     server_name _;
+    # TLS must terminate before this container. Do not expose the wallet over plain
+    # internet HTTP in production; terminate HTTPS at the ingress/load balancer.
 
     root  /usr/share/nginx/html;
     index ${APP_INDEX};
@@ -27,6 +29,12 @@ server {
     #    defines its own add_header directives) ────────────────────────────────
     # Required for Qt WASM SharedArrayBuffer (even single-threaded builds
     # benefit from these; multi-threaded builds require them).
+    # CSP notes:
+    # - 'self' only: the wallet should load code/assets from its own origin only.
+    # - 'unsafe-inline' is kept for the current Qt-generated HTML bootstrap.
+    # - 'wasm-unsafe-eval' is required for WebAssembly startup.
+    # - connect-src is limited to the wallet origin plus the built-in project nodes.
+    set $wallet_csp "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self' https://mainnet.grinffindor.org https://testnet.grinffindor.org; worker-src 'self' blob:;";
 
     # ── 1. HTML entry point – never cache ────────────────────────────────────
     location = /${APP_INDEX} {
@@ -36,6 +44,7 @@ server {
         add_header Cross-Origin-Opener-Policy   "same-origin"  always;
         add_header Cross-Origin-Embedder-Policy "require-corp" always;
         add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        add_header Content-Security-Policy $wallet_csp always;
         try_files /${APP_INDEX} =404;
     }
 
@@ -47,6 +56,7 @@ server {
         add_header Cross-Origin-Opener-Policy   "same-origin"  always;
         add_header Cross-Origin-Embedder-Policy "require-corp" always;
         add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        add_header Content-Security-Policy $wallet_csp always;
         try_files /version.json =404;
     }
 
@@ -57,6 +67,7 @@ server {
         add_header Cross-Origin-Opener-Policy   "same-origin"  always;
         add_header Cross-Origin-Embedder-Policy "require-corp" always;
         add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        add_header Content-Security-Policy $wallet_csp always;
         try_files $uri =404;
     }
 
@@ -66,6 +77,7 @@ server {
         add_header Cross-Origin-Opener-Policy   "same-origin"  always;
         add_header Cross-Origin-Embedder-Policy "require-corp" always;
         add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        add_header Content-Security-Policy $wallet_csp always;
         try_files $uri =404;
     }
 
@@ -75,6 +87,7 @@ server {
         add_header Cross-Origin-Opener-Policy   "same-origin"  always;
         add_header Cross-Origin-Embedder-Policy "require-corp" always;
         add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        add_header Content-Security-Policy $wallet_csp always;
         try_files $uri =404;
     }
 
@@ -83,6 +96,7 @@ server {
         add_header Cross-Origin-Opener-Policy   "same-origin"  always;
         add_header Cross-Origin-Embedder-Policy "require-corp" always;
         add_header Cross-Origin-Resource-Policy "same-origin"  always;
+        add_header Content-Security-Policy $wallet_csp always;
         try_files $uri /${APP_INDEX};
     }
 }

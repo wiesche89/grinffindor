@@ -31,7 +31,8 @@ QByteArray deriveSigningBaseSecret(const QString &walletFingerprint,
                                    const QString &roleTag);
 QByteArray deriveAggsigSecnonce(const QString &walletFingerprint,
                                 const QString &workflowId,
-                                const QString &roleTag);
+                                const QString &roleTag,
+                                const QString &nonceEntropy = QString());
 
 /**
  * @brief Creates create compressed pubkey hex.

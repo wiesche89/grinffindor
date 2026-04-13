@@ -20,7 +20,7 @@ QByteArray GrinWalletWorkflowService::currentSlatepackDecryptionKey() const
         return QByteArray();
     }
 
-    const WalletKeychain keychain(m_controller->sessionMnemonic());
+    const WalletKeychain keychain = m_controller->sessionKeychain();
     return keychain.isValid() ? keychain.slatepackSecretKey() : QByteArray();
 }
 

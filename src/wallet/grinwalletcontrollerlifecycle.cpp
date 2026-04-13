@@ -1,8 +1,11 @@
 #include "grinwalletcontroller.h"
 
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QTimer>
+
+#include "../3rdparty/monocypher/monocypher.h"
 
 #include "grinwalletcontrollerhelpers.h"
 #include "grinwalletseedcrypto.h"
@@ -24,6 +27,33 @@ void wipeQString(QString *value)
     }
     value->clear();
     value->squeeze();
+}
+
+void wipeByteArray(QByteArray *value)
+{
+    if (!value) {
+        return;
+    }
+    if (!value->isEmpty()) {
+        crypto_wipe(value->data(), static_cast<size_t>(value->size()));
+    }
+    value->clear();
+    value->squeeze();
+}
+
+QByteArray normalizedMnemonicBytes(const QString &mnemonic)
+{
+    QString normalized = GrinWalletSeedCrypto::normalizeMnemonic(mnemonic);
+    QByteArray normalizedUtf8 = normalized.toUtf8();
+    normalized.fill(QChar(u'\0'));
+    normalized.clear();
+    return normalizedUtf8;
+}
+
+QByteArray deriveSensitiveDataKey(const QByteArray &normalizedMnemonicUtf8)
+{
+    return QCryptographicHash::hash(QByteArrayLiteral("grinffindor.wallet-sensitive-key:") + normalizedMnemonicUtf8,
+                                    QCryptographicHash::Blake2b_256);
 }
 
 } // namespace
@@ -70,7 +100,11 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
 
     GrinWalletStorage::setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
 
+    QByteArray sessionMnemonicBytes = normalizedMnemonicBytes(mnemonic);
+    GrinWalletStorage::setSensitiveDataKey(deriveSensitiveDataKey(sessionMnemonicBytes));
     if (!GrinWalletStorage::saveDocument(document)) {
+        GrinWalletStorage::clearSensitiveDataKey();
+        wipeByteArray(&sessionMnemonicBytes);
         setLastError(QStringLiteral("Failed to persist wallet in browser storage."));
         return;
     }
@@ -78,10 +112,11 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
     m_walletExists = true;
     m_walletUnlocked = true;
     m_walletName = walletName.trimmed();
-    m_sessionMnemonic = mnemonic;
-    m_sessionMnemonic.detach();
+    m_sessionMnemonicBytes = sessionMnemonicBytes;
+    GrinWalletStorage::setSensitiveDataKey(deriveSensitiveDataKey(sessionMnemonicBytes));
     m_mnemonicPreview.clear();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
+    wipeByteArray(&sessionMnemonicBytes);
     wipeQString(&mnemonic);
     emit walletChanged();
     refreshStateFromStorage();
@@ -144,7 +179,11 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
 
     GrinWalletStorage::setWorkflowContextsForNetwork(&document, resolvedNetworkName(), QJsonObject());
 
+    QByteArray sessionMnemonicBytes = normalizedMnemonicBytes(normalizedMnemonic);
+    GrinWalletStorage::setSensitiveDataKey(deriveSensitiveDataKey(sessionMnemonicBytes));
     if (!GrinWalletStorage::saveDocument(document)) {
+        GrinWalletStorage::clearSensitiveDataKey();
+        wipeByteArray(&sessionMnemonicBytes);
         setLastError(QStringLiteral("Failed to persist wallet in browser storage."));
         return;
     }
@@ -152,10 +191,11 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
     m_walletExists = true;
     m_walletUnlocked = true;
     m_walletName = walletName.trimmed();
-    m_sessionMnemonic = normalizedMnemonic;
-    m_sessionMnemonic.detach();
+    m_sessionMnemonicBytes = sessionMnemonicBytes;
+    GrinWalletStorage::setSensitiveDataKey(deriveSensitiveDataKey(sessionMnemonicBytes));
     m_mnemonicPreview.clear();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
+    wipeByteArray(&sessionMnemonicBytes);
     wipeQString(&normalizedMnemonic);
     emit walletChanged();
     refreshStateFromStorage();
@@ -192,9 +232,12 @@ void GrinWalletController::unlockWallet(const QString &password)
     m_walletUnlocked = true;
     m_walletName = wallet.value(QStringLiteral("name")).toString();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
-    m_sessionMnemonic = mnemonic;
-    m_sessionMnemonic.detach();
+    QByteArray sessionMnemonicBytes = normalizedMnemonicBytes(mnemonic);
+    m_sessionMnemonicBytes = sessionMnemonicBytes;
+    GrinWalletStorage::setSensitiveDataKey(deriveSensitiveDataKey(sessionMnemonicBytes));
     m_mnemonicPreview.clear();
+    GrinWalletStorage::saveDocument(document);
+    wipeByteArray(&sessionMnemonicBytes);
     emit walletChanged();
     touchWalletSession();
     setLastError(QString());
@@ -212,7 +255,8 @@ void GrinWalletController::unlockWallet(const QString &password)
 void GrinWalletController::lockWallet()
 {
     m_walletUnlocked = false;
-    wipeQString(&m_sessionMnemonic);
+    GrinWalletStorage::clearSensitiveDataKey();
+    wipeByteArray(&m_sessionMnemonicBytes);
     wipeQString(&m_mnemonicPreview);
     if (m_sessionLockTimer) {
         m_sessionLockTimer->stop();
@@ -274,8 +318,27 @@ bool GrinWalletController::revealSeedPhrase(const QString &password)
 /**
  * @brief Deletes active-network wallet data and resets controller state.
  */
-void GrinWalletController::deleteWallet()
+bool GrinWalletController::deleteWallet(const QString &password)
 {
+    if (!m_walletExists) {
+        setLastError(QStringLiteral("No wallet exists for the active network."));
+        return false;
+    }
+    if (password.isEmpty()) {
+        setLastError(QStringLiteral("Password is required to delete the wallet."));
+        return false;
+    }
+
+    const QJsonObject currentDocument = GrinWalletStorage::loadDocument();
+    const QJsonObject wallet = GrinWalletStorage::walletForNetwork(currentDocument, resolvedNetworkName());
+    QString mnemonic;
+    if (wallet.isEmpty()
+        || !GrinWalletSeedCrypto::decryptMnemonic(wallet.value(QStringLiteral("encrypted_seed")).toObject(), password, &mnemonic)) {
+        setLastError(QStringLiteral("Failed to delete wallet. Password is invalid or local data is corrupted."));
+        return false;
+    }
+    wipeQString(&mnemonic);
+
     QJsonObject document = GrinWalletStorage::loadDocument();
     document.insert(QStringLiteral("wallet"), GrinWalletStorage::defaultWalletMetadata());
     GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), GrinWalletStorage::defaultWalletMetadata());
@@ -286,13 +349,14 @@ void GrinWalletController::deleteWallet()
 
     if (!GrinWalletStorage::saveDocument(document)) {
         setLastError(QStringLiteral("Failed to delete the local wallet configuration."));
-        return;
+        return false;
     }
 
     clearWorkflow();
     loadFromStorage();
     setLastError(QString());
     setLastInfo(QStringLiteral("Local wallet configuration deleted. You can now create or restore a wallet."));
+    return true;
 }
 
 /**
@@ -306,7 +370,8 @@ void GrinWalletController::loadFromStorage()
     m_walletExists = state.walletExists;
     m_walletUnlocked = false;
     m_walletName = state.walletName;
-    wipeQString(&m_sessionMnemonic);
+    GrinWalletStorage::clearSensitiveDataKey();
+    wipeByteArray(&m_sessionMnemonicBytes);
     m_seedFingerprint = state.seedFingerprint;
     wipeQString(&m_mnemonicPreview);
     m_selectedNetwork = state.selectedNetwork;
@@ -405,7 +470,14 @@ bool GrinWalletController::setNodeUrl(const QString &nodeUrl)
     emit nodeConfigChanged();
     connectNodeClient();
     setLastError(QString());
-    setLastInfo(QStringLiteral("External node updated. Reconnecting to %1").arg(trimmed));
+    QString info = QStringLiteral("External node updated. Reconnecting to %1").arg(trimmed);
+    const QUrl parsed = QUrl::fromUserInput(trimmed);
+    if (parsed.scheme() != QStringLiteral("https")) {
+        info += QStringLiteral(" Warning: non-TLS custom nodes expose wallet metadata and traffic to interception.");
+    } else if (!GrinWalletControllerHelpers::isBuiltInProjectNode(trimmed)) {
+        info += QStringLiteral(" Note: certificate pinning is not yet enforced for custom nodes.");
+    }
+    setLastInfo(info);
     refreshNodeStatus();
     return true;
 }

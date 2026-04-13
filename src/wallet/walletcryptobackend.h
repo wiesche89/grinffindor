@@ -18,6 +18,7 @@ public:
         QString role;
         QString blindSecret;
         QString nonceSecret;
+        QString nonceEntropy;
         QString blindPublic;
         QString noncePublic;
         QString address;
@@ -47,7 +48,8 @@ public:
     static ParticipantContext createParticipantFromBlindSecret(const QString &blindSecretHex,
                                                                const QString &walletFingerprint,
                                                                const QString &workflowId,
-                                                               const QString &roleTag);
+                                                               const QString &roleTag,
+                                                               const QString &nonceEntropy = QString());
 /**
  * @brief Creates create random participant.
  */

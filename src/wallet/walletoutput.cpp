@@ -1,4 +1,5 @@
 #include "walletoutput.h"
+#include "grinwalletstorage.h"
 
 /**
  * @brief WalletOutput::toJson
@@ -11,9 +12,6 @@ QJsonObject WalletOutput::toJson() const
     json.insert(QStringLiteral("proof"), proof);
     json.insert(QStringLiteral("amount"), amount);
     json.insert(QStringLiteral("source"), source);
-    json.insert(QStringLiteral("key_path"), keyPath);
-    json.insert(QStringLiteral("blinding_factor"), blindingFactor);
-    json.insert(QStringLiteral("child_index"), static_cast<int>(childIndex));
     json.insert(QStringLiteral("height"), QString::number(height));
     json.insert(QStringLiteral("coinbase"), coinbase);
     json.insert(QStringLiteral("on_chain"), onChain);
@@ -22,6 +20,21 @@ QJsonObject WalletOutput::toJson() const
     json.insert(QStringLiteral("pending"), pending);
     json.insert(QStringLiteral("reverted"), reverted);
     json.insert(QStringLiteral("workflow_id"), workflowId);
+
+    // Spend-critical metadata is encrypted at rest when a session key is available.
+    const QJsonObject sensitive = {
+        { QStringLiteral("key_path"), keyPath },
+        { QStringLiteral("blinding_factor"), blindingFactor },
+        { QStringLiteral("child_index"), static_cast<int>(childIndex) }
+    };
+    const QJsonObject envelope = GrinWalletStorage::protectSensitiveObject(sensitive);
+    if (!envelope.isEmpty()) {
+        json.insert(QStringLiteral("protected_v1"), envelope);
+    } else {
+        json.insert(QStringLiteral("key_path"), keyPath);
+        json.insert(QStringLiteral("blinding_factor"), blindingFactor);
+        json.insert(QStringLiteral("child_index"), static_cast<int>(childIndex));
+    }
     return json;
 }
 
@@ -37,9 +50,16 @@ WalletOutput WalletOutput::fromJson(const QJsonObject &json)
     output.proof = json.value(QStringLiteral("proof")).toString();
     output.amount = json.value(QStringLiteral("amount")).toString();
     output.source = json.value(QStringLiteral("source")).toString();
-    output.keyPath = json.value(QStringLiteral("key_path")).toString();
-    output.blindingFactor = json.value(QStringLiteral("blinding_factor")).toString();
-    output.childIndex = static_cast<quint32>(json.value(QStringLiteral("child_index")).toInt());
+    QJsonObject sensitive;
+    if (GrinWalletStorage::unprotectSensitiveObject(json.value(QStringLiteral("protected_v1")).toObject(), &sensitive)) {
+        output.keyPath = sensitive.value(QStringLiteral("key_path")).toString();
+        output.blindingFactor = sensitive.value(QStringLiteral("blinding_factor")).toString();
+        output.childIndex = static_cast<quint32>(sensitive.value(QStringLiteral("child_index")).toInt());
+    } else {
+        output.keyPath = json.value(QStringLiteral("key_path")).toString();
+        output.blindingFactor = json.value(QStringLiteral("blinding_factor")).toString();
+        output.childIndex = static_cast<quint32>(json.value(QStringLiteral("child_index")).toInt());
+    }
     output.height = json.value(QStringLiteral("height")).toVariant().toULongLong();
     output.coinbase = json.value(QStringLiteral("coinbase")).toBool();
     output.onChain = json.value(QStringLiteral("on_chain")).toBool();

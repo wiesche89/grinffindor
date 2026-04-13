@@ -31,6 +31,7 @@ public:
  * @brief Returns whether node url accepted.
  */
     static bool isNodeUrlAccepted(const QString &nodeUrl);
+    static bool isBuiltInProjectNode(const QString &nodeUrl);
 /**
  * @brief Returns whether final transaction status.
  */

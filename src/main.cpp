@@ -14,6 +14,7 @@
 #include "platformbridge.h"
 #include "nodefooterstatus.h"
 #include "wallet/grinwalletcontroller.h"
+#include "wallet/walletsecurerandom.h"
 
 #ifdef Q_OS_WASM
 /**
@@ -55,6 +56,9 @@ int main(int argc, char *argv[])
     const QIcon appIcon(QStringLiteral(":/res/media/icons/IconGrinffindor.ico"));
     app.setWindowIcon(appIcon);
     qputenv("QML_XHR_ALLOW_FILE_READ", "1");
+    if (!WalletSecureRandom::selfTest()) {
+        return -1;
+    }
 
     // -------------------------------------------------------------------------------------------------------
     // Initializing UI Styling

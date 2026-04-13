@@ -248,10 +248,13 @@ QString GrinWalletController::workflowDecoded() const { return m_workflowDecoded
 bool GrinWalletController::autoLockOnAppDeactivate() const { return m_autoLockOnAppDeactivate; }
 
 /**
- * @brief Returns the in-memory session mnemonic.
+ * @brief Returns the derived keychain for the in-memory unlocked session.
  * @return
  */
-QString GrinWalletController::sessionMnemonic() const { return m_sessionMnemonic; }
+WalletKeychain GrinWalletController::sessionKeychain() const
+{
+    return WalletKeychain(m_sessionMnemonicBytes);
+}
 
 /**
  * @brief Returns whether an unlocked session with mnemonic material is available.
@@ -259,7 +262,7 @@ QString GrinWalletController::sessionMnemonic() const { return m_sessionMnemonic
  */
 bool GrinWalletController::hasUnlockedSession() const
 {
-    return m_walletUnlocked && !m_sessionMnemonic.trimmed().isEmpty();
+    return m_walletUnlocked && !m_sessionMnemonicBytes.isEmpty();
 }
 
 /**
@@ -821,7 +824,7 @@ void GrinWalletController::syncWallet()
 {
 
     touchWalletSession();
-    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!hasUnlockedSession()) {
         setLastError(QStringLiteral("Unlock the wallet before running a wallet sync."));
         setLastInfo(QStringLiteral("Wallet sync was skipped because the wallet is locked."));
         return;
@@ -842,7 +845,7 @@ void GrinWalletController::rescanWallet()
 {
 
     touchWalletSession();
-    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!hasUnlockedSession()) {
         setLastError(QStringLiteral("Unlock the wallet before starting a full rescan."));
         setLastInfo(QStringLiteral("Full rescan was skipped because the wallet is locked."));
         return;
@@ -1113,8 +1116,8 @@ QString GrinWalletController::encodeSlatepack(const QString &slateJson, const QS
 QString GrinWalletController::decodeSlatepack(const QString &slatepack) const
 {
     QByteArray decryptionKey;
-    if (m_walletUnlocked && !m_sessionMnemonic.trimmed().isEmpty()) {
-        const WalletKeychain keychain(m_sessionMnemonic);
+    if (hasUnlockedSession()) {
+        const WalletKeychain keychain = sessionKeychain();
         if (keychain.isValid()) {
             decryptionKey = keychain.slatepackSecretKey();
         }

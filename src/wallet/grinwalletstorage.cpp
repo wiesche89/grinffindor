@@ -12,6 +12,9 @@
 #include <QStandardPaths>
 #include <QUrl>
 
+#include "../3rdparty/monocypher/monocypher.h"
+#include "walletsecurerandom.h"
+
 #ifdef Q_OS_WASM
 #include <emscripten.h>
 
@@ -117,8 +120,220 @@ const char *kMinimumConfirmationsKey = "minimum_confirmations";
 const char *kWalletStorePath = "/grin-wallet/browser-wallet.json";
 const char *kMainnetNodeUrl = "https://mainnet.grinffindor.org/v2/foreign";
 const char *kTestnetNodeUrl = "https://testnet.grinffindor.org/v2/foreign";
+const int kSensitiveEnvelopeVersion = 1;
+const int kSensitiveMacBytes = 16;
+const char *kProtectedWalletStatesKey = "wallet_states_protected_v2";
+QByteArray g_sensitiveDataKey;
 
 Q_LOGGING_CATEGORY(walletStorageLog, "grinffindor.wallet.storage")
+
+QString storageRootPath();
+QString storageFilePath();
+
+void wipeByteArray(QByteArray *value)
+{
+    if (!value) {
+        return;
+    }
+    if (!value->isEmpty()) {
+        crypto_wipe(value->data(), static_cast<size_t>(value->size()));
+    }
+    value->clear();
+    value->squeeze();
+}
+
+QByteArray sensitiveEncryptionKey()
+{
+    if (g_sensitiveDataKey.isEmpty()) {
+        return QByteArray();
+    }
+    return QCryptographicHash::hash(QByteArrayLiteral("grinffindor.wallet-sensitive.v1:") + g_sensitiveDataKey,
+                                    QCryptographicHash::Blake2b_256);
+}
+
+QJsonObject encryptSensitiveObject(const QJsonObject &sensitive)
+{
+    if (g_sensitiveDataKey.isEmpty()) {
+        return QJsonObject();
+    }
+
+    const QByteArray key = sensitiveEncryptionKey();
+    const QByteArray plain = QJsonDocument(sensitive).toJson(QJsonDocument::Compact);
+    const QByteArray nonce = WalletSecureRandom::bytes(24);
+    if (key.size() != 32 || nonce.size() != 24 || plain.isEmpty()) {
+        return QJsonObject();
+    }
+
+    QByteArray cipher(plain.size(), Qt::Uninitialized);
+    QByteArray mac(kSensitiveMacBytes, Qt::Uninitialized);
+    static const QByteArray associatedData("grinffindor.wallet-sensitive-envelope", 37);
+    crypto_aead_lock(reinterpret_cast<uint8_t *>(cipher.data()),
+                     reinterpret_cast<uint8_t *>(mac.data()),
+                     reinterpret_cast<const uint8_t *>(key.constData()),
+                     reinterpret_cast<const uint8_t *>(nonce.constData()),
+                     reinterpret_cast<const uint8_t *>(associatedData.constData()),
+                     static_cast<size_t>(associatedData.size()),
+                     reinterpret_cast<const uint8_t *>(plain.constData()),
+                     static_cast<size_t>(plain.size()));
+
+    QJsonObject envelope;
+    envelope.insert(QStringLiteral("version"), kSensitiveEnvelopeVersion);
+    envelope.insert(QStringLiteral("algorithm"), QStringLiteral("xchacha20-poly1305"));
+    envelope.insert(QStringLiteral("nonce"), QString::fromUtf8(nonce.toBase64()));
+    envelope.insert(QStringLiteral("cipher"), QString::fromUtf8(cipher.toBase64()));
+    envelope.insert(QStringLiteral("mac"), QString::fromUtf8(mac.toBase64()));
+    return envelope;
+}
+
+QJsonObject redactedWalletState()
+{
+    return GrinWalletStorage::defaultWalletState();
+}
+
+QJsonObject redactedWalletStatesObject(const QJsonObject &walletStates)
+{
+    QJsonObject redacted;
+    const QStringList keys = walletStates.keys();
+    for (int i = 0; i < keys.size(); ++i) {
+        redacted.insert(keys.at(i), redactedWalletState());
+    }
+    if (!redacted.contains(QStringLiteral("mainnet"))) {
+        redacted.insert(QStringLiteral("mainnet"), redactedWalletState());
+    }
+    if (!redacted.contains(QStringLiteral("testnet"))) {
+        redacted.insert(QStringLiteral("testnet"), redactedWalletState());
+    }
+    return redacted;
+}
+
+bool decryptSensitiveObject(const QJsonObject &envelope, QJsonObject *sensitiveOut)
+{
+    if (!sensitiveOut || g_sensitiveDataKey.isEmpty()) {
+        return false;
+    }
+    if (envelope.value(QStringLiteral("version")).toInt() != kSensitiveEnvelopeVersion) {
+        return false;
+    }
+
+    const QByteArray key = sensitiveEncryptionKey();
+    QByteArray nonce = QByteArray::fromBase64(envelope.value(QStringLiteral("nonce")).toString().toUtf8());
+    QByteArray cipher = QByteArray::fromBase64(envelope.value(QStringLiteral("cipher")).toString().toUtf8());
+    QByteArray mac = QByteArray::fromBase64(envelope.value(QStringLiteral("mac")).toString().toUtf8());
+    if (key.size() != 32 || nonce.size() != 24 || mac.size() != kSensitiveMacBytes) {
+        return false;
+    }
+
+    QByteArray plain(cipher.size(), Qt::Uninitialized);
+    static const QByteArray associatedData("grinffindor.wallet-sensitive-envelope", 37);
+    const int ok = crypto_aead_unlock(reinterpret_cast<uint8_t *>(plain.data()),
+                                      reinterpret_cast<const uint8_t *>(mac.constData()),
+                                      reinterpret_cast<const uint8_t *>(key.constData()),
+                                      reinterpret_cast<const uint8_t *>(nonce.constData()),
+                                      reinterpret_cast<const uint8_t *>(associatedData.constData()),
+                                      static_cast<size_t>(associatedData.size()),
+                                      reinterpret_cast<const uint8_t *>(cipher.constData()),
+                                      static_cast<size_t>(cipher.size()));
+    if (ok != 0) {
+        wipeByteArray(&plain);
+        return false;
+    }
+
+    const QJsonDocument document = QJsonDocument::fromJson(plain);
+    wipeByteArray(&plain);
+    if (!document.isObject()) {
+        return false;
+    }
+    *sensitiveOut = document.object();
+    return true;
+}
+
+void restoreProtectedWalletStates(QJsonObject *document)
+{
+    if (!document) {
+        return;
+    }
+
+    const QJsonObject envelope = document->value(QString::fromUtf8(kProtectedWalletStatesKey)).toObject();
+    if (envelope.isEmpty()) {
+        return;
+    }
+
+    if (!GrinWalletStorage::hasSensitiveDataKey()) {
+        return;
+    }
+
+    QJsonObject decrypted;
+    if (!decryptSensitiveObject(envelope, &decrypted)) {
+        qWarning(walletStorageLog) << "restoreProtectedWalletStates: decrypt failed for protected wallet state envelope";
+        return;
+    }
+
+    const QJsonObject walletStates = decrypted.value(QStringLiteral("wallet_states")).toObject();
+    if (walletStates.isEmpty()) {
+        qWarning(walletStorageLog) << "restoreProtectedWalletStates: decrypted payload missing wallet_states object";
+        return;
+    }
+
+    document->insert(QStringLiteral("wallet_states"), walletStates);
+}
+
+void preserveProtectedWalletStatesEnvelope(QJsonObject *document)
+{
+    if (!document) {
+        return;
+    }
+
+    if (document->contains(QString::fromUtf8(kProtectedWalletStatesKey))) {
+        return;
+    }
+
+    QFile file(storageFilePath());
+    if (!file.exists() || !file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+
+    const QJsonDocument storedDoc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    if (!storedDoc.isObject()) {
+        return;
+    }
+
+    const QJsonObject storedEnvelope = storedDoc.object().value(QString::fromUtf8(kProtectedWalletStatesKey)).toObject();
+    if (!storedEnvelope.isEmpty()) {
+        document->insert(QString::fromUtf8(kProtectedWalletStatesKey), storedEnvelope);
+    }
+}
+
+bool protectWalletStatesForPersistence(QJsonObject *document, const QString &networkName)
+{
+    if (!document) {
+        return false;
+    }
+
+    if (!GrinWalletStorage::hasSensitiveDataKey()) {
+        preserveProtectedWalletStatesEnvelope(document);
+        return true;
+    }
+
+    const QJsonObject walletStates = document->value(QStringLiteral("wallet_states")).toObject();
+    if (walletStates.isEmpty()) {
+        qWarning(walletStorageLog) << "protectWalletStatesForPersistence: wallet_states missing before encryption";
+        return false;
+    }
+
+    QJsonObject payload;
+    payload.insert(QStringLiteral("wallet_states"), walletStates);
+    const QJsonObject envelope = encryptSensitiveObject(payload);
+    if (envelope.isEmpty()) {
+        qWarning(walletStorageLog) << "protectWalletStatesForPersistence: failed to encrypt wallet_states";
+        return false;
+    }
+
+    document->insert(QString::fromUtf8(kProtectedWalletStatesKey), envelope);
+    document->insert(QStringLiteral("wallet_states"), redactedWalletStatesObject(walletStates));
+    GrinWalletStorage::syncActiveNetworkView(document, networkName);
+    return true;
+}
 
 /**
  * @brief Returns the default wallet network name.
@@ -542,6 +757,7 @@ QJsonObject GrinWalletStorage::ensureDocumentSchema(const QJsonObject &rawDocume
 QJsonObject GrinWalletStorage::normalizeDocumentSchema(const QJsonObject &rawDocument)
 {
     QJsonObject document = ensureDocumentSchema(rawDocument);
+    restoreProtectedWalletStates(&document);
     const QString networkName =
         inferNetworkName(document.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
                          document.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
@@ -591,21 +807,26 @@ bool GrinWalletStorage::saveDocument(const QJsonObject &document)
         qWarning(walletStorageLog) << "saveDocument: storage not ready";
         return false;
     }
-    // -------------------------------------------------------------------------------------------------------
-    // Normalizing And Persisting Active Network View
-    // -------------------------------------------------------------------------------------------------------
+
+    // Normalize document and persist the active network-specific top-level view.
     QJsonObject normalized = ensureDocumentSchema(document);
     const QString networkName =
         inferNetworkName(normalized.value(QStringLiteral("node")).toObject().value(QStringLiteral("network")).toString(),
                          normalized.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
+
     persistActiveNetworkView(&normalized, networkName);
+
+    if (!protectWalletStatesForPersistence(&normalized, networkName)) {
+        qWarning(walletStorageLog) << "saveDocument: failed to protect wallet_states before write";
+        return false;
+    }
+
     const QByteArray json = QJsonDocument(normalized).toJson(QJsonDocument::Indented);
+    const QString path = storageFilePath();
 
 #ifdef Q_OS_WASM
-    QFile file(storageFilePath());
-#else
-    QSaveFile file(storageFilePath());
-#endif
+    QFile file(path);
+
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         qWarning(walletStorageLog) << "saveDocument: open failed for"
                                    << file.fileName()
@@ -613,18 +834,19 @@ bool GrinWalletStorage::saveDocument(const QJsonObject &document)
         return false;
     }
 
-    if (file.write(json) != json.size()) {
+    const qint64 written = file.write(json);
+    if (written != json.size()) {
         qWarning(walletStorageLog) << "saveDocument: partial write for"
                                    << file.fileName()
                                    << "written"
-                                   << file.pos()
+                                   << written
                                    << "expected"
                                    << json.size()
                                    << file.errorString();
         file.close();
         return false;
     }
-#ifdef Q_OS_WASM
+
     if (!file.flush()) {
         qWarning(walletStorageLog) << "saveDocument: flush failed for"
                                    << file.fileName()
@@ -632,8 +854,32 @@ bool GrinWalletStorage::saveDocument(const QJsonObject &document)
         file.close();
         return false;
     }
+
     file.close();
+
 #else
+    QSaveFile file(path);
+
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning(walletStorageLog) << "saveDocument: open failed for"
+                                   << file.fileName()
+                                   << file.errorString();
+        return false;
+    }
+
+    const qint64 written = file.write(json);
+    if (written != json.size()) {
+        qWarning(walletStorageLog) << "saveDocument: partial write for"
+                                   << file.fileName()
+                                   << "written"
+                                   << written
+                                   << "expected"
+                                   << json.size()
+                                   << file.errorString();
+        file.cancelWriting();
+        return false;
+    }
+
     if (!file.commit()) {
         qWarning(walletStorageLog) << "saveDocument: commit failed for"
                                    << file.fileName()
@@ -641,10 +887,12 @@ bool GrinWalletStorage::saveDocument(const QJsonObject &document)
         return false;
     }
 #endif
+
     const bool flushOk = flushStorage();
     if (!flushOk) {
-        qWarning(walletStorageLog) << "saveDocument: persistent flush failed for" << file.fileName();
+        qWarning(walletStorageLog) << "saveDocument: persistent flush failed for" << path;
     }
+
     return flushOk;
 }
 
@@ -915,4 +1163,30 @@ QJsonObject GrinWalletStorage::workflowContext(const QJsonObject &document, cons
     }
 
     return document.value(QStringLiteral("workflow_contexts")).toObject().value(workflowId).toObject();
+}
+
+void GrinWalletStorage::setSensitiveDataKey(const QByteArray &key)
+{
+    wipeByteArray(&g_sensitiveDataKey);
+    g_sensitiveDataKey = key;
+}
+
+void GrinWalletStorage::clearSensitiveDataKey()
+{
+    wipeByteArray(&g_sensitiveDataKey);
+}
+
+bool GrinWalletStorage::hasSensitiveDataKey()
+{
+    return !g_sensitiveDataKey.isEmpty();
+}
+
+QJsonObject GrinWalletStorage::protectSensitiveObject(const QJsonObject &sensitive)
+{
+    return encryptSensitiveObject(sensitive);
+}
+
+bool GrinWalletStorage::unprotectSensitiveObject(const QJsonObject &envelope, QJsonObject *sensitiveOut)
+{
+    return decryptSensitiveObject(envelope, sensitiveOut);
 }

@@ -1,6 +1,7 @@
 ﻿#include "grinwalletcontroller.h"
 
 #include <QGuiApplication>
+#include <QThread>
 #include <QTimer>
 
 #include "grinwalletcontrollerhelpers.h"
@@ -355,6 +356,26 @@ QJsonObject GrinWalletController::loadDocumentForService() const
  */
 bool GrinWalletController::saveDocumentForService(const QJsonObject &document) const
 {
+    return updateDocumentForService([&document](QJsonObject *current) {
+        if (!current) {
+            return false;
+        }
+        *current = document;
+        return true;
+    });
+}
+
+bool GrinWalletController::updateDocumentForService(const std::function<bool(QJsonObject *)> &updater) const
+{
+    Q_ASSERT(thread() == QThread::currentThread());
+    if (!updater) {
+        return false;
+    }
+
+    QJsonObject document = GrinWalletStorage::loadDocument();
+    if (!updater(&document)) {
+        return false;
+    }
     return GrinWalletStorage::saveDocument(document);
 }
 
@@ -464,7 +485,7 @@ bool GrinWalletController::buildOwnedOutput(const QString &source,
         }
         return false;
     }
-    if (!m_walletUnlocked || m_sessionMnemonic.trimmed().isEmpty()) {
+    if (!hasUnlockedSession()) {
         if (errorOut) {
             *errorOut = QStringLiteral("Wallet must be unlocked to derive owned outputs.");
         }
@@ -474,7 +495,7 @@ bool GrinWalletController::buildOwnedOutput(const QString &source,
     const QJsonObject walletState = GrinWalletStorage::loadDocument().value(QStringLiteral("wallet_state")).toObject();
     const quint32 childIndex = static_cast<quint32>(walletState.value(QStringLiteral("next_child_index")).toInt());
 
-    const WalletKeychain keychain(m_sessionMnemonic);
+    const WalletKeychain keychain = sessionKeychain();
     if (!keychain.isValid()) {
         if (errorOut) {
             *errorOut = QStringLiteral("Wallet keychain could not be derived.");

@@ -79,6 +79,13 @@ bool GrinWalletControllerHelpers::isNodeUrlAccepted(const QString &nodeUrl)
         && (parsed.scheme() == QStringLiteral("http") || parsed.scheme() == QStringLiteral("https"));
 }
 
+bool GrinWalletControllerHelpers::isBuiltInProjectNode(const QString &nodeUrl)
+{
+    const QString normalized = QUrl::fromUserInput(nodeUrl.trimmed()).toString(QUrl::RemoveFragment | QUrl::RemoveQuery);
+    return normalized == defaultNodeUrlForNetwork(QStringLiteral("mainnet"))
+        || normalized == defaultNodeUrlForNetwork(QStringLiteral("testnet"));
+}
+
 /**
  * @brief GrinWalletControllerHelpers::isFinalTransactionStatus
  * @param status
