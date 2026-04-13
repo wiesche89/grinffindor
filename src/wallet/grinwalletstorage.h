@@ -84,10 +84,6 @@ public:
  */
     static QJsonObject normalizeDocumentSchema(const QJsonObject &rawDocument);
 /**
- * @brief Returns extract imported backup document.
- */
-    static QJsonObject extractImportedBackupDocument(const QByteArray &json, QString *errorOut);
-/**
  * @brief Loads document.
  */
     static QJsonObject loadDocument();

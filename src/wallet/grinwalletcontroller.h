@@ -197,8 +197,6 @@ public:
     Q_INVOKABLE void dismissMnemonicPreview();
     Q_INVOKABLE bool revealSeedPhrase(const QString &password);
     Q_INVOKABLE void deleteWallet();
-    Q_INVOKABLE QString exportEncryptedWalletBackup() const;
-    Q_INVOKABLE bool importEncryptedWalletBackup(const QString &backupJson);
     Q_INVOKABLE bool setSelectedNetwork(const QString &networkName);
     Q_INVOKABLE bool setNodeUrl(const QString &nodeUrl);
     Q_INVOKABLE void resetNodeUrl();

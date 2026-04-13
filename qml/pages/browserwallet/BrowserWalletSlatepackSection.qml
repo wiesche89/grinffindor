@@ -155,6 +155,11 @@ Item {
 
     function openProcessReviewDialog() {
         if (slatepackActionsBlocked || slatepackArea.text.trim().length === 0) return
+        if (PlatformBridge.activeEditorId === slatepackArea.bridgeId) {
+            PlatformBridge.closeTextEditor(true)
+            Qt.callLater(function() { slatepackSection.openProcessReviewDialog() })
+            return
+        }
         resetProcessReview()
         var decodedText = decodeSlatepackForReview()
         var trimmed = decodedText ? decodedText.trim() : ""

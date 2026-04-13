@@ -154,6 +154,26 @@ FocusScope {
         onTextChanged: root.syncShortcutContext()
 
         Keys.onPressed: function(event) {
+            if (event.matches(StandardKey.Copy)) {
+                root.copy()
+                event.accepted = true
+                return
+            }
+            if (event.matches(StandardKey.Cut)) {
+                root.cut()
+                event.accepted = true
+                return
+            }
+            if (event.matches(StandardKey.Paste)) {
+                root.paste()
+                event.accepted = true
+                return
+            }
+            if (event.matches(StandardKey.SelectAll)) {
+                root.selectAll()
+                event.accepted = true
+                return
+            }
             event.accepted = false
         }
 

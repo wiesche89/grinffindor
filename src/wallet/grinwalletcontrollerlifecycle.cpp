@@ -10,10 +10,21 @@
 
 namespace {
 
-const int kSeedCipherVersion = 3;
 const char *kAppSettingsKey = "app_settings";
 const char *kAutoLockOnDeactivateKey = "auto_lock_on_app_deactivate";
 const char *kMinimumConfirmationsKey = "minimum_confirmations";
+
+void wipeQString(QString *value)
+{
+    if (!value) {
+        return;
+    }
+    if (!value->isEmpty()) {
+        value->fill(QChar(u'\0'));
+    }
+    value->clear();
+    value->squeeze();
+}
 
 } // namespace
 
@@ -33,7 +44,7 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
         return;
     }
 
-    const QString mnemonic = generateMnemonic();
+    QString mnemonic = generateMnemonic();
     if (mnemonic.isEmpty()) {
         setLastError(QStringLiteral("Failed to generate a valid seed phrase."));
         return;
@@ -68,14 +79,16 @@ void GrinWalletController::createWallet(const QString &walletName, const QString
     m_walletUnlocked = true;
     m_walletName = walletName.trimmed();
     m_sessionMnemonic = mnemonic;
-    m_mnemonicPreview = mnemonic;
+    m_sessionMnemonic.detach();
+    m_mnemonicPreview.clear();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
+    wipeQString(&mnemonic);
     emit walletChanged();
     refreshStateFromStorage();
     touchWalletSession();
     setLastError(QString());
 
-    setLastInfo(QStringLiteral("Wallet created locally. Save the seed phrase now - it will not be shown again after this session."));
+    setLastInfo(QStringLiteral("Wallet created locally. You can reveal the seed phrase later in Settings after confirming your password."));
     if (m_scanHeight == 0) {
         rescanWallet();
     }
@@ -101,7 +114,7 @@ void GrinWalletController::importWallet(const QString &walletName, const QString
 void GrinWalletController::restoreWallet(const QString &walletName, const QString &mnemonic, const QString &password)
 {
 
-    const QString normalizedMnemonic = GrinWalletSeedCrypto::normalizeMnemonic(mnemonic);
+    QString normalizedMnemonic = GrinWalletSeedCrypto::normalizeMnemonic(mnemonic);
     if (walletName.trimmed().isEmpty() || password.isEmpty()) {
         setLastError(QStringLiteral("Wallet name and password are required."));
         return;
@@ -140,8 +153,10 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
     m_walletUnlocked = true;
     m_walletName = walletName.trimmed();
     m_sessionMnemonic = normalizedMnemonic;
+    m_sessionMnemonic.detach();
     m_mnemonicPreview.clear();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
+    wipeQString(&normalizedMnemonic);
     emit walletChanged();
     refreshStateFromStorage();
     touchWalletSession();
@@ -163,8 +178,8 @@ void GrinWalletController::restoreWallet(const QString &walletName, const QStrin
  */
 void GrinWalletController::unlockWallet(const QString &password)
 {
-    QJsonObject document = GrinWalletStorage::loadDocument();
-    QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
+    const QJsonObject document = GrinWalletStorage::loadDocument();
+    const QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
     QString mnemonic;
     if (wallet.isEmpty()
 
@@ -178,22 +193,13 @@ void GrinWalletController::unlockWallet(const QString &password)
     m_walletName = wallet.value(QStringLiteral("name")).toString();
     m_seedFingerprint = wallet.value(QStringLiteral("seed_fingerprint")).toString();
     m_sessionMnemonic = mnemonic;
+    m_sessionMnemonic.detach();
     m_mnemonicPreview.clear();
     emit walletChanged();
     touchWalletSession();
     setLastError(QString());
     setLastInfo(QStringLiteral("Wallet unlocked locally."));
-
-    const QJsonObject encryptedSeed = wallet.value(QStringLiteral("encrypted_seed")).toObject();
-    if (encryptedSeed.value(QStringLiteral("version")).toInt(1) < kSeedCipherVersion) {
-        const QJsonObject upgradedSeed = GrinWalletSeedCrypto::encryptMnemonic(mnemonic, password);
-        if (!upgradedSeed.isEmpty()) {
-            wallet.insert(QStringLiteral("encrypted_seed"), upgradedSeed);
-            document.insert(QStringLiteral("wallet"), wallet);
-            GrinWalletStorage::setWalletForNetwork(&document, resolvedNetworkName(), wallet);
-            GrinWalletStorage::saveDocument(document);
-        }
-    }
+    wipeQString(&mnemonic);
 
     if (!resumePendingFullRescan() && m_scanHeight == 0) {
         rescanWallet();
@@ -206,9 +212,8 @@ void GrinWalletController::unlockWallet(const QString &password)
 void GrinWalletController::lockWallet()
 {
     m_walletUnlocked = false;
-    m_sessionMnemonic.clear();
-
-    m_mnemonicPreview.clear();
+    wipeQString(&m_sessionMnemonic);
+    wipeQString(&m_mnemonicPreview);
     if (m_sessionLockTimer) {
         m_sessionLockTimer->stop();
     }
@@ -225,7 +230,7 @@ void GrinWalletController::dismissMnemonicPreview()
         return;
     }
 
-    m_mnemonicPreview.clear();
+    wipeQString(&m_mnemonicPreview);
     emit walletChanged();
     setLastInfo(QStringLiteral("Seed phrase hidden. Use your password to unlock the wallet next time."));
 }
@@ -253,6 +258,8 @@ bool GrinWalletController::revealSeedPhrase(const QString &password)
     }
 
     m_mnemonicPreview = mnemonic;
+    m_mnemonicPreview.detach();
+    wipeQString(&mnemonic);
     emit walletChanged();
     touchWalletSession();
     setLastError(QString());
@@ -289,69 +296,6 @@ void GrinWalletController::deleteWallet()
 }
 
 /**
- * @brief Exports a full encrypted wallet backup document as formatted JSON.
- * @return Backup JSON text or empty string if no wallet exists.
- */
-QString GrinWalletController::exportEncryptedWalletBackup() const
-{
-    const QJsonObject document = GrinWalletStorage::loadDocument();
-
-    const QJsonObject wallet = GrinWalletStorage::walletForNetwork(document, resolvedNetworkName());
-    if (wallet.isEmpty()) {
-        return QString();
-    }
-
-    QJsonObject backup;
-    backup.insert(QStringLiteral("backup_kind"), QStringLiteral("grinffindor.encrypted_wallet_backup"));
-    backup.insert(QStringLiteral("backup_version"), 1);
-    backup.insert(QStringLiteral("exported_at"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-    backup.insert(QStringLiteral("wallet_name"), wallet.value(QStringLiteral("name")).toString());
-    backup.insert(QStringLiteral("seed_fingerprint"), wallet.value(QStringLiteral("seed_fingerprint")).toString());
-    backup.insert(QStringLiteral("document"), document);
-    return QString::fromUtf8(QJsonDocument(backup).toJson(QJsonDocument::Indented));
-}
-
-/**
- * @brief Imports an encrypted wallet backup document into local storage.
- * @param backupJson Backup JSON text.
- * @return True when backup import succeeds.
- */
-bool GrinWalletController::importEncryptedWalletBackup(const QString &backupJson)
-{
-    if (m_walletExists) {
-        setLastError(QStringLiteral("Delete the current local wallet for this network before importing an encrypted backup."));
-        return false;
-    }
-
-    const QString trimmed = backupJson.trimmed();
-    if (trimmed.isEmpty()) {
-        setLastError(QStringLiteral("Encrypted wallet backup text is required."));
-        return false;
-    }
-
-    QString validationError;
-
-    const QJsonObject imported = GrinWalletStorage::extractImportedBackupDocument(trimmed.toUtf8(), &validationError);
-    if (imported.isEmpty()) {
-        setLastError(validationError.isEmpty()
-                         ? QStringLiteral("Encrypted wallet backup is invalid.")
-                         : validationError);
-        return false;
-    }
-
-    if (!GrinWalletStorage::saveDocument(imported)) {
-        setLastError(QStringLiteral("Failed to persist imported wallet backup."));
-        return false;
-    }
-
-    clearWorkflow();
-    loadFromStorage();
-    setLastError(QString());
-    setLastInfo(QStringLiteral("Encrypted wallet backup imported. Unlock it with the backup password."));
-    return true;
-}
-
-/**
  * @brief Loads wallet and node configuration from persistent storage.
  */
 void GrinWalletController::loadFromStorage()
@@ -362,9 +306,9 @@ void GrinWalletController::loadFromStorage()
     m_walletExists = state.walletExists;
     m_walletUnlocked = false;
     m_walletName = state.walletName;
-    m_sessionMnemonic.clear();
+    wipeQString(&m_sessionMnemonic);
     m_seedFingerprint = state.seedFingerprint;
-    m_mnemonicPreview.clear();
+    wipeQString(&m_mnemonicPreview);
     m_selectedNetwork = state.selectedNetwork;
     m_nodeUrl = state.nodeUrl;
     m_autoLockOnAppDeactivate = state.autoLockOnDeactivate;

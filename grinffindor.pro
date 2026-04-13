@@ -142,6 +142,7 @@ wasm {
     RESOURCES -= res.qrc
     RESOURCES += res-wasm.qrc
     QMAKE_LFLAGS += -Wl,--initial-memory=134217728
+    QMAKE_LFLAGS += -lidbfs.js
 
     win32 {
         WASM_MEDIA_SOURCE = $$replace($$shell_path($$PWD/media), /, \\)

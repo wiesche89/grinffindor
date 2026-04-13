@@ -10,6 +10,11 @@ Item {
     readonly property bool phoneMode: walletRoot && walletRoot.phoneMode
     readonly property bool veryPhoneMode: walletRoot && walletRoot.veryPhoneMode
 
+    onVisibleChanged: {
+        if (!visible && walletRoot)
+            walletRoot.unlockPasswordDraft = ""
+    }
+
     // Shared button style helpers (inline, no helper component dependency)
     function btnBg(pressed, hovered) {
         if (pressed)  return "#07111c"
@@ -74,9 +79,7 @@ Item {
                         Layout.fillWidth: true
                         text: walletRoot.authMode === "unlock"
                               ? walletRoot.tf("browser_wallet_login_note", "Enter your password to unlock the locally stored wallet for this browser session.")
-                              : (walletRoot.authMode === "import_backup"
-                                 ? walletRoot.tf("browser_wallet_import_backup_note", "Paste a previously exported encrypted wallet backup JSON. The wallet stays locked after import until you unlock it with its password.")
-                                 : walletRoot.tf("browser_wallet_setup_note", "Create a new wallet with a fresh seed phrase or restore an existing wallet from its 24 words."))
+                              : walletRoot.tf("browser_wallet_setup_note", "Create a new wallet with a fresh seed phrase or restore an existing wallet from its 24 words.")
                         color: "#4a7a94"
                         font.pixelSize: veryPhoneMode ? 12 : 13
                         wrapMode: Text.WordWrap
@@ -85,7 +88,7 @@ Item {
                     // Network selector
                     ColumnLayout {
                         Layout.fillWidth: true
-                        visible: walletRoot.authMode !== "import_backup"
+                        visible: true
                         spacing: 6
 
                         Label {
@@ -154,8 +157,7 @@ Item {
                             Repeater {
                                 model: [
                                     { key: "create",        label: walletRoot.tf("browser_wallet_create_mode", "New Wallet") },
-                                    { key: "restore",       label: walletRoot.tf("browser_wallet_restore_mode", "Restore Seed") },
-                                    { key: "import_backup", label: walletRoot.tf("browser_wallet_import_backup", "Import Backup") }
+                                    { key: "restore",       label: walletRoot.tf("browser_wallet_restore_mode", "Restore Seed") }
                                 ]
 
                                 Button {
@@ -180,7 +182,6 @@ Item {
                                     onClicked: {
                                         walletRoot.authMode = modelData.key
                                         if (modelData.key !== "restore")  walletRoot.restoreMnemonicDraft = ""
-                                        if (modelData.key !== "import_backup") walletRoot.backupImportDraft = ""
                                     }
                                 }
                             }
@@ -191,7 +192,7 @@ Item {
                     AppComponents.AppTextField {
                         id: walletNameField
                         Layout.fillWidth: true
-                        visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
+                        visible: walletRoot.authMode !== "unlock"
                         font.pixelSize: walletRoot.controlTextSize
                         text: walletPageSettings.walletNameDraft
                         placeholderText: walletRoot.tf("browser_wallet_name_placeholder", "Wallet name")
@@ -216,28 +217,10 @@ Item {
                         onTextChanged: walletRoot.restoreMnemonicDraft = text
                     }
 
-                    // Import backup
-                    AppComponents.AppTextArea {
-                        id: importBackupArea
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: walletRoot.authMode === "import_backup"
-                                                ? (veryPhoneMode ? 128 : (phoneMode ? 144 : 168)) : 0
-                        visible: walletRoot.authMode === "import_backup"
-                        editorTitle: walletRoot.tf("browser_wallet_paste_backup_title", "Paste Encrypted Backup")
-                        font.pixelSize: walletRoot.controlTextSize
-                        wrapMode: TextEdit.WrapAnywhere
-                        selectByMouse: true
-                        persistentSelection: true
-                        activeFocusOnPress: true
-                        text: walletRoot.backupImportDraft
-                        placeholderText: walletRoot.tf("browser_wallet_backup_import_placeholder", "Paste encrypted wallet backup JSON here.")
-                        onTextChanged: walletRoot.backupImportDraft = text
-                    }
-
-                    // Paste button for restore/import
+                    // Paste button for restore
                     RowLayout {
                         Layout.fillWidth: true
-                        visible: walletRoot.authMode === "restore" || walletRoot.authMode === "import_backup"
+                        visible: walletRoot.authMode === "restore"
                         Item { Layout.fillWidth: true }
 
                         Button {
@@ -252,14 +235,10 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                             }
                             onClicked: {
-                                var target = walletRoot.authMode === "restore" ? restoreMnemonicArea : importBackupArea
-                                var title  = walletRoot.authMode === "restore"
-                                             ? walletRoot.tf("browser_wallet_paste_restore_title", "Paste Seed Phrase")
-                                             : walletRoot.tf("browser_wallet_paste_backup_title", "Paste Encrypted Backup")
-                                var ph     = walletRoot.authMode === "restore"
-                                             ? walletRoot.tf("browser_wallet_mnemonic_placeholder", "24-word mnemonic for importing an existing wallet.")
-                                             : walletRoot.tf("browser_wallet_backup_import_placeholder", "Paste encrypted wallet backup JSON here.")
-                                walletRoot.openPasteDialog(target, title, ph)
+                                walletRoot.openPasteDialog(
+                                    restoreMnemonicArea,
+                                    walletRoot.tf("browser_wallet_paste_restore_title", "Paste Seed Phrase"),
+                                    walletRoot.tf("browser_wallet_mnemonic_placeholder", "24-word mnemonic for importing an existing wallet."))
                             }
                         }
                     }
@@ -282,7 +261,7 @@ Item {
                     AppComponents.AppTextField {
                         id: createPasswordField
                         Layout.fillWidth: true
-                        visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
+                        visible: walletRoot.authMode !== "unlock"
                         editorTitle: walletRoot.tf("browser_wallet_setup_title", "Set Up Your Wallet")
                         font.pixelSize: walletRoot.controlTextSize
                         echoMode: TextInput.Password
@@ -295,7 +274,7 @@ Item {
                     AppComponents.AppTextField {
                         id: confirmPasswordField
                         Layout.fillWidth: true
-                        visible: walletRoot.authMode !== "unlock" && walletRoot.authMode !== "import_backup"
+                        visible: walletRoot.authMode !== "unlock"
                         editorTitle: walletRoot.tf("browser_wallet_confirm_password_placeholder", "Confirm password")
                         font.pixelSize: walletRoot.controlTextSize
                         echoMode: TextInput.Password
@@ -309,7 +288,6 @@ Item {
                     Label {
                         Layout.fillWidth: true
                         visible: walletRoot.authMode !== "unlock"
-                                 && walletRoot.authMode !== "import_backup"
                                  && walletRoot.passwordDraft.length > 0
                         text: walletRoot.passwordDraft === walletRoot.passwordConfirmDraft
                               ? walletRoot.tf("browser_wallet_password_match", "Passwords match.")
@@ -348,25 +326,21 @@ Item {
 
                         Item { Layout.fillWidth: true }
 
-                        // Primary action (Unlock / Create / Restore / Import)
+                        // Primary action (Unlock / Create / Restore)
                         Button {
                             text: walletRoot.authMode === "unlock"
                                   ? walletRoot.tf("browser_wallet_unlock", "Unlock")
                                   : (walletRoot.authMode === "create"
                                      ? walletRoot.tf("browser_wallet_create", "Create")
-                                     : (walletRoot.authMode === "restore"
-                                        ? walletRoot.tf("browser_wallet_restore", "Restore")
-                                        : walletRoot.tf("browser_wallet_import_backup", "Import Backup")))
+                                     : walletRoot.tf("browser_wallet_restore", "Restore"))
                             font.pixelSize: walletRoot.controlTextSize
                             font.weight: Font.DemiBold
                             enabled: walletRoot.authMode === "unlock"
                                      ? unlockPasswordField.text.length > 0
-                                     : (walletRoot.authMode === "import_backup"
-                                        ? importBackupArea.text.trim().length > 0
-                                        : (walletNameField.text.trim().length > 0
-                                           && createPasswordField.text.length > 0
-                                           && createPasswordField.text === confirmPasswordField.text
-                                           && (walletRoot.authMode !== "restore" || restoreMnemonicArea.text.trim().length > 0)))
+                                     : (walletNameField.text.trim().length > 0
+                                        && createPasswordField.text.length > 0
+                                        && createPasswordField.text === confirmPasswordField.text
+                                        && (walletRoot.authMode !== "restore" || restoreMnemonicArea.text.trim().length > 0))
                             background: Rectangle {
                                 radius: 10
                                 color: !parent.enabled ? "transparent"
@@ -387,7 +361,6 @@ Item {
                                 walletRoot.passwordDraft = createPasswordField.text
                                 walletRoot.passwordConfirmDraft = confirmPasswordField.text
                                 walletRoot.restoreMnemonicDraft = restoreMnemonicArea.text
-                                walletRoot.backupImportDraft = importBackupArea.text
                                 walletRoot.submitAuth()
                             }
                         }

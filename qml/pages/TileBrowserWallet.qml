@@ -14,7 +14,6 @@ Item {
     property bool deleteConfirmOpen: false
     property string errorDialogText: ""
     property string restoreMnemonicDraft: ""
-    property string backupImportDraft: ""
     property string revealSeedPasswordDraft: ""
     property string unlockPasswordDraft: ""
     property string passwordDraft: ""
@@ -53,7 +52,7 @@ Item {
             return
         }
 
-        if (authMode !== "create" && authMode !== "restore" && authMode !== "import_backup")
+        if (authMode !== "create" && authMode !== "restore")
             authMode = "create"
     }
     function clearPasswordDrafts() {
@@ -248,7 +247,6 @@ Item {
         grinWalletController.deleteWallet()
         authMode = "restore"
         restoreMnemonicDraft = ""
-        backupImportDraft = ""
         clearPasswordDrafts()
     }
     function submitAuth() {
@@ -257,15 +255,9 @@ Item {
         var unlockPassword = unlockPasswordDraft
         var createPassword = passwordDraft
         var restoreMnemonic = restoreMnemonicDraft
-        var importBackup = backupImportDraft
-
         if (authMode === "unlock") {
             grinWalletController.setSelectedNetwork(targetNetwork)
             grinWalletController.unlockWallet(unlockPassword)
-            return
-        }
-        if (authMode === "import_backup") {
-            grinWalletController.importEncryptedWalletBackup(importBackup)
             return
         }
         grinWalletController.setSelectedNetwork(targetNetwork)
@@ -471,7 +463,6 @@ Item {
 
             if (grinWalletController.walletUnlocked) {
                 root.restoreMnemonicDraft = ""
-                root.backupImportDraft = ""
                 root.clearPasswordDrafts()
                 root.syncWorkflowEditors()
             } else {

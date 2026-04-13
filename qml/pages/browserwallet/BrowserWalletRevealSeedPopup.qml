@@ -15,6 +15,10 @@ Popup {
     width: Math.min(walletRoot.width - 28, 480)
     padding: 0
 
+    onClosed: {
+        walletRoot.revealSeedPasswordDraft = ""
+    }
+
     onOpened: {
         if (revealSeedPasswordField.bridgeId !== undefined)
             PlatformBridge.requestFocus(revealSeedPasswordField.bridgeId)

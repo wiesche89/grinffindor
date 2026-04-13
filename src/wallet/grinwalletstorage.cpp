@@ -6,7 +6,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QJsonParseError>
+#include <QLoggingCategory>
 #include <QSet>
 #include <QSaveFile>
 #include <QStandardPaths>
@@ -14,41 +14,100 @@
 
 #ifdef Q_OS_WASM
 #include <emscripten.h>
+
+EM_JS(int, wasmEnsurePersistentStorageReady, (), {
+    try {
+        if (typeof FS === "undefined" || typeof IDBFS === "undefined") {
+            try {
+                console.error("wallet storage init failed", {
+                    hasFS: typeof FS !== "undefined",
+                    hasIDBFS: typeof IDBFS !== "undefined"
+                });
+            } catch (ignored) {}
+            return 0;
+        }
+
+        if (!Module.grinWalletStorageInitPromise) {
+            Module.grinWalletStorageInitPromise = (async () => {
+                try {
+                    try {
+                        FS.mkdir('/persistent');
+                    } catch (e) {}
+
+                    if (!Module.grinWalletIdbMounted) {
+                        FS.mount(IDBFS, {}, '/persistent');
+                        Module.grinWalletIdbMounted = true;
+                    }
+
+                    await new Promise((resolve, reject) => {
+                        FS.syncfs(true, function(err) {
+                            if (err) {
+                                reject(err);
+                                return;
+                            }
+                            Module.grinWalletIdbReady = true;
+                            resolve();
+                        });
+                    });
+                    return 1;
+                } catch (e) {
+                    try {
+                        console.error("wallet storage init failed", e);
+                    } catch (ignored) {}
+                    Module.grinWalletIdbReady = false;
+                    throw e;
+                }
+            })();
+        }
+
+        return 1;
+    } catch (e) {
+        try {
+            console.error("wallet storage init bridge failed", e);
+        } catch (ignored) {}
+    }
+    return 0;
+});
+
+EM_JS(int, wasmFlushPersistentStorage, (), {
+    try {
+        if (typeof FS === "undefined" || !Module.grinWalletIdbMounted) {
+            return 1;
+        }
+
+        if (!Module.grinWalletStorageFlushPromise) {
+            Module.grinWalletStorageFlushPromise = Promise.resolve();
+        }
+
+        Module.grinWalletStorageFlushPromise = Module.grinWalletStorageFlushPromise.then(async () => {
+            if (Module.grinWalletStorageInitPromise) {
+                await Module.grinWalletStorageInitPromise;
+            }
+            await new Promise((resolve, reject) => {
+                FS.syncfs(false, function(err) {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    resolve();
+                });
+            });
+        }).catch((e) => {
+            try {
+                console.error("wallet storage flush failed", e);
+            } catch (ignored) {}
+        });
+        return 1;
+    } catch (e) {
+        try {
+            console.error("wallet storage flush bridge failed", e);
+        } catch (ignored) {}
+    }
+    return 0;
+});
 #endif
 
 #include "walletscanner.h"
-
-#ifdef Q_OS_WASM
-
-/**
- * @brief Writes a JSON blob to browser localStorage under the provided key.
- * @param key Storage key.
- * @param value JSON payload string.
- */
-EM_JS(void, browserLocalStorageSet, (const char *key, const char *value), {
-    if (typeof localStorage === 'undefined' || !key || !value) {
-        return;
-    }
-    localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
-});
-
-/**
- * @brief Reads a JSON blob from browser localStorage for the provided key.
- * @param key Storage key.
- * @return Newly allocated UTF-8 string or null.
- */
-EM_JS(char *, browserLocalStorageGet, (const char *key), {
-    if (typeof localStorage === 'undefined' || !key) {
-        return 0;
-    }
-
-    const value = localStorage.getItem(UTF8ToString(key));
-    if (value === null || value === undefined) {
-        return 0;
-    }
-    return stringToNewUTF8(value);
-});
-#endif
 
 namespace {
 
@@ -56,11 +115,10 @@ const char *kAppSettingsKey = "app_settings";
 const char *kAutoLockOnDeactivateKey = "auto_lock_on_app_deactivate";
 const char *kMinimumConfirmationsKey = "minimum_confirmations";
 const char *kWalletStorePath = "/grin-wallet/browser-wallet.json";
-#ifdef Q_OS_WASM
-const char *kWalletLocalStorageKey = "grinffindor.browserWallet";
-#endif
 const char *kMainnetNodeUrl = "https://mainnet.grinffindor.org/v2/foreign";
 const char *kTestnetNodeUrl = "https://testnet.grinffindor.org/v2/foreign";
+
+Q_LOGGING_CATEGORY(walletStorageLog, "grinffindor.wallet.storage")
 
 /**
  * @brief Returns the default wallet network name.
@@ -166,182 +224,44 @@ QString storageFilePath()
 /**
  * @brief Creates storage directories and mounts persistent filesystem on WASM.
  */
-void ensureStorageReady()
+bool ensureStorageReady()
 {
     const QFileInfo info(storageFilePath());
-    QDir().mkpath(info.absolutePath());
 #ifdef Q_OS_WASM
-    EM_ASM({
-        if (typeof FS !== "undefined" && typeof IDBFS !== "undefined") {
-            try {
-                FS.mkdir('/persistent');
-            } catch (e) {}
-            if (!Module.grinWalletIdbMounted) {
-                FS.mount(IDBFS, {}, '/persistent');
-                Module.grinWalletIdbMounted = true;
-                FS.syncfs(true, function(err) {});
-            }
-        }
-    });
+    if (wasmEnsurePersistentStorageReady() != 1) {
+        qWarning(walletStorageLog) << "ensureStorageReady: wasmEnsurePersistentStorageReady failed for"
+                                   << info.absoluteFilePath();
+        return false;
+    }
+    const bool mkpathOk = QDir().mkpath(info.absolutePath());
+    if (!mkpathOk) {
+        qWarning(walletStorageLog) << "ensureStorageReady: mkpath failed for"
+                                   << info.absolutePath()
+                                   << "file"
+                                   << info.absoluteFilePath();
+    }
+    return mkpathOk;
+#else
+    QDir().mkpath(info.absolutePath());
+    return true;
 #endif
 }
 
 /**
  * @brief Flushes pending WASM filesystem changes to persistent backing store.
  */
-void flushStorage()
+bool flushStorage()
 {
 #ifdef Q_OS_WASM
-    EM_ASM({
-        if (typeof FS !== "undefined" && Module.grinWalletIdbMounted) {
-            FS.syncfs(false, function(err) {});
-        }
-    });
+    const bool ok = wasmFlushPersistentStorage() == 1;
+    if (!ok) {
+        qWarning(walletStorageLog) << "flushStorage: wasmFlushPersistentStorage failed for"
+                                   << storageFilePath();
+    }
+    return ok;
+#else
+    return true;
 #endif
-}
-
-/**
- * @brief Validates required fields of an encrypted seed backup object.
- * @param encryptedSeed Encrypted seed object.
- * @param errorOut Optional validation error output.
- * @return True when backup seed object is valid.
- */
-bool validateEncryptedSeedObject(const QJsonObject &encryptedSeed, QString *errorOut)
-{
-    const int version = encryptedSeed.value(QStringLiteral("version")).toInt();
-    const QStringList requiredFields = {
-        QStringLiteral("salt"),
-        QStringLiteral("nonce"),
-        QStringLiteral("cipher"),
-        QStringLiteral("mac")
-    };
-
-    if (version < 1) {
-        if (errorOut) {
-            *errorOut = QStringLiteral("Backup seed payload is missing a valid encryption version.");
-        }
-        return false;
-    }
-
-    for (int i = 0; i < requiredFields.size(); ++i) {
-        if (encryptedSeed.value(requiredFields.at(i)).toString().trimmed().isEmpty()) {
-            if (errorOut) {
-                *errorOut = QStringLiteral("Backup seed payload is incomplete.");
-            }
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/**
- * @brief Normalizes an imported backup candidate into current storage schema.
- * @param candidate Raw imported backup object.
- * @param documentOut Output normalized document.
- * @param errorOut Optional normalization error output.
- * @return True when normalization succeeds.
- */
-bool normalizeImportedDocument(const QJsonObject &candidate, QJsonObject *documentOut, QString *errorOut)
-{
-    if (!documentOut) {
-        return false;
-    }
-
-    // -------------------------------------------------------------------------------------------------------
-    // Validating Wallet Metadata And Seed Payload
-    // -------------------------------------------------------------------------------------------------------
-    QJsonObject document = GrinWalletStorage::defaultDocument();
-    QJsonObject wallet = candidate.value(QStringLiteral("wallet")).toObject();
-    if (wallet.isEmpty()) {
-        if (errorOut) {
-            *errorOut = QStringLiteral("Backup does not contain a wallet section.");
-        }
-        return false;
-    }
-
-    const QJsonObject encryptedSeed = wallet.value(QStringLiteral("encrypted_seed")).toObject();
-    if (!validateEncryptedSeedObject(encryptedSeed, errorOut)) {
-        return false;
-    }
-
-    const QString walletName = wallet.value(QStringLiteral("name")).toString().trimmed();
-    if (walletName.isEmpty()) {
-        if (errorOut) {
-            *errorOut = QStringLiteral("Backup wallet name is missing.");
-        }
-        return false;
-    }
-
-    // -------------------------------------------------------------------------------------------------------
-    // Normalizing Network And Node Configuration
-    // -------------------------------------------------------------------------------------------------------
-    QJsonObject node = candidate.value(QStringLiteral("node")).toObject();
-    const QString importedNodeUrl = node.value(QStringLiteral("url")).toString().trimmed();
-    QJsonObject normalizedNode = document.value(QStringLiteral("node")).toObject();
-    const QString importedNetwork =
-        inferNetworkName(node.value(QStringLiteral("network")).toString(), importedNodeUrl);
-    normalizedNode.insert(QStringLiteral("network"), importedNetwork);
-    normalizedNode.insert(QStringLiteral("url"),
-                          isNodeUrlAccepted(importedNodeUrl)
-                              ? importedNodeUrl
-                              : defaultNodeUrlForNetwork(importedNetwork));
-    document.insert(QStringLiteral("node"), normalizedNode);
-
-    QJsonObject normalizedWallet = wallet;
-    normalizedWallet.insert(QStringLiteral("name"), walletName);
-    GrinWalletStorage::setWalletForNetwork(&document, importedNetwork, normalizedWallet);
-    document.insert(QStringLiteral("wallet"), normalizedWallet);
-
-    // -------------------------------------------------------------------------------------------------------
-    // Normalizing Wallet State And Workflow Contexts
-    // -------------------------------------------------------------------------------------------------------
-    QJsonObject walletState = candidate.value(QStringLiteral("wallet_state")).toObject();
-    QJsonObject normalizedState = document.value(QStringLiteral("wallet_state")).toObject();
-    if (!walletState.isEmpty()) {
-        normalizedState.insert(QStringLiteral("balances"),
-                               walletState.value(QStringLiteral("balances")).isObject()
-                                   ? walletState.value(QStringLiteral("balances")).toObject()
-                                   : normalizedState.value(QStringLiteral("balances")).toObject());
-        normalizedState.insert(QStringLiteral("scan_height"),
-                               walletState.value(QStringLiteral("scan_height")).toVariant().toLongLong());
-        normalizedState.insert(QStringLiteral("restore_leaf_index"),
-                               qMax<qint64>(0, walletState.value(QStringLiteral("restore_leaf_index")).toVariant().toLongLong()));
-        normalizedState.insert(QStringLiteral("next_child_index"),
-                               qMax<qint64>(0, walletState.value(QStringLiteral("next_child_index")).toVariant().toLongLong()));
-        normalizedState.insert(QStringLiteral("outputs"),
-                               walletState.value(QStringLiteral("outputs")).isArray()
-                                   ? walletState.value(QStringLiteral("outputs")).toArray()
-                                   : QJsonArray());
-        normalizedState.insert(QStringLiteral("transactions"),
-                               walletState.value(QStringLiteral("transactions")).isArray()
-                                   ? walletState.value(QStringLiteral("transactions")).toArray()
-                                   : QJsonArray());
-        if (walletState.value(QStringLiteral("transaction_rescan_backup")).isArray()) {
-            normalizedState.insert(QStringLiteral("transaction_rescan_backup"),
-                                   walletState.value(QStringLiteral("transaction_rescan_backup")).toArray());
-        }
-        if (walletState.contains(QStringLiteral("last_sync_mode"))) {
-            normalizedState.insert(QStringLiteral("last_sync_mode"),
-                                   walletState.value(QStringLiteral("last_sync_mode")).toString());
-        }
-        if (walletState.contains(QStringLiteral("last_synced_at"))) {
-            normalizedState.insert(QStringLiteral("last_synced_at"),
-                                   walletState.value(QStringLiteral("last_synced_at")).toString());
-        }
-    }
-    document.insert(QStringLiteral("wallet_state"), normalizedState);
-    GrinWalletStorage::setWalletStateForNetwork(&document, importedNetwork, normalizedState);
-
-    const QJsonObject normalizedContexts =
-        candidate.value(QStringLiteral("workflow_contexts")).isObject()
-            ? candidate.value(QStringLiteral("workflow_contexts")).toObject()
-            : QJsonObject();
-    document.insert(QStringLiteral("workflow_contexts"), normalizedContexts);
-    GrinWalletStorage::setWorkflowContextsForNetwork(&document, importedNetwork, normalizedContexts);
-
-    *documentOut = document;
-    return true;
 }
 
 } // namespace
@@ -630,68 +550,33 @@ QJsonObject GrinWalletStorage::normalizeDocumentSchema(const QJsonObject &rawDoc
 }
 
 /**
- * @brief Extracts and normalizes backup JSON into current storage schema.
- * @param json Backup JSON bytes.
- * @param errorOut Optional parse/normalization error output.
- * @return Normalized backup document, or empty object on failure.
- */
-QJsonObject GrinWalletStorage::extractImportedBackupDocument(const QByteArray &json, QString *errorOut)
-{
-    QJsonParseError parseError;
-
-    const QJsonDocument parsed = QJsonDocument::fromJson(json, &parseError);
-    if (!parsed.isObject()) {
-        if (errorOut) {
-            *errorOut = parseError.error == QJsonParseError::NoError
-                ? QStringLiteral("Backup text is not a JSON object.")
-                : QStringLiteral("Backup JSON could not be parsed: %1").arg(parseError.errorString());
-        }
-        return QJsonObject();
-    }
-
-    const QJsonObject root = parsed.object();
-    QJsonObject candidate = root;
-    if (root.value(QStringLiteral("backup_kind")).toString()
-
-        == QStringLiteral("grinffindor.encrypted_wallet_backup")) {
-        candidate = root.value(QStringLiteral("document")).toObject();
-    }
-
-    QJsonObject normalized;
-    if (!normalizeImportedDocument(candidate, &normalized, errorOut)) {
-        return QJsonObject();
-    }
-    return normalized;
-}
-
-/**
  * @brief Loads wallet document from persistent storage.
  * @return Loaded and normalized document.
  */
 QJsonObject GrinWalletStorage::loadDocument()
 {
-    ensureStorageReady();
-#ifdef Q_OS_WASM
-    if (char *storedJson = browserLocalStorageGet(kWalletLocalStorageKey)) {
-        const QByteArray localJson(storedJson);
-        free(storedJson);
-        const QJsonDocument localDoc = QJsonDocument::fromJson(localJson);
-        if (localDoc.isObject()) {
-            return normalizeDocumentSchema(localDoc.object());
-        }
+    if (!ensureStorageReady()) {
+        qWarning(walletStorageLog) << "loadDocument: storage not ready, using default document";
+        return defaultDocument();
     }
-#endif
 
     QFile file(storageFilePath());
     if (!file.exists()) {
+        qWarning(walletStorageLog) << "loadDocument: file does not exist yet at" << file.fileName();
         return defaultDocument();
     }
     if (!file.open(QIODevice::ReadOnly)) {
+        qWarning(walletStorageLog) << "loadDocument: open failed for"
+                                   << file.fileName()
+                                   << file.errorString();
         return defaultDocument();
     }
 
     const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
     file.close();
+    if (!doc.isObject()) {
+        qWarning(walletStorageLog) << "loadDocument: invalid json at" << file.fileName();
+    }
     return doc.isObject() ? normalizeDocumentSchema(doc.object()) : defaultDocument();
 }
 
@@ -702,7 +587,10 @@ QJsonObject GrinWalletStorage::loadDocument()
  */
 bool GrinWalletStorage::saveDocument(const QJsonObject &document)
 {
-    ensureStorageReady();
+    if (!ensureStorageReady()) {
+        qWarning(walletStorageLog) << "saveDocument: storage not ready";
+        return false;
+    }
     // -------------------------------------------------------------------------------------------------------
     // Normalizing And Persisting Active Network View
     // -------------------------------------------------------------------------------------------------------
@@ -712,21 +600,52 @@ bool GrinWalletStorage::saveDocument(const QJsonObject &document)
                          normalized.value(QStringLiteral("node")).toObject().value(QStringLiteral("url")).toString());
     persistActiveNetworkView(&normalized, networkName);
     const QByteArray json = QJsonDocument(normalized).toJson(QJsonDocument::Indented);
+
 #ifdef Q_OS_WASM
-    browserLocalStorageSet(kWalletLocalStorageKey, json.constData());
-#endif
-
+    QFile file(storageFilePath());
+#else
     QSaveFile file(storageFilePath());
+#endif
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning(walletStorageLog) << "saveDocument: open failed for"
+                                   << file.fileName()
+                                   << file.errorString();
         return false;
     }
 
-    file.write(json);
-    if (!file.commit()) {
+    if (file.write(json) != json.size()) {
+        qWarning(walletStorageLog) << "saveDocument: partial write for"
+                                   << file.fileName()
+                                   << "written"
+                                   << file.pos()
+                                   << "expected"
+                                   << json.size()
+                                   << file.errorString();
+        file.close();
         return false;
     }
-    flushStorage();
-    return true;
+#ifdef Q_OS_WASM
+    if (!file.flush()) {
+        qWarning(walletStorageLog) << "saveDocument: flush failed for"
+                                   << file.fileName()
+                                   << file.errorString();
+        file.close();
+        return false;
+    }
+    file.close();
+#else
+    if (!file.commit()) {
+        qWarning(walletStorageLog) << "saveDocument: commit failed for"
+                                   << file.fileName()
+                                   << file.errorString();
+        return false;
+    }
+#endif
+    const bool flushOk = flushStorage();
+    if (!flushOk) {
+        qWarning(walletStorageLog) << "saveDocument: persistent flush failed for" << file.fileName();
+    }
+    return flushOk;
 }
 
 /**

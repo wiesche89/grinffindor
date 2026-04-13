@@ -23,11 +23,6 @@ Item {
             walletRoot: homeSection.walletRoot
         }
 
-        BrowserWalletHomeBackup {
-            width: parent.width
-            walletRoot: homeSection.walletRoot
-        }
-
         BrowserWalletHomeHistory {
             width: parent.width
             walletRoot: homeSection.walletRoot

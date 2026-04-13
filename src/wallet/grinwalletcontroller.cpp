@@ -704,6 +704,26 @@ void GrinWalletController::initialize()
     startAutoRefresh();
     refreshStoragePersistenceState();
     refreshNodeStatus();
+
+#ifdef Q_OS_WASM
+    auto retryLoadFromStorage = [this](auto &&self, int attempt) -> void {
+        if (attempt >= 12 || m_walletExists) {
+            return;
+        }
+
+        QTimer::singleShot(250, this, [this, attempt, self]() {
+            const bool hadWallet = m_walletExists;
+            loadFromStorage();
+            refreshStoragePersistenceState();
+            if (!hadWallet && m_walletExists) {
+                refreshNodeStatus();
+                return;
+            }
+            self(self, attempt + 1);
+        });
+    };
+    retryLoadFromStorage(retryLoadFromStorage, 0);
+#endif
 }
 
 /**

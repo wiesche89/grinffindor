@@ -14,12 +14,24 @@
 namespace {
 
 const int kMnemonicEntropyBytes = 32;
-const int kSeedCipherVersion = 3;
-const int kSeedCipherArgon2Blocks = 256;
-const int kSeedCipherArgon2Passes = 3;
+const int kSeedCipherVersion = 4;
+const int kSeedCipherArgon2Blocks = 32768;
+const int kSeedCipherArgon2Passes = 4;
 const int kSeedCipherArgon2Lanes = 1;
 const int kSeedCipherKeyBytes = 32;
 const int kSeedCipherMacBytes = 16;
+
+void wipeByteArray(QByteArray *value)
+{
+    if (!value) {
+        return;
+    }
+    if (!value->isEmpty()) {
+        crypto_wipe(value->data(), static_cast<size_t>(value->size()));
+    }
+    value->clear();
+    value->squeeze();
+}
 
 /**
  * @brief Generates bytes.
@@ -171,76 +183,7 @@ bool entropyFromMnemonic(const QString &mnemonic, QByteArray *entropyOut)
 }
 
 /**
- * @brief Builds legacy key material.
- * @param password
- * @param salt
- * @return
- */
-QByteArray deriveLegacyKeyMaterial(const QString &password, const QByteArray &salt)
-{
-    const QByteArray material = password.toUtf8() + salt;
-    QByteArray digest = QCryptographicHash::hash(material, QCryptographicHash::Sha256);
-    for (int i = 0; i < 120000; ++i) {
-        digest = QCryptographicHash::hash(digest + material, QCryptographicHash::Sha256);
-    }
-    return digest;
-}
-
-/**
- * @brief Processes xor stream.
- * @param data
- * @param key
- * @param nonce
- * @return
- */
-QByteArray xorStream(const QByteArray &data, const QByteArray &key, const QByteArray &nonce)
-{
-    QByteArray output(data.size(), Qt::Uninitialized);
-    int offset = 0;
-    quint32 counter = 0;
-    while (offset < data.size()) {
-        const QByteArray block = QCryptographicHash::hash(
-            key + nonce + QByteArray::number(counter++), QCryptographicHash::Sha256);
-        for (int i = 0; i < block.size() && offset < data.size(); ++i, ++offset) {
-            output[offset] = static_cast<char>(
-                static_cast<unsigned char>(data.at(offset)) ^ static_cast<unsigned char>(block.at(i)));
-        }
-    }
-    return output;
-}
-
-/**
- * @brief Builds key material v2.
- * @param password
- * @param salt
- * @param iterations
- * @param outputLength
- * @return
- */
-QByteArray deriveKeyMaterialV2(const QString &password, const QByteArray &salt, int iterations, int outputLength)
-{
-    const QByteArray material = password.toUtf8() + salt;
-    QByteArray state = QCryptographicHash::hash(material, QCryptographicHash::Sha512);
-    for (int i = 0; i < iterations; ++i) {
-        state = QCryptographicHash::hash(state + material + QByteArray::number(i), QCryptographicHash::Sha512);
-    }
-
-    QByteArray output;
-    output.reserve(outputLength);
-    QByteArray blockSeed = state;
-    quint32 counter = 0;
-    while (output.size() < outputLength) {
-        blockSeed = QCryptographicHash::hash(
-            blockSeed + material + QByteArray::number(counter++),
-            QCryptographicHash::Sha512);
-        output.append(blockSeed);
-    }
-    output.truncate(outputLength);
-    return output;
-}
-
-/**
- * @brief Builds key material v3.
+ * @brief Builds key material for the current seed cipher format.
  * @param password
  * @param salt
  * @param blocks
@@ -248,11 +191,11 @@ QByteArray deriveKeyMaterialV2(const QString &password, const QByteArray &salt, 
  * @param keyOut
  * @return
  */
-bool deriveKeyMaterialV3(const QString &password,
-                         const QByteArray &salt,
-                         int blocks,
-                         int passes,
-                         QByteArray *keyOut)
+bool deriveKeyMaterial(const QString &password,
+                       const QByteArray &salt,
+                       int blocks,
+                       int passes,
+                       QByteArray *keyOut)
 {
     if (!keyOut || salt.isEmpty() || blocks < 8 || passes < 1) {
         return false;
@@ -260,7 +203,7 @@ bool deriveKeyMaterialV3(const QString &password,
 
     QByteArray keyMaterial(kSeedCipherKeyBytes, Qt::Uninitialized);
     QByteArray workArea(blocks * 1024, Qt::Uninitialized);
-    const QByteArray passwordBytes = password.toUtf8();
+    QByteArray passwordBytes = password.toUtf8();
     static const QByteArray additionalData("grinffindor.seed.v3", 19);
 
     crypto_argon2_config config;
@@ -289,6 +232,8 @@ bool deriveKeyMaterialV3(const QString &password,
     crypto_wipe(workArea.data(), static_cast<size_t>(workArea.size()));
     *keyOut = keyMaterial;
     crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
+    wipeByteArray(&passwordBytes);
+    wipeByteArray(&workArea);
     return true;
 }
 
@@ -333,15 +278,18 @@ bool GrinWalletSeedCrypto::isValidMnemonic(const QString &mnemonic)
  */
 QJsonObject GrinWalletSeedCrypto::encryptMnemonic(const QString &mnemonic, const QString &password)
 {
-    const QByteArray salt = randomBytes(16);
-    const QByteArray nonce = randomBytes(24);
-    const QByteArray plain = normalizeMnemonic(mnemonic).toUtf8();
+    QByteArray salt = randomBytes(16);
+    QByteArray nonce = randomBytes(24);
+    QByteArray plain = normalizeMnemonic(mnemonic).toUtf8();
     QByteArray keyMaterial;
-    if (!deriveKeyMaterialV3(password,
-                             salt,
-                             kSeedCipherArgon2Blocks,
-                             kSeedCipherArgon2Passes,
-                             &keyMaterial)) {
+    if (!deriveKeyMaterial(password,
+                           salt,
+                           kSeedCipherArgon2Blocks,
+                           kSeedCipherArgon2Passes,
+                           &keyMaterial)) {
+        wipeByteArray(&plain);
+        wipeByteArray(&nonce);
+        wipeByteArray(&salt);
         return QJsonObject();
     }
 
@@ -368,6 +316,12 @@ QJsonObject GrinWalletSeedCrypto::encryptMnemonic(const QString &mnemonic, const
     encrypted.insert(QStringLiteral("cipher"), QString::fromUtf8(cipher.toBase64()));
     encrypted.insert(QStringLiteral("mac"), QString::fromUtf8(mac.toBase64()));
     crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
+    wipeByteArray(&keyMaterial);
+    wipeByteArray(&mac);
+    wipeByteArray(&cipher);
+    wipeByteArray(&plain);
+    wipeByteArray(&nonce);
+    wipeByteArray(&salt);
     return encrypted;
 }
 
@@ -383,80 +337,77 @@ bool GrinWalletSeedCrypto::decryptMnemonic(const QJsonObject &encrypted,
                                            QString *mnemonicOut)
 {
     const int version = encrypted.value(QStringLiteral("version")).toInt(1);
-    const QByteArray salt = QByteArray::fromBase64(encrypted.value(QStringLiteral("salt")).toString().toUtf8());
-    const QByteArray nonce = QByteArray::fromBase64(encrypted.value(QStringLiteral("nonce")).toString().toUtf8());
-    const QByteArray cipher = QByteArray::fromBase64(encrypted.value(QStringLiteral("cipher")).toString().toUtf8());
-
-    const QByteArray mac = QByteArray::fromBase64(encrypted.value(QStringLiteral("mac")).toString().toUtf8());
-
-    if (version >= kSeedCipherVersion) {
-        const int blocks = std::max(8, encrypted.value(QStringLiteral("kdf_blocks")).toInt(kSeedCipherArgon2Blocks));
-        const int passes = std::max(1, encrypted.value(QStringLiteral("kdf_passes")).toInt(kSeedCipherArgon2Passes));
-        QByteArray keyMaterial;
-        if (!deriveKeyMaterialV3(password, salt, blocks, passes, &keyMaterial)) {
-            return false;
-        }
-
-        if (nonce.size() != 24 || mac.size() != kSeedCipherMacBytes) {
-            crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
-            return false;
-        }
-
-        QByteArray plain(cipher.size(), Qt::Uninitialized);
-        static const QByteArray associatedData("grinffindor.seed-store", 22);
-        const int unlockResult =
-            crypto_aead_unlock(reinterpret_cast<uint8_t *>(plain.data()),
-                               reinterpret_cast<const uint8_t *>(mac.constData()),
-                               reinterpret_cast<const uint8_t *>(keyMaterial.constData()),
-                               reinterpret_cast<const uint8_t *>(nonce.constData()),
-                               reinterpret_cast<const uint8_t *>(associatedData.constData()),
-                               static_cast<size_t>(associatedData.size()),
-                               reinterpret_cast<const uint8_t *>(cipher.constData()),
-                               static_cast<size_t>(cipher.size()));
-        crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
-        if (unlockResult != 0) {
-            crypto_wipe(plain.data(), static_cast<size_t>(plain.size()));
-            return false;
-        }
-
-        const QString mnemonic = normalizeMnemonic(QString::fromUtf8(plain));
-        crypto_wipe(plain.data(), static_cast<size_t>(plain.size()));
-        if (!isValidMnemonic(mnemonic)) {
-            return false;
-        }
-        if (mnemonicOut) {
-            *mnemonicOut = mnemonic;
-        }
-        return true;
-    }
-
-    QByteArray encryptionKey;
-    QByteArray macKey;
-    if (version == 2) {
-        const int iterations = std::max(1, encrypted.value(QStringLiteral("kdf_iterations")).toInt(240000));
-        const QByteArray keyMaterial = deriveKeyMaterialV2(password, salt, iterations, 64);
-        encryptionKey = keyMaterial.left(32);
-        macKey = keyMaterial.mid(32, 32);
-    } else {
-        const QByteArray legacyKey = deriveLegacyKeyMaterial(password, salt);
-        encryptionKey = legacyKey;
-        macKey = legacyKey;
-    }
-
-    const QByteArray expectedMac =
-
-        QCryptographicHash::hash(macKey + nonce + cipher + macKey, QCryptographicHash::Sha256);
-    if (expectedMac != mac) {
+    if (version != kSeedCipherVersion
+        || encrypted.value(QStringLiteral("kdf_algorithm")).toString() != QStringLiteral("argon2id")) {
         return false;
     }
 
-    const QString mnemonic = normalizeMnemonic(QString::fromUtf8(xorStream(cipher, encryptionKey, nonce)));
+    QByteArray salt = QByteArray::fromBase64(encrypted.value(QStringLiteral("salt")).toString().toUtf8());
+    QByteArray nonce = QByteArray::fromBase64(encrypted.value(QStringLiteral("nonce")).toString().toUtf8());
+    QByteArray cipher = QByteArray::fromBase64(encrypted.value(QStringLiteral("cipher")).toString().toUtf8());
+    QByteArray mac = QByteArray::fromBase64(encrypted.value(QStringLiteral("mac")).toString().toUtf8());
+    const int blocks = std::max(8, encrypted.value(QStringLiteral("kdf_blocks")).toInt(kSeedCipherArgon2Blocks));
+    const int passes = std::max(1, encrypted.value(QStringLiteral("kdf_passes")).toInt(kSeedCipherArgon2Passes));
+    QByteArray keyMaterial;
+    if (!deriveKeyMaterial(password, salt, blocks, passes, &keyMaterial)) {
+        wipeByteArray(&mac);
+        wipeByteArray(&cipher);
+        wipeByteArray(&nonce);
+        wipeByteArray(&salt);
+        return false;
+    }
+
+    if (nonce.size() != 24 || mac.size() != kSeedCipherMacBytes) {
+        crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
+        wipeByteArray(&keyMaterial);
+        wipeByteArray(&mac);
+        wipeByteArray(&cipher);
+        wipeByteArray(&nonce);
+        wipeByteArray(&salt);
+        return false;
+    }
+
+    QByteArray plain(cipher.size(), Qt::Uninitialized);
+    static const QByteArray associatedData("grinffindor.seed-store", 22);
+    const int unlockResult =
+        crypto_aead_unlock(reinterpret_cast<uint8_t *>(plain.data()),
+                           reinterpret_cast<const uint8_t *>(mac.constData()),
+                           reinterpret_cast<const uint8_t *>(keyMaterial.constData()),
+                           reinterpret_cast<const uint8_t *>(nonce.constData()),
+                           reinterpret_cast<const uint8_t *>(associatedData.constData()),
+                           static_cast<size_t>(associatedData.size()),
+                           reinterpret_cast<const uint8_t *>(cipher.constData()),
+                           static_cast<size_t>(cipher.size()));
+    crypto_wipe(keyMaterial.data(), static_cast<size_t>(keyMaterial.size()));
+    wipeByteArray(&keyMaterial);
+    if (unlockResult != 0) {
+        crypto_wipe(plain.data(), static_cast<size_t>(plain.size()));
+        wipeByteArray(&plain);
+        wipeByteArray(&mac);
+        wipeByteArray(&cipher);
+        wipeByteArray(&nonce);
+        wipeByteArray(&salt);
+        return false;
+    }
+
+    const QString mnemonic = normalizeMnemonic(QString::fromUtf8(plain));
+    crypto_wipe(plain.data(), static_cast<size_t>(plain.size()));
+    wipeByteArray(&plain);
     if (!isValidMnemonic(mnemonic)) {
+        wipeByteArray(&mac);
+        wipeByteArray(&cipher);
+        wipeByteArray(&nonce);
+        wipeByteArray(&salt);
         return false;
     }
     if (mnemonicOut) {
         *mnemonicOut = mnemonic;
+        mnemonicOut->detach();
     }
+    wipeByteArray(&mac);
+    wipeByteArray(&cipher);
+    wipeByteArray(&nonce);
+    wipeByteArray(&salt);
     return true;
 }
 

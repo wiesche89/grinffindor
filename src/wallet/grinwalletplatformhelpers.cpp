@@ -489,6 +489,7 @@ EM_JS(int, browserOpenTextEditor, (const char *editorId,
 
                 const options = payload.options || {};
                 const multiline = !!options.multiline;
+                const isPasswordField = options.password === true;
                 const field = buildField(multiline);
 
                 state.restoreOverflow = document.body ? document.body.style.overflow : "";
@@ -497,7 +498,7 @@ EM_JS(int, browserOpenTextEditor, (const char *editorId,
                 }
 
                 if (!multiline) {
-                    if (options.password === true) {
+                    if (isPasswordField) {
                         field.type = "password";
                     } else if (typeof options.inputType === "string" && options.inputType.length > 0) {
                         field.type = options.inputType;
@@ -542,7 +543,7 @@ EM_JS(int, browserOpenTextEditor, (const char *editorId,
                 });
 
                 state.elements.titleNode.textContent = payload.title || options.placeholder || "Edit text";
-                state.elements.copyButton.style.display = field.value && field.value.length > 0 ? "inline-flex" : "inline-flex";
+                state.elements.copyButton.style.display = isPasswordField ? "none" : "inline-flex";
                 state.elements.acceptButton.textContent = options.readOnly ? (options.acceptText || "Close") : (options.acceptText || "Done");
                 state.elements.cancelButton.style.display = options.readOnly ? "none" : "inline-flex";
                 state.elements.body.innerHTML = "";

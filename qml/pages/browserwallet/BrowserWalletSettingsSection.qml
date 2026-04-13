@@ -178,44 +178,6 @@ Item {
                 }
             }
 
-            // Encrypted Backup
-            BrowserWalletPanel {
-                Layout.fillWidth: true
-                title: walletRoot.tf("browser_wallet_backup_export", "Encrypted Backup")
-                description: walletRoot.tf("browser_wallet_backup_download_note", "Download a fresh encrypted backup file for this wallet. Inline display and clipboard copy are intentionally not offered here.")
-
-                Button {
-                    text: walletRoot.tf("browser_wallet_backup_download", "Download Backup")
-                    font.pixelSize: walletRoot.controlTextSize
-                    enabled: grinWalletController.storagePersistenceState !== "native"
-                    background: Rectangle {
-                        radius: 10; color: parent.down ? "#07111c" : (parent.hovered ? "#060e18" : "transparent")
-                        border.color: parent.hovered ? "#1e3a52" : "#152a3c"; border.width: 1
-                    }
-                    contentItem: Label {
-                        text: parent.text; font: parent.font
-                        color: !parent.enabled ? "#283c50" : (parent.hovered ? "#88b8d8" : "#5a8eac")
-                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                    }
-                    onClicked: {
-                        var backup = grinWalletController.exportEncryptedWalletBackup()
-                        if (backup.trim().length > 0)
-                            grinWalletController.downloadTextFile(
-                                "grinffindor-wallet-backup-" + grinWalletController.selectedNetwork + ".json",
-                                backup)
-                    }
-                }
-
-                Label {
-                    Layout.fillWidth: true
-                    visible: grinWalletController.storagePersistenceState === "native"
-                    text: walletRoot.tf("browser_wallet_backup_download_browser_only", "Backup download from this section applies only to Browser/Wasm builds.")
-                    color: "#5a8eaa"
-                    font.pixelSize: walletRoot.compactTextSize
-                    wrapMode: Text.WordWrap
-                }
-            }
-
             // External Node
             BrowserWalletPanel {
                 Layout.fillWidth: true
