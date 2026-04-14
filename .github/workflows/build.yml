@@ -340,6 +340,20 @@ jobs:
             ~/Library/MobileDevice/Provisioning\ Profiles/"${PROFILE_UUID}.mobileprovision"
           echo "Installed provisioning profile UUID: $PROFILE_UUID"
 
+      # ── App-Icons generieren ──────────────────────────────────────────────
+      - name: Generate app icons
+        run: |
+          SRC="media/images/Image_1_logo.PNG"
+          DEST="ios/Assets.xcassets/AppIcon.appiconset"
+          # Quadratisch zuschneiden aus der Mitte
+          W=$(sips -g pixelWidth "$SRC" | awk '/pixelWidth/{print $2}')
+          H=$(sips -g pixelHeight "$SRC" | awk '/pixelHeight/{print $2}')
+          SQUARE=$(( W < H ? W : H ))
+          sips -c $SQUARE $SQUARE "$SRC" --out /tmp/AppIcon-source.png
+          for SIZE in 20 29 40 58 60 76 80 87 120 152 167 180 1024; do
+            sips -z $SIZE $SIZE /tmp/AppIcon-source.png --out "$DEST/AppIcon-${SIZE}.png"
+          done
+
       # ── qmake für echtes Gerät ─────────────────────────────────────────────
       - name: qmake
         env:
@@ -477,6 +491,16 @@ jobs:
           cp "$RUNNER_TEMP/appstore.mobileprovision" \
             ~/Library/MobileDevice/Provisioning\ Profiles/"${PROFILE_UUID}.mobileprovision"
           echo "Installed App Store profile UUID: $PROFILE_UUID"
+
+      # ── App-Icons generieren ──────────────────────────────────────────────
+      - name: Generate app icons
+        run: |
+          SRC="media/tiles/tile_grinffindor.PNG"
+          DEST="ios/Assets.xcassets/AppIcon.appiconset"
+          sips -c 770 770 "$SRC" --out /tmp/AppIcon-source.png
+          for SIZE in 20 29 40 58 60 76 80 87 120 152 167 180 1024; do
+            sips -z $SIZE $SIZE /tmp/AppIcon-source.png --out "$DEST/AppIcon-${SIZE}.png"
+          done
 
       # ── qmake ─────────────────────────────────────────────────────────────
       - name: qmake
@@ -714,12 +738,13 @@ jobs:
           R_WINDOWS: ${{ needs.build-windows.result }}
           R_IOS: ${{ needs.build-ios.result }}
           R_WASM: ${{ needs.build-wasm.result }}
+          R_TESTFLIGHT: ${{ needs.testflight.result }}
         run: |
           [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
           emoji() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
           COMMIT="$COMMIT_MESSAGE"
           OVERALL="success"
-          for s in "$R_MACOS" "$R_ANDROID" "$R_LINUX" "$R_WINDOWS" "$R_IOS" "$R_WASM"; do
+          for s in "$R_MACOS" "$R_ANDROID" "$R_LINUX" "$R_WINDOWS" "$R_IOS" "$R_WASM" "$R_TESTFLIGHT"; do
             [ "$s" != "success" ] && OVERALL="failure"
           done
           [ "$OVERALL" = "success" ] && TOP="✅ <b>Build complete</b>" || TOP="❌ <b>Build failed</b>"
@@ -729,7 +754,8 @@ jobs:
           MSG+="$(emoji $R_LINUX) 🐧 Linux: ${R_LINUX}"$'\n'
           MSG+="$(emoji $R_WINDOWS) 🪟 Windows: ${R_WINDOWS}"$'\n'
           MSG+="$(emoji $R_IOS) 🍎 iOS: ${R_IOS}"$'\n'
-          MSG+="$(emoji $R_WASM) 🌐 WebAssembly: ${R_WASM}"$'\n\n'
+          MSG+="$(emoji $R_WASM) 🌐 WebAssembly: ${R_WASM}"$'\n'
+          MSG+="$(emoji $R_TESTFLIGHT) 🚀 TestFlight: ${R_TESTFLIGHT}"$'\n\n'
           MSG+="🧑‍💻 <b>Actor:</b> ${{ github.actor }}"$'\n'
           MSG+="📦 <b>Repository:</b> ${{ github.repository }}"$'\n'
           MSG+="🏷️ <b>Branch:</b> ${{ github.ref_name }}"$'\n'

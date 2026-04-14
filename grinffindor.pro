@@ -3,7 +3,7 @@ QT += quick qml quickcontrols2 gui network
 CONFIG += c++17
 
 TARGET = grinffindor
-VERSION = 0.1.9
+VERSION = 0.2.0
 
 QMAKE_TARGET_COMPANY = Grinffindor
 QMAKE_TARGET_PRODUCT = Grinffindor
@@ -127,6 +127,8 @@ android {
 
 ios {
     QMAKE_INFO_PLIST = $$PWD/ios/Info.plist
+    QMAKE_ASSET_CATALOGS += $$PWD/ios/Assets.xcassets
+    QMAKE_ASSET_CATALOGS_APP_ICON = "AppIcon"
     # Qt provides a compatible LaunchScreen.storyboard automatically;
     # do NOT set QMAKE_IOS_LAUNCH_SCREEN to avoid ibtool version conflicts.
 }
