@@ -348,9 +348,14 @@ jobs:
           W=$(sips -g pixelWidth "$SRC" | awk '/pixelWidth/{print $2}')
           H=$(sips -g pixelHeight "$SRC" | awk '/pixelHeight/{print $2}')
           SQUARE=$(( W < H ? W : H ))
-          sips -c $SQUARE $SQUARE "$SRC" --out /tmp/AppIcon-source.png
+          sips -c $SQUARE $SQUARE "$SRC" --out /tmp/AppIcon-cropped.png
+          # ffmpeg skaliert auf RGB24 ohne Alpha-Kanal (sips behält Alpha beim Resize)
           for SIZE in 20 29 40 58 60 76 80 87 120 152 167 180 1024; do
-            sips -z $SIZE $SIZE /tmp/AppIcon-source.png --out "$DEST/AppIcon-${SIZE}.png"
+            ffmpeg -y -i /tmp/AppIcon-cropped.png \
+              -vf "scale=${SIZE}:${SIZE}" \
+              -pix_fmt rgb24 \
+              "$DEST/AppIcon-${SIZE}.png" \
+              -loglevel error
           done
 
       # ── qmake für echtes Gerät ─────────────────────────────────────────────
