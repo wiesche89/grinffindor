@@ -4,18 +4,30 @@
 <dict>
     <!--
         method: Wähle je nach Ziel:
-          "development"  – Testen auf Entwicklergeräten
+          "development"  – Testen auf Entwicklergeräten (persönlicher Test, einfachste Variante)
           "ad-hoc"       – Testen auf registrierten Geräten ohne App Store
           "app-store"    – Veröffentlichung im App Store / TestFlight
     -->
     <key>method</key>
-    <string>ad-hoc</string>
+    <string>development</string>
 
+    <!-- Team ID aus Apple Developer Portal (10-stellig, z.B. AB12CD34EF) -->
+    <!-- Wird im CI durch sed aus dem Secret IOS_TEAM_ID ersetzt -->
     <key>teamID</key>
     <string>APPLE_TEAM_ID_PLACEHOLDER</string>
 
     <key>signingStyle</key>
     <string>manual</string>
+
+    <!--
+        Provisioning Profile Name (exakt wie im Apple Developer Portal angelegt).
+        Standard-Name laut Anleitung: "Grinffindor Development"
+    -->
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>org.wiesche89.grinffindor</key>
+        <string>Grinffindor Development</string>
+    </dict>
 
     <key>stripSwiftSymbols</key>
     <true/>

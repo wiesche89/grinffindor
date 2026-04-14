@@ -273,12 +273,20 @@ jobs:
           if-no-files-found: warn
 
   # ─────────────────────────────────────────────
-  # iOS (Simulator)
+  # iOS (echtes Gerät – Development IPA)
+  # ─────────────────────────────────────────────
+  # Benötigte Secrets (GitHub → Settings → Secrets → Actions):
+  #   IOS_CERTIFICATE_P12        – Base64-kodiertes .p12 Development-Zertifikat
+  #   IOS_CERTIFICATE_PASSWORD   – Passwort des .p12-Archivs
+  #   IOS_PROVISIONING_PROFILE   – Base64-kodiertes .mobileprovision (Development)
+  #   IOS_TEAM_ID                – 10-stellige Apple Team ID (z.B. AB12CD34EF)
   # ─────────────────────────────────────────────
   build-ios:
     name: iOS
     runs-on: macos-latest
     needs: [read-version]
+    env:
+      IOS_BUNDLE_ID: org.wiesche89.grinffindor
     steps:
       - uses: actions/checkout@v4
         with:
@@ -292,31 +300,101 @@ jobs:
           cache: true
           set-env: true
 
+      # ── Zertifikat in temporären Keychain importieren ──────────────────────
+      - name: Import signing certificate
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PASSWORD="ci_keychain_pw_$$"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+
+          echo "$IOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$IOS_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/xcodebuild
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      # ── Provisioning Profile installieren ─────────────────────────────────
+      - name: Install provisioning profile
+        env:
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$IOS_PROVISIONING_PROFILE" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+          PROFILE_UUID=$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" \
+            | plutil -extract UUID xml1 -o - - \
+            | sed -n 's/.*<string>\(.*\)<\/string>.*/\1/p')
+          cp "$RUNNER_TEMP/profile.mobileprovision" \
+            ~/Library/MobileDevice/Provisioning\ Profiles/"${PROFILE_UUID}.mobileprovision"
+          echo "Installed provisioning profile UUID: $PROFILE_UUID"
+
+      # ── qmake für echtes Gerät ─────────────────────────────────────────────
       - name: qmake
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
           mkdir -p build-ios && cd build-ios
           qmake ../grinffindor.pro \
             -spec macx-ios-clang \
-            CONFIG+=iphonesimulator CONFIG+=simulator CONFIG+=release \
+            CONFIG+=iphoneos CONFIG+=device CONFIG+=release \
             QMAKE_IOS_DEPLOYMENT_TARGET=16.0 \
-            QMAKE_APPLE_DEVICE_ARCHS=arm64
+            QMAKE_APPLE_DEVICE_ARCHS=arm64 \
+            QMAKE_DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID"
 
-      - name: xcodebuild
+      # ── Archive erstellen ──────────────────────────────────────────────────
+      - name: xcodebuild archive
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
           cd build-ios
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -1)
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
           xcodebuild \
-            -project "$XCODEPROJ" -scheme "$SCHEME" \
-            -sdk iphonesimulator -configuration Release \
-            -destination "generic/platform=iOS Simulator" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" \
-            | xcpretty || true
+            -project "$XCODEPROJ" \
+            -scheme "$SCHEME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/grinffindor.xcarchive" \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="Grinffindor Development" \
+            PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID" \
+            archive | xcpretty || true
+
+      # ── IPA exportieren ────────────────────────────────────────────────────
+      - name: Export IPA
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          # Team ID in ExportOptions.plist einsetzen
+          sed "s/APPLE_TEAM_ID_PLACEHOLDER/$IOS_TEAM_ID/" \
+            ios/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/grinffindor.xcarchive" \
+            -exportPath "$RUNNER_TEMP/ipa" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      # ── Keychain aufräumen ─────────────────────────────────────────────────
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain" 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
           name: grinffindor-ios-${{ needs.read-version.outputs.app_version }}
-          path: build-ios/**/*.app
+          path: ${{ runner.temp }}/ipa/*.ipa
           if-no-files-found: warn
 
   # ─────────────────────────────────────────────
