@@ -8,8 +8,13 @@ import QtCore
 ApplicationWindow {
     id: root
     readonly property bool isWasm: Qt.platform.os === "wasm"
-    readonly property bool isNativeMobile: Qt.platform.os === "android" || Qt.platform.os === "ios"
+    readonly property bool isIos: Qt.platform.os === "ios"
+    readonly property bool isNativeMobile: Qt.platform.os === "android" || isIos
     readonly property bool isMobileRuntime: isWasm || isNativeMobile || (typeof PlatformBridge !== "undefined" && PlatformBridge.mobile)
+
+    // Safe area insets for iPhone notch / home indicator (Qt 6.7+)
+    readonly property real iosSafeTop: isIos ? safeAreaInsets.top : 0
+    readonly property real iosSafeBottom: isIos ? safeAreaInsets.bottom : 0
     function assetPath(path) {
         return (typeof assetBaseUrl === "string" ? assetBaseUrl : "qrc:/res/") + path
     }
@@ -17,7 +22,7 @@ ApplicationWindow {
     height: isMobileRuntime ? Screen.height : 640
     visible: true
     visibility: isNativeMobile ? Window.FullScreen : (isWasm ? Window.Windowed : Window.Maximized)
-    flags: isWasm ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
+    flags: (isWasm || isIos) ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: i18n ? i18n.tf("app_title", "Grinffindor") : "Grinffindor"
     property string activeTilePage: ""
 
@@ -122,7 +127,7 @@ ApplicationWindow {
     ListModel { id: tileModel }
 
     Component.onCompleted: {
-        if (isWasm) {
+        if (isWasm || isIos) {
             root.x = 0
             root.y = 0
         }
@@ -151,13 +156,14 @@ ApplicationWindow {
         Item {
             id: headerHost
             width: root.width
-            height: headerLoader.item ? headerLoader.item.height : 78
+            height: (headerLoader.item ? headerLoader.item.height : 78) + root.iosSafeTop
             anchors.top: parent.top
             anchors.horizontalCenter: parent.horizontalCenter
 
             Loader {
                 id: headerLoader
                 anchors.fill: parent
+                anchors.topMargin: root.iosSafeTop
                 source: "qrc:/qml/qml/Header.qml"
                 onLoaded: {
                     if (!item)
@@ -291,7 +297,7 @@ ApplicationWindow {
             width: root.width
             height: footerLoader.item ? footerLoader.item.height : 64
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: Math.max(10, Math.round(root.height * 0.025))
+            anchors.bottomMargin: Math.max(10, Math.round(root.height * 0.025)) + root.iosSafeBottom
             anchors.horizontalCenter: parent.horizontalCenter
 
             Loader {

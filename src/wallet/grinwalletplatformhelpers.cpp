@@ -639,9 +639,9 @@ bool GrinWalletPlatformHelpers::supportsNativeTouchSelection()
 {
 #ifdef Q_OS_WASM
     return browserSupportsNativeTouchSelection() == 1;
-#elif defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
-    return true;
 #else
+    // Native iOS/Android use Qt's built-in keyboard and focus handling.
+    // The browser-overlay editor is a WASM-only feature.
     return false;
 #endif
 }

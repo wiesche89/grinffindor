@@ -219,7 +219,11 @@ Item {
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        width: Math.min(walletRoot.width - 28, 500)
+        width: {
+            var available = Overlay.overlay ? Overlay.overlay.width : walletRoot.width
+            var margin = walletRoot.veryPhoneMode ? 12 : (walletRoot.phoneMode ? 16 : 28)
+            return Math.min(available - margin, 500)
+        }
         padding: 0
 
         onOpened: {
@@ -402,8 +406,15 @@ Item {
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        width: Math.min(walletRoot.width - 28, 700)
-        height: Math.min(implicitHeight, walletRoot.height - 40)
+        width: {
+            var available = Overlay.overlay ? Overlay.overlay.width : walletRoot.width
+            var margin = walletRoot.veryPhoneMode ? 12 : (walletRoot.phoneMode ? 16 : 28)
+            return Math.min(available - margin, 700)
+        }
+        height: {
+            var available = Overlay.overlay ? Overlay.overlay.height : walletRoot.height
+            return Math.min(implicitHeight, available - (walletRoot.veryPhoneMode ? 16 : 40))
+        }
         padding: 0
 
         background: Rectangle {
@@ -415,8 +426,8 @@ Item {
 
         contentItem: ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 22
-            spacing: 14
+            anchors.margins: walletRoot.veryPhoneMode ? 12 : (walletRoot.phoneMode ? 16 : 22)
+            spacing: walletRoot.veryPhoneMode ? 8 : (walletRoot.phoneMode ? 10 : 14)
 
             Label {
                 Layout.fillWidth: true
