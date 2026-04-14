@@ -343,20 +343,31 @@ jobs:
       # ── App-Icons generieren ──────────────────────────────────────────────
       - name: Generate app icons
         run: |
-          SRC="media/images/Image_9_ios_logo.png"
-          DEST="ios/Assets.xcassets/AppIcon.appiconset"
-          W=$(sips -g pixelWidth "$SRC" | awk '/pixelWidth/{print $2}')
-          H=$(sips -g pixelHeight "$SRC" | awk '/pixelHeight/{print $2}')
-          SQUARE=$(( W < H ? W : H ))
-          sips -c $SQUARE $SQUARE "$SRC" --out /tmp/AppIcon-cropped.png
-          # ffmpeg skaliert auf RGB24 ohne Alpha-Kanal (sips behält Alpha beim Resize)
-          for SIZE in 20 29 40 58 60 76 80 87 120 152 167 180 1024; do
-            ffmpeg -y -i /tmp/AppIcon-cropped.png \
-              -vf "scale=${SIZE}:${SIZE}" \
-              -pix_fmt rgb24 \
-              "$DEST/AppIcon-${SIZE}.png" \
-              -loglevel error
-          done
+          pip3 install --quiet Pillow
+          python3 - <<'PYEOF'
+import sys
+from PIL import Image
+
+src = "media/images/Image_9_ios_logo.png"
+dest = "ios/Assets.xcassets/AppIcon.appiconset"
+sizes = [20, 29, 40, 58, 60, 76, 80, 87, 120, 152, 167, 180, 1024]
+
+img = Image.open(src).convert("RGBA")
+w, h = img.size
+square = min(w, h)
+left = (w - square) // 2
+top  = (h - square) // 2
+img = img.crop((left, top, left + square, top + square))
+
+# Alpha entfernen: auf weißen Hintergrund compositen
+bg = Image.new("RGB", img.size, (255, 255, 255))
+bg.paste(img, mask=img.split()[3])
+
+for size in sizes:
+    out = bg.resize((size, size), Image.LANCZOS)
+    out.save(f"{dest}/AppIcon-{size}.png")
+    print(f"  {size}x{size} -> AppIcon-{size}.png")
+PYEOF
 
       # ── qmake für echtes Gerät ─────────────────────────────────────────────
       - name: qmake
