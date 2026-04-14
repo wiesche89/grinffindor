@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store</string>
+
+    <!-- Wird im CI durch sed aus dem Secret IOS_TEAM_ID ersetzt -->
+    <key>teamID</key>
+    <string>APPLE_TEAM_ID_PLACEHOLDER</string>
+
+    <key>signingStyle</key>
+    <string>manual</string>
+
+    <!--
+        Provisioning Profile Name (exakt wie im Apple Developer Portal angelegt).
+        Standard-Name laut Anleitung: "Grinffindor AppStore"
+    -->
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>org.wiesche89.grinffindor</key>
+        <string>Grinffindor AppStore</string>
+    </dict>
+
+    <key>stripSwiftSymbols</key>
+    <true/>
+
+    <key>compileBitcode</key>
+    <false/>
+
+    <key>uploadSymbols</key>
+    <true/>
+
+    <key>thinning</key>
+    <string>&lt;none&gt;</string>
+</dict>
+</plist>
