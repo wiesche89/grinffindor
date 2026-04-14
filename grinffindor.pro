@@ -127,7 +127,8 @@ android {
 
 ios {
     QMAKE_INFO_PLIST = $$PWD/ios/Info.plist
-    QMAKE_IOS_LAUNCH_SCREEN = $$PWD/ios/LaunchScreen.storyboard
+    # Qt provides a compatible LaunchScreen.storyboard automatically;
+    # do NOT set QMAKE_IOS_LAUNCH_SCREEN to avoid ibtool version conflicts.
 }
 
 win32 {
