@@ -307,9 +307,9 @@ jobs:
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
         run: |
           KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
-          KEYCHAIN_PASSWORD="ci_keychain_pw_$$"
+          KEYCHAIN_PASSWORD="ci_keychain_pw_fixed"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 3600 "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 7200 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
 
@@ -321,6 +321,10 @@ jobs:
             -T /usr/bin/xcodebuild
           security set-key-partition-list -S apple-tool:,apple: -s \
             -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Persist password for subsequent steps
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       # ── Provisioning Profile installieren ─────────────────────────────────
       - name: Install provisioning profile
@@ -355,9 +359,14 @@ jobs:
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
+          # Keychain vor dem Build erneut entsperren (kann zwischen Steps sperren)
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
           cd build-ios
           XCODEPROJ=$(find . -name "*.xcodeproj" | head -1)
           SCHEME=$(basename "$XCODEPROJ" .xcodeproj)
+          echo "Building project: $XCODEPROJ  scheme: $SCHEME"
+
           xcodebuild \
             -project "$XCODEPROJ" \
             -scheme "$SCHEME" \
@@ -369,7 +378,9 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             PROVISIONING_PROFILE_SPECIFIER="Grinffindor Development" \
             PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID" \
-            archive | xcpretty || true
+            archive
+
+          echo "Archive created at: $RUNNER_TEMP/grinffindor.xcarchive"
 
       # ── IPA exportieren ────────────────────────────────────────────────────
       - name: Export IPA
