@@ -21,8 +21,12 @@ ApplicationWindow {
     width: isMobileRuntime ? Screen.width : 960
     height: isMobileRuntime ? Screen.height : 640
     visible: true
-    visibility: isNativeMobile ? Window.FullScreen : (isWasm ? Window.Windowed : Window.Maximized)
-    flags: (isWasm || isIos) ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
+    // iOS: Maximized keeps the system status bar (clock/battery/wifi) visible.
+    // FullScreen would hide it. Android keeps FullScreen.
+    visibility: isIos ? Window.Maximized
+              : (isNativeMobile ? Window.FullScreen
+              : (isWasm ? Window.Windowed : Window.Maximized))
+    flags: isWasm ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: i18n ? i18n.tf("app_title", "Grinffindor") : "Grinffindor"
     property string activeTilePage: ""
 
