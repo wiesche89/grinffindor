@@ -1,3 +1,4 @@
+
 # Grinffindor
 
 Qt Quick / QML application for desktop and WebAssembly, including a containerized `nginx` setup for serving the WASM build via Docker Compose.
