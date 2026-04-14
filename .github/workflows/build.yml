@@ -343,17 +343,12 @@ jobs:
       # ── App-Icons generieren ──────────────────────────────────────────────
       - name: Generate app icons
         run: |
-          SRC="media/images/Image_1_logo.PNG"
+          SRC="media/images/Image_9_ios_logo.png"
           DEST="ios/Assets.xcassets/AppIcon.appiconset"
-          # Quadratisch zuschneiden aus der Mitte
           W=$(sips -g pixelWidth "$SRC" | awk '/pixelWidth/{print $2}')
           H=$(sips -g pixelHeight "$SRC" | awk '/pixelHeight/{print $2}')
           SQUARE=$(( W < H ? W : H ))
-          sips -c $SQUARE $SQUARE "$SRC" --out /tmp/AppIcon-cropped.png
-          # Alpha-Kanal entfernen (Apple verbietet Alpha im 1024x1024 Icon):
-          # BMP kennt kein Alpha → transparente Pixel werden weiß → zurück zu PNG
-          sips -s format bmp /tmp/AppIcon-cropped.png --out /tmp/AppIcon-flat.bmp
-          sips -s format png /tmp/AppIcon-flat.bmp --out /tmp/AppIcon-source.png
+          sips -c $SQUARE $SQUARE "$SRC" --out /tmp/AppIcon-source.png
           for SIZE in 20 29 40 58 60 76 80 87 120 152 167 180 1024; do
             sips -z $SIZE $SIZE /tmp/AppIcon-source.png --out "$DEST/AppIcon-${SIZE}.png"
           done
