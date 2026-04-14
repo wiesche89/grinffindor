@@ -127,6 +127,7 @@ android {
 
 ios {
     QMAKE_INFO_PLIST = $$PWD/ios/Info.plist
+    QMAKE_IOS_LAUNCH_SCREEN = $$PWD/ios/LaunchScreen.storyboard
 }
 
 win32 {

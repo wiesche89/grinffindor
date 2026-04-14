@@ -142,16 +142,19 @@ ApplicationWindow {
         }
     }
 
-    Item {
-        anchors.fill: parent
-
+    // Wallpaper covers the full window including iOS safe areas (status bar + home indicator)
+    background: Rectangle {
+        color: "#080f18"
         Image {
             anchors.fill: parent
             source: root.assetPath("media/images/image_wallpaper_tile.png")
             fillMode: Image.Stretch
             smooth: true
-            z: -10
         }
+    }
+
+    Item {
+        anchors.fill: parent
 
         Item {
             id: headerHost
