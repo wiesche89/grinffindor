@@ -521,27 +521,6 @@ jobs:
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             archive
 
-      # ── Debug: Icons im xcarchive prüfen ─────────────────────────────────
-      - name: Debug - inspect icons in xcarchive
-        run: |
-          ARCHIVE="$RUNNER_TEMP/grinffindor-appstore.xcarchive"
-          echo "=== Alle PNG-Dateien im xcarchive ==="
-          find "$ARCHIVE" -name "*.png" | sort
-          echo ""
-          echo "=== Icon-Modus (alpha?) ==="
-          pip3 install --quiet Pillow
-          python3 -c "
-import glob, os
-from PIL import Image
-for f in sorted(glob.glob('$ARCHIVE/**/*.png', recursive=True)):
-    try:
-        img = Image.open(f)
-        name = os.path.basename(f)
-        print(f'{name}: mode={img.mode} size={img.size}')
-    except Exception as e:
-        print(f'{f}: ERROR {e}')
-"
-
       # ── IPA exportieren (App Store) ───────────────────────────────────────
       - name: Export App Store IPA
         env:
