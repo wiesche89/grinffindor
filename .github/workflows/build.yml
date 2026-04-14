@@ -496,6 +496,8 @@ jobs:
       - name: xcodebuild archive
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          APP_VERSION: ${{ needs.read-version.outputs.app_version }}
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
@@ -515,6 +517,8 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="Grinffindor AppStore" \
             PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID" \
+            MARKETING_VERSION="$APP_VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             archive
 
       # ── IPA exportieren (App Store) ───────────────────────────────────────
