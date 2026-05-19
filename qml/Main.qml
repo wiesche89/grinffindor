@@ -67,7 +67,7 @@ ApplicationWindow {
         tileModel.append({
             titleText: "",
             subtitleText: "",
-            buttonText: i18n.tf("tile_runtime_monitor", "Runtime Testnet Monitor"),
+            buttonText: i18n.tf("tile_runtime_monitor", "Runtime Monitor"),
             imageSource: root.assetPath("media/tiles/tile_server.PNG"),
             pageFile: "TileRuntimeMonitor.qml"
         })

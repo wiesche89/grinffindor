@@ -379,16 +379,18 @@ Item {
             }
 
             Label {
-                text: i18n ? i18n.tf("runtime_monitor_title", "Runtime Testnet Monitor") : "Runtime Testnet Monitor"
+                text: i18n ? i18n.tf("runtime_monitor_title", "Runtime Monitor") : "Runtime Monitor"
                 color: "#ffffff"
                 font.pixelSize: compact ? 20 : 26
                 font.bold: true
+                elide: Text.ElideRight
+                Layout.fillWidth: true
             }
 
-            Item { Layout.fillWidth: true }
-
             Button {
-                text: i18n ? i18n.tf("runtime_monitor_refresh", "Refresh") : "Refresh"
+                text: compact ? "↻" : (i18n ? i18n.tf("runtime_monitor_refresh", "Refresh") : "Refresh")
+                Layout.preferredWidth: compact ? 44 : implicitWidth
+                Layout.preferredHeight: compact ? 38 : implicitHeight
                 onClicked: root.refresh()
             }
         }
@@ -605,28 +607,46 @@ Item {
                         font.bold: true
                     }
 
-                    Repeater {
-                        model: {
-                            var rows = []
-                            var nodes = root.runtimeData.nodes || []
-                            for (var i = 0; i < nodes.length; i++) {
-                                var peers = nodes[i].peers || []
-                                for (var j = 0; j < peers.length; j++)
-                                    rows.push({ node: nodes[i].node_name, peer: peers[j] })
+                    Flickable {
+                        id: peerTable
+                        width: parent.width
+                        height: peerRows.implicitHeight
+                        contentWidth: compact ? Math.max(width, 620) : width
+                        contentHeight: peerRows.implicitHeight
+                        clip: true
+                        flickableDirection: Flickable.HorizontalFlick
+
+                        ScrollBar.horizontal: ScrollBar { policy: compact ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+
+                        Column {
+                            id: peerRows
+                            width: peerTable.contentWidth
+                            spacing: 8
+
+                            Repeater {
+                                model: {
+                                    var rows = []
+                                    var nodes = root.runtimeData.nodes || []
+                                    for (var i = 0; i < nodes.length; i++) {
+                                        var peers = nodes[i].peers || []
+                                        for (var j = 0; j < peers.length; j++)
+                                            rows.push({ node: nodes[i].node_name, peer: peers[j] })
+                                    }
+                                    return rows
+                                }
+
+                                RowLayout {
+                                    width: peerRows.width
+                                    spacing: 10
+
+                                    Label { text: modelData.node; color: "#dfe5ff"; Layout.preferredWidth: 150; elide: Text.ElideRight }
+                                    Label { text: modelData.peer.direction; color: "#aeb7c8"; Layout.preferredWidth: 80; elide: Text.ElideRight }
+                                    Label { text: modelData.peer.ip; color: "#ffffff"; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Label { text: modelData.peer.port; color: "#aeb7c8"; Layout.preferredWidth: 58; elide: Text.ElideRight }
+                                    Label { text: root.fmt(modelData.peer.height); color: "#ffffff"; Layout.preferredWidth: 92; horizontalAlignment: Text.AlignRight }
+                                    Label { text: modelData.peer.user_agent; color: "#aeb7c8"; Layout.preferredWidth: 220; elide: Text.ElideRight }
+                                }
                             }
-                            return rows
-                        }
-
-                        RowLayout {
-                            width: parent.width
-                            spacing: 10
-
-                            Label { text: modelData.node; color: "#dfe5ff"; Layout.preferredWidth: 150; elide: Text.ElideRight }
-                            Label { text: modelData.peer.direction; color: "#aeb7c8"; Layout.preferredWidth: 80 }
-                            Label { text: modelData.peer.ip; color: "#ffffff"; Layout.fillWidth: true; elide: Text.ElideRight }
-                            Label { text: modelData.peer.port; color: "#aeb7c8"; Layout.preferredWidth: 58 }
-                            Label { text: root.fmt(modelData.peer.height); color: "#ffffff"; Layout.preferredWidth: 92; horizontalAlignment: Text.AlignRight }
-                            Label { text: modelData.peer.user_agent; color: "#aeb7c8"; Layout.preferredWidth: compact ? 0 : 220; visible: !compact; elide: Text.ElideRight }
                         }
                     }
                 }
@@ -686,19 +706,37 @@ Item {
                         font.bold: true
                     }
 
-                    Repeater {
-                        model: root.benchmarkData.runs || []
+                    Flickable {
+                        id: benchmarkTable
+                        width: parent.width
+                        height: benchmarkRows.implicitHeight
+                        contentWidth: compact ? Math.max(width, 740) : width
+                        contentHeight: benchmarkRows.implicitHeight
+                        clip: true
+                        flickableDirection: Flickable.HorizontalFlick
 
-                        RowLayout {
-                            width: parent.width
-                            spacing: 10
+                        ScrollBar.horizontal: ScrollBar { policy: compact ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
 
-                            Label { text: root.fmt(modelData.node_name); color: "#dfe5ff"; Layout.preferredWidth: 150; elide: Text.ElideRight }
-                            Label { text: root.fmt(modelData.node_type); color: "#aeb7c8"; Layout.preferredWidth: 92 }
-                            Label { text: root.fmt(modelData.result); color: modelData.result === "success" ? "#7fd276" : "#f2cc0c"; Layout.preferredWidth: 84 }
-                            Label { text: root.seconds(modelData.total_sync_duration); color: "#ffffff"; Layout.preferredWidth: 90; horizontalAlignment: Text.AlignRight }
-                            Label { text: root.fmt(modelData.final_height); color: "#ffffff"; Layout.preferredWidth: 100; horizontalAlignment: Text.AlignRight }
-                            Label { text: root.fmt(modelData.sync_completed_at || modelData.sync_started_at); color: "#aeb7c8"; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Column {
+                            id: benchmarkRows
+                            width: benchmarkTable.contentWidth
+                            spacing: 8
+
+                            Repeater {
+                                model: root.benchmarkData.runs || []
+
+                                RowLayout {
+                                    width: benchmarkRows.width
+                                    spacing: 10
+
+                                    Label { text: root.fmt(modelData.node_name); color: "#dfe5ff"; Layout.preferredWidth: 150; elide: Text.ElideRight }
+                                    Label { text: root.fmt(modelData.node_type); color: "#aeb7c8"; Layout.preferredWidth: 92; elide: Text.ElideRight }
+                                    Label { text: root.fmt(modelData.result); color: modelData.result === "success" ? "#7fd276" : "#f2cc0c"; Layout.preferredWidth: 84; elide: Text.ElideRight }
+                                    Label { text: root.seconds(modelData.total_sync_duration); color: "#ffffff"; Layout.preferredWidth: 90; horizontalAlignment: Text.AlignRight }
+                                    Label { text: root.fmt(modelData.final_height); color: "#ffffff"; Layout.preferredWidth: 100; horizontalAlignment: Text.AlignRight }
+                                    Label { text: root.fmt(modelData.sync_completed_at || modelData.sync_started_at); color: "#aeb7c8"; Layout.fillWidth: true; elide: Text.ElideRight }
+                                }
+                            }
                         }
                     }
                 }
