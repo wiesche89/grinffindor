@@ -67,6 +67,13 @@ ApplicationWindow {
         tileModel.append({
             titleText: "",
             subtitleText: "",
+            buttonText: i18n.tf("tile_runtime_monitor", "Runtime Testnet Monitor"),
+            imageSource: root.assetPath("media/tiles/tile_server.PNG"),
+            pageFile: "TileRuntimeMonitor.qml"
+        })
+        tileModel.append({
+            titleText: "",
+            subtitleText: "",
             buttonText: i18n.tf("tile_mainnet_faucet", "Mainnet Bot"),
             imageSource: root.assetPath("media/tiles/tile_mainnet_faucet.PNG"),
             pageFile: "TileMainnetFaucet.qml"
@@ -121,6 +128,7 @@ ApplicationWindow {
         category: "grinffindor"
 
         property string languageCode: "en"
+        property string runtimePrometheusUrl: "https://prometheus.grinffindor.org"
     }
 
     I18n {

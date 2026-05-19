@@ -36,6 +36,7 @@
         <file>qml/pages/TileExplorer.qml</file>
         <file>qml/pages/TileGrinffindor.qml</file>
         <file>qml/pages/TileGrinNode.qml</file>
+        <file>qml/pages/TileRuntimeMonitor.qml</file>
         <file>qml/pages/TileMainnetFaucet.qml</file>
         <file>qml/pages/TileSettings.qml</file>
         <file>qml/pages/TileSupport.qml</file>
