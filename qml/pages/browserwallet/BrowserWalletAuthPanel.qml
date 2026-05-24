@@ -62,6 +62,26 @@ Item {
                     anchors.margins: veryPhoneMode ? 16 : (phoneMode ? 18 : 24)
                     spacing: veryPhoneMode ? 10 : (phoneMode ? 12 : 14)
 
+                    Label {
+                        Layout.fillWidth: true
+                        text: walletRoot.tf("browser_wallet_experimental_title", "Experimental")
+                        color: "#FEF102"
+                        font.pixelSize: veryPhoneMode ? 24 : (phoneMode ? 28 : 34)
+                        font.weight: Font.Bold
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: walletRoot.tf("browser_wallet_work_in_progress", "Work in Progress")
+                        color: "#90c8e8"
+                        font.pixelSize: veryPhoneMode ? 14 : (phoneMode ? 16 : 18)
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                    }
+
                     // Title
                     Label {
                         Layout.fillWidth: true

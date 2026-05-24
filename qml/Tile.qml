@@ -55,11 +55,13 @@ Item {
             visible: bg.paintedWidth > 0
             text: tile.titleText
             color: "#ffffff"
-            font.pixelSize: 22
+            font.pixelSize: Math.max(17, Math.round(bg.paintedWidth * 0.075))
             font.bold: true
             horizontalAlignment: Text.AlignHCenter
             width: bg.paintedWidth * 0.92
-            wrapMode: Text.NoWrap
+            wrapMode: Text.WordWrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
 
             x: bg.x + (bg.paintedWidth - width) / 2
             y: content.pxY(tile.titleY) - height / 2
@@ -77,10 +79,14 @@ Item {
 
             Text {
                 anchors.centerIn: parent
+                width: parent.width - 8
                 text: tile.buttonText
-                font.pixelSize: 16
+                font.pixelSize: Math.max(12, Math.round(parent.height * 0.42))
                 font.bold: true
                 color: btnArea.hovered ? "#e6dcff" : "#ffffff"
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
             }
 
             MouseArea {

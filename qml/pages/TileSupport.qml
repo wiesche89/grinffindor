@@ -337,6 +337,7 @@ Item {
                         color: "#ffffff"
                         font.pixelSize: 28
                         font.bold: true
+                        wrapMode: Text.WordWrap
                     }
 
                     Label {

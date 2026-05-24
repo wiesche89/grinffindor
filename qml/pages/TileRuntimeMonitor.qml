@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "runtime" as Runtime
 
 Item {
     id: root
@@ -17,6 +18,8 @@ Item {
     property string activeView: "runtime"
     property var runtimeData: ({ summary: {}, nodes: [] })
     property var benchmarkData: ({ summary: {}, runs: [] })
+    property var notificationData: ({ summary: {}, notifications: [] })
+    property var setupData: ({ summary: {}, nodes: [], source: "prometheus" })
     property string errorText: ""
     property bool loading: false
 
@@ -297,11 +300,111 @@ Item {
         })
     }
 
+    function buildNotifications() {
+        requestQuery("grin_runtime_notification_info", function(rows) {
+            var list = []
+            var active = 0
+            var warnings = 0
+            var errors = 0
+            for (var i = 0; i < rows.length; i++) {
+                var labels = metricLabels(rows[i])
+                var isActive = labels.active === "1" || labels.active === "true"
+                if (isActive)
+                    active++
+                if (labels.severity === "warning")
+                    warnings++
+                if (labels.severity === "error")
+                    errors++
+                list.push({
+                    id: labels.notification_id || "",
+                    active: isActive,
+                    severity: labels.severity || "",
+                    category: labels.category || "",
+                    node_id: labels.node_id || "",
+                    node_name: labels.node_name || "",
+                    sync_run_id: labels.sync_run_id || "",
+                    sync_state: labels.sync_state || "",
+                    progress_stage: labels.progress_stage || "",
+                    title: labels.title || "",
+                    message: labels.message || "",
+                    created_at: labels.created_at || "",
+                    updated_at: labels.updated_at || "",
+                    resolved_at: labels.resolved_at || ""
+                })
+            }
+            list.sort(function(a, b) {
+                if (a.created_at !== b.created_at)
+                    return a.created_at < b.created_at ? 1 : -1
+                var nodeA = a.node_name || a.node_id || ""
+                var nodeB = b.node_name || b.node_id || ""
+                if (nodeA !== nodeB)
+                    return nodeA > nodeB ? 1 : -1
+                return 0
+            })
+            notificationData = {
+                updated_at: Date.now() / 1000,
+                summary: {
+                    notification_count: list.length,
+                    active_count: active,
+                    warning_count: warnings,
+                    error_count: errors
+                },
+                notifications: list
+            }
+        })
+    }
+
+    function buildSetup() {
+        var nodes = {}
+        requestQuery("grin_runtime_autosync_enabled", function(rows) {
+            for (var i = 0; i < rows.length; i++) {
+                var labels = metricLabels(rows[i])
+                var nodeId = labels.node_id || labels.node_name || ""
+                nodes[nodeId] = {
+                    node_id: nodeId,
+                    node_name: labels.node_name || nodeId,
+                    node_type: labels.node_type || "",
+                    profile: labels.profile || "",
+                    status: labels.status || "",
+                    autosync_enabled: sampleValue(rows[i]) > 0,
+                    frequent_restart_enabled: false,
+                    frequent_restart_last_bucket: "",
+                    failure_state: labels.failure_state || "",
+                    docker_image: labels.docker_image || "",
+                    image_tag: labels.image_tag || "",
+                    sync_run_id: "",
+                    last_action: ""
+                }
+            }
+            requestQuery("grin_runtime_frequent_restart_enabled", function(restartRows) {
+                for (var i = 0; i < restartRows.length; i++) {
+                    var labels = metricLabels(restartRows[i])
+                    var nodeId = labels.node_id || labels.node_name || ""
+                    if (!nodes[nodeId])
+                        continue
+                    nodes[nodeId].frequent_restart_enabled = sampleValue(restartRows[i]) > 0
+                    nodes[nodeId].frequent_restart_last_bucket = labels.last_bucket || ""
+                }
+                var list = nodeListFromMap(nodes)
+                setupData = {
+                    updated_at: Date.now() / 1000,
+                    source: "prometheus",
+                    summary: {
+                        node_count: list.length
+                    },
+                    nodes: list
+                }
+            })
+        })
+    }
+
     function refresh() {
         loading = true
         errorText = ""
         buildRuntime()
         buildBenchmarks()
+        buildNotifications()
+        buildSetup()
     }
 
     Component.onCompleted: initialRefreshTimer.start()
@@ -433,25 +536,12 @@ Item {
                         font.bold: true
                     }
 
-                    RowLayout {
+                    Runtime.RuntimeMonitorTabs {
                         width: parent.width
-                        spacing: 8
-
-                        Button {
-                            text: "Runtime"
-                            checked: root.activeView === "runtime"
-                            checkable: true
-                            onClicked: root.activeView = "runtime"
+                        activeView: root.activeView
+                        onViewRequested: function(view) {
+                            root.activeView = view
                         }
-
-                        Button {
-                            text: "Benchmarks"
-                            checked: root.activeView === "benchmarks"
-                            checkable: true
-                            onClicked: root.activeView = "benchmarks"
-                        }
-
-                        Item { Layout.fillWidth: true }
                     }
 
                     Label {
@@ -464,282 +554,43 @@ Item {
                 }
             }
 
-            GridLayout {
+            Runtime.RuntimeMonitorRuntimeView {
                 visible: root.activeView === "runtime"
                 width: parent.width
-                columns: compact ? 2 : 4
-                columnSpacing: 10
-                rowSpacing: 10
-
-                Repeater {
-                    model: [
-                        { label: "Nodes", value: root.fmt(root.runtimeData.summary.node_count, "0") },
-                        { label: "API Up", value: root.fmt(root.runtimeData.summary.api_up_count, "0") },
-                        { label: "Syncing", value: root.fmt(root.runtimeData.summary.syncing_count, "0") },
-                        { label: "Peers", value: root.fmt(root.runtimeData.summary.peer_count, "0") }
-                    ]
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 92
-                        radius: 14
-                        color: root.panelSoft
-                        border.color: root.border
-
-                        Column {
-                            anchors.fill: parent
-                            anchors.margins: 14
-                            spacing: 8
-                            Label { text: modelData.label; color: "#aeb7c8"; font.pixelSize: 13; font.bold: true }
-                            Label { text: modelData.value; color: "#7fd276"; font.pixelSize: 34; font.bold: true }
-                        }
-                    }
-                }
+                compact: root.compact
+                runtimeData: root.runtimeData
+                panel: root.panel
+                panelSoft: root.panelSoft
+                borderColor: root.border
             }
 
-            GridLayout {
-                visible: root.activeView === "runtime"
-                width: parent.width
-                columns: compact ? 1 : 2
-                columnSpacing: 12
-                rowSpacing: 12
-
-                Repeater {
-                    model: root.runtimeData.nodes || []
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: nodeColumn.implicitHeight + 28
-                        radius: 16
-                        color: "#d00d121b"
-                        border.color: root.border
-
-                        Column {
-                            id: nodeColumn
-                            anchors.fill: parent
-                            anchors.margins: 14
-                            spacing: 10
-
-                            RowLayout {
-                                width: parent.width
-                                Label {
-                                    text: modelData.node_name
-                                    color: "#ffffff"
-                                    font.pixelSize: 20
-                                    font.bold: true
-                                }
-                                Item { Layout.fillWidth: true }
-                                Label {
-                                    text: modelData.api_up ? "up" : "down"
-                                    color: modelData.api_up ? "#7fd276" : "#ff5570"
-                                    font.bold: true
-                                }
-                            }
-
-                            Label {
-                                width: parent.width
-                                text: root.fmt(modelData.node_type) + " | " + root.fmt(modelData.sync_status) + " | " + root.fmt(modelData.version)
-                                color: "#cfd6ff"
-                                wrapMode: Text.WordWrap
-                            }
-
-                            Rectangle {
-                                width: parent.width
-                                height: 10
-                                radius: 5
-                                color: "#26303a"
-                                Rectangle {
-                                    width: parent.width * Math.max(0, Math.min(100, Number(modelData.sync_percent || 0))) / 100
-                                    height: parent.height
-                                    radius: parent.radius
-                                    color: Number(modelData.sync_percent || 0) >= 95 ? "#73bf69" : "#f2cc0c"
-                                }
-                            }
-
-                            Label {
-                                text: root.fmt(modelData.sync_stage) + "  " + root.pct(modelData.sync_percent)
-                                color: "#f4f7ff"
-                                font.bold: true
-                            }
-
-                            GridLayout {
-                                width: parent.width
-                                columns: 3
-                                columnSpacing: 10
-                                rowSpacing: 4
-                                Label { text: "Height"; color: "#9da6b8" }
-                                Label { text: "Connections"; color: "#9da6b8" }
-                                Label { text: "Protocol"; color: "#9da6b8" }
-                                Label { text: root.fmt(modelData.height); color: "#ffffff"; font.bold: true }
-                                Label { text: root.fmt(modelData.connections); color: "#ffffff"; font.bold: true }
-                                Label { text: root.fmt(modelData.protocol); color: "#ffffff"; font.bold: true }
-                            }
-
-                            Label {
-                                width: parent.width
-                                text: root.fmt(modelData.user_agent)
-                                color: "#aeb7c8"
-                                elide: Text.ElideRight
-                            }
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                visible: root.activeView === "runtime"
-                width: parent.width
-                radius: 16
-                color: root.panel
-                border.color: root.border
-                implicitHeight: peerColumn.implicitHeight + 26
-
-                Column {
-                    id: peerColumn
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 8
-
-                    Label {
-                        text: "Connected Peers"
-                        color: "#ffffff"
-                        font.pixelSize: 20
-                        font.bold: true
-                    }
-
-                    Flickable {
-                        id: peerTable
-                        width: parent.width
-                        height: peerRows.implicitHeight
-                        contentWidth: compact ? Math.max(width, 620) : width
-                        contentHeight: peerRows.implicitHeight
-                        clip: true
-                        flickableDirection: Flickable.HorizontalFlick
-
-                        ScrollBar.horizontal: ScrollBar { policy: compact ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
-
-                        Column {
-                            id: peerRows
-                            width: peerTable.contentWidth
-                            spacing: 8
-
-                            Repeater {
-                                model: {
-                                    var rows = []
-                                    var nodes = root.runtimeData.nodes || []
-                                    for (var i = 0; i < nodes.length; i++) {
-                                        var peers = nodes[i].peers || []
-                                        for (var j = 0; j < peers.length; j++)
-                                            rows.push({ node: nodes[i].node_name, peer: peers[j] })
-                                    }
-                                    return rows
-                                }
-
-                                RowLayout {
-                                    width: peerRows.width
-                                    spacing: 10
-
-                                    Label { text: modelData.node; color: "#dfe5ff"; Layout.preferredWidth: 150; elide: Text.ElideRight }
-                                    Label { text: modelData.peer.direction; color: "#aeb7c8"; Layout.preferredWidth: 80; elide: Text.ElideRight }
-                                    Label { text: modelData.peer.ip; color: "#ffffff"; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Label { text: modelData.peer.port; color: "#aeb7c8"; Layout.preferredWidth: 58; elide: Text.ElideRight }
-                                    Label { text: root.fmt(modelData.peer.height); color: "#ffffff"; Layout.preferredWidth: 92; horizontalAlignment: Text.AlignRight }
-                                    Label { text: modelData.peer.user_agent; color: "#aeb7c8"; Layout.preferredWidth: 220; elide: Text.ElideRight }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            GridLayout {
+            Runtime.RuntimeMonitorBenchmarksView {
                 visible: root.activeView === "benchmarks"
                 width: parent.width
-                columns: compact ? 2 : 4
-                columnSpacing: 10
-                rowSpacing: 10
-
-                Repeater {
-                    model: [
-                        { label: "Runs", value: root.fmt(root.benchmarkData.summary.run_count, "0") },
-                        { label: "Success", value: root.fmt(root.benchmarkData.summary.success_count, "0") },
-                        { label: "Running", value: root.fmt(root.benchmarkData.summary.running_count, "0") },
-                        { label: "Failed", value: root.fmt(root.benchmarkData.summary.failed_count, "0") }
-                    ]
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: 92
-                        radius: 14
-                        color: root.panelSoft
-                        border.color: root.border
-
-                        Column {
-                            anchors.fill: parent
-                            anchors.margins: 14
-                            spacing: 8
-                            Label { text: modelData.label; color: "#aeb7c8"; font.pixelSize: 13; font.bold: true }
-                            Label { text: modelData.value; color: "#7fd276"; font.pixelSize: 34; font.bold: true }
-                        }
-                    }
-                }
+                compact: root.compact
+                benchmarkData: root.benchmarkData
+                panel: root.panel
+                panelSoft: root.panelSoft
+                borderColor: root.border
             }
 
-            Rectangle {
-                visible: root.activeView === "benchmarks"
+            Runtime.RuntimeMonitorNotificationsView {
+                visible: root.activeView === "notifications"
                 width: parent.width
-                radius: 16
-                color: root.panel
-                border.color: root.border
-                implicitHeight: benchmarkColumn.implicitHeight + 26
+                compact: root.compact
+                notificationData: root.notificationData
+                panel: root.panel
+                panelSoft: root.panelSoft
+                borderColor: root.border
+            }
 
-                Column {
-                    id: benchmarkColumn
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 8
-
-                    Label {
-                        text: "Benchmark History"
-                        color: "#ffffff"
-                        font.pixelSize: 20
-                        font.bold: true
-                    }
-
-                    Flickable {
-                        id: benchmarkTable
-                        width: parent.width
-                        height: benchmarkRows.implicitHeight
-                        contentWidth: compact ? Math.max(width, 740) : width
-                        contentHeight: benchmarkRows.implicitHeight
-                        clip: true
-                        flickableDirection: Flickable.HorizontalFlick
-
-                        ScrollBar.horizontal: ScrollBar { policy: compact ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
-
-                        Column {
-                            id: benchmarkRows
-                            width: benchmarkTable.contentWidth
-                            spacing: 8
-
-                            Repeater {
-                                model: root.benchmarkData.runs || []
-
-                                RowLayout {
-                                    width: benchmarkRows.width
-                                    spacing: 10
-
-                                    Label { text: root.fmt(modelData.node_name); color: "#dfe5ff"; Layout.preferredWidth: 150; elide: Text.ElideRight }
-                                    Label { text: root.fmt(modelData.node_type); color: "#aeb7c8"; Layout.preferredWidth: 92; elide: Text.ElideRight }
-                                    Label { text: root.fmt(modelData.result); color: modelData.result === "success" ? "#7fd276" : "#f2cc0c"; Layout.preferredWidth: 84; elide: Text.ElideRight }
-                                    Label { text: root.seconds(modelData.total_sync_duration); color: "#ffffff"; Layout.preferredWidth: 90; horizontalAlignment: Text.AlignRight }
-                                    Label { text: root.fmt(modelData.final_height); color: "#ffffff"; Layout.preferredWidth: 100; horizontalAlignment: Text.AlignRight }
-                                    Label { text: root.fmt(modelData.sync_completed_at || modelData.sync_started_at); color: "#aeb7c8"; Layout.fillWidth: true; elide: Text.ElideRight }
-                                }
-                            }
-                        }
-                    }
-                }
+            Runtime.RuntimeMonitorSetupView {
+                visible: root.activeView === "setup"
+                width: parent.width
+                compact: root.compact
+                setupData: root.setupData
+                panel: root.panel
+                borderColor: root.border
             }
         }
     }

@@ -11,8 +11,13 @@ Item {
     }
     anchors.fill: parent
     readonly property bool compact: width < 760
+    readonly property bool narrow: width < 520
     readonly property bool singleColumn: width < 980
-    readonly property int pageGutter: compact ? 16 : 28
+    readonly property int pageGutter: narrow ? 10 : (compact ? 16 : 28)
+    readonly property int heroTitleSize: narrow ? 24 : (compact ? 30 : 42)
+    readonly property int sectionTitleSize: narrow ? 24 : (compact ? 26 : 28)
+    readonly property int sectionBodySize: narrow ? 15 : 16
+    readonly property int listTextSize: narrow ? 16 : 18
     readonly property color glassPanel: "#d9101722"
     readonly property color glassPanelSoft: "#cc131c28"
     readonly property color glassBorder: "#1fd8e1f0"
@@ -136,7 +141,7 @@ Item {
 
         Column {
             id: contentColumn
-            width: Math.min(scrollView.width - (compact ? 20 : 48), 1120)
+            width: Math.min(scrollView.width - (narrow ? 12 : (compact ? 20 : 48)), 1120)
             x: Math.round((scrollView.width - width) / 2)
             y: compact ? 16 : 28
             spacing: compact ? 20 : 28
@@ -153,7 +158,7 @@ Item {
                 Column {
                     id: heroColumn
                     anchors.fill: parent
-                    anchors.margins: 22
+                    anchors.margins: narrow ? 16 : 22
                     spacing: 12
 
                     Label {
@@ -166,27 +171,27 @@ Item {
                     Label {
                         width: parent.width
                         text: i18n ? i18n.tf("grinffindor_page_title", "Welcome to Grinffindor") : "Welcome to Grinffindor"
-                        font.pixelSize: scrollView.width < 700 ? 30 : 42
+                        font.pixelSize: root.heroTitleSize
                         font.bold: true
                         color: "#ffffff"
                         wrapMode: Text.WordWrap
                     }
 
                     Label {
-                        width: parent.width * 0.9
+                        width: parent.width
                         text: i18n ? i18n.tf("grinffindor_page_intro", "Grinffindor is a modern gateway into the world of Grin and Mimblewimble — built to make privacy-focused cryptocurrency more accessible, more practical, and more visual.")
                                    : "Grinffindor is a modern gateway into the world of Grin and Mimblewimble — built to make privacy-focused cryptocurrency more accessible, more practical, and more visual."
                         color: "#e8ebff"
-                        font.pixelSize: 18
+                        font.pixelSize: narrow ? 16 : 18
                         wrapMode: Text.WordWrap
                     }
 
                     Label {
-                        width: parent.width * 0.9
+                        width: parent.width
                         text: i18n ? i18n.tf("grinffindor_page_sub", "From seed nodes and faucets to browser wallets and UmbrelOS integration — everything the Grin community needs in one place.")
                                    : "From seed nodes and faucets to browser wallets and UmbrelOS integration — everything the Grin community needs in one place."
                         color: "#d8ddff"
-                        font.pixelSize: 16
+                        font.pixelSize: root.sectionBodySize
                         wrapMode: Text.WordWrap
                     }
                 }
@@ -300,15 +305,16 @@ Item {
                 Column {
                     id: valuesColumn
                     anchors.fill: parent
-                    anchors.margins: 22
+                    anchors.margins: narrow ? 16 : 22
                     spacing: 12
 
                     Label {
                         width: parent.width
                         text: i18n ? i18n.tf("grinffindor_values_title", "What Grinffindor Stands For") : "What Grinffindor Stands For"
                         color: "#ffffff"
-                        font.pixelSize: 28
+                        font.pixelSize: root.sectionTitleSize
                         font.bold: true
+                        wrapMode: Text.WordWrap
                     }
 
                     Repeater {
@@ -323,7 +329,7 @@ Item {
                             width: valuesColumn.width
                             text: "\u2022  " + modelData
                             color: "#f3f5ff"
-                            font.pixelSize: 18
+                            font.pixelSize: root.listTextSize
                             wrapMode: Text.WordWrap
                         }
                     }
@@ -332,7 +338,7 @@ Item {
                         width: parent.width
                         text: i18n ? i18n.tf("grinffindor_values_note", "Everything is open source, self-hostable, and designed to keep you in control of your funds and privacy.") : "Everything is open source, self-hostable, and designed to keep you in control of your funds and privacy."
                         color: "#d7dbe6"
-                        font.pixelSize: 16
+                        font.pixelSize: root.sectionBodySize
                         wrapMode: Text.WordWrap
                     }
                 }
@@ -353,15 +359,16 @@ Item {
                 Column {
                     id: privacyColumn
                     anchors.fill: parent
-                    anchors.margins: 22
+                    anchors.margins: narrow ? 16 : 22
                     spacing: 12
 
                     Label {
                         width: parent.width
                         text: i18n ? i18n.tf("grinffindor_privacy_title", "Privacy by Design. Yours.") : "Privacy by Design. Yours."
                         color: "#ffffff"
-                        font.pixelSize: 28
+                        font.pixelSize: root.sectionTitleSize
                         font.bold: true
+                        wrapMode: Text.WordWrap
                     }
 
                     Repeater {
@@ -376,7 +383,7 @@ Item {
                             width: privacyColumn.width
                             text: "\u2022  " + modelData
                             color: "#f3f5ff"
-                            font.pixelSize: 18
+                            font.pixelSize: root.listTextSize
                             wrapMode: Text.WordWrap
                         }
                     }

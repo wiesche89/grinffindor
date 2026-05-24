@@ -37,6 +37,12 @@
         <file>qml/pages/TileGrinffindor.qml</file>
         <file>qml/pages/TileGrinNode.qml</file>
         <file>qml/pages/TileRuntimeMonitor.qml</file>
+        <file>qml/pages/runtime/RuntimeMonitorBenchmarksView.qml</file>
+        <file>qml/pages/runtime/RuntimeMonitorMetricGrid.qml</file>
+        <file>qml/pages/runtime/RuntimeMonitorNotificationsView.qml</file>
+        <file>qml/pages/runtime/RuntimeMonitorRuntimeView.qml</file>
+        <file>qml/pages/runtime/RuntimeMonitorSetupView.qml</file>
+        <file>qml/pages/runtime/RuntimeMonitorTabs.qml</file>
         <file>qml/pages/TileMainnetFaucet.qml</file>
         <file>qml/pages/TileSettings.qml</file>
         <file>qml/pages/TileSupport.qml</file>
