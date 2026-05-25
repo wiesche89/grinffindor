@@ -207,10 +207,120 @@ Item {
 
                     Label {
                         width: parent.width
-                        text: i18n ? i18n.tf("umbrel_store_cta_note", "Template / concept basis for community stores") : "Template / concept basis for community stores"
+                        text: i18n ? i18n.tf("umbrel_store_cta_note", "Add this URL in Umbrel under App Store, three-dot menu, Community App Stores:") : "Add this URL in Umbrel under App Store, three-dot menu, Community App Stores:"
                         color: "#c4cada"
                         font.pixelSize: 14
                         wrapMode: Text.WordWrap
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: "<a href=\"" + (i18n ? i18n.tf("umbrel_store_url", "https://github.com/wiesche89/umbrel-community-app-store.git") : "https://github.com/wiesche89/umbrel-community-app-store.git") + "\">"
+                              + (i18n ? i18n.tf("umbrel_store_url", "https://github.com/wiesche89/umbrel-community-app-store.git") : "https://github.com/wiesche89/umbrel-community-app-store.git")
+                              + "</a>"
+                        color: "#dfe5ff"
+                        font.pixelSize: compact ? 15 : 18
+                        font.bold: true
+                        linkColor: "#dfe5ff"
+                        wrapMode: Text.WrapAnywhere
+                        onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                    }
+                }
+            }
+
+            GridLayout {
+                width: parent.width
+                columns: root.singleColumn ? 1 : 2
+                columnSpacing: 16
+                rowSpacing: 16
+
+                Repeater {
+                    model: [
+                        root.assetPath("media/images/umbrel/galleryHome.png"),
+                        root.assetPath("media/images/umbrel/galleryMap.png")
+                    ]
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: previewImage.height
+                        radius: 18
+                        color: "#0f1117"
+                        border.color: "#6b738066"
+                        border.width: 1
+                        clip: true
+
+                        Image {
+                            id: previewImage
+                            width: parent.width
+                            height: Math.round(width * 0.56)
+                            source: modelData
+                            fillMode: Image.PreserveAspectCrop
+                            smooth: true
+                            asynchronous: true
+                        }
+                    }
+                }
+            }
+
+            GridLayout {
+                width: parent.width
+                columns: root.singleColumn ? 1 : 2
+                columnSpacing: 16
+                rowSpacing: 16
+
+                Repeater {
+                    model: [
+                        {
+                            title: i18n ? i18n.tf("umbrel_mainnet_app_title", "Grin Node") : "Grin Node",
+                            body: i18n ? i18n.tf("umbrel_mainnet_app_body", "Mainnet node for running real Grin infrastructure. Includes Rust Grin and Grin++, a web dashboard, peer map, mempool and block explorer views, and persistent chain data.") : "Mainnet node for running real Grin infrastructure. Includes Rust Grin and Grin++, a web dashboard, peer map, mempool and block explorer views, and persistent chain data.",
+                            details: i18n ? i18n.tf("umbrel_mainnet_app_details", "Umbrel app id: grin-node. Dashboard: http://umbrel.local/grin-node. Ports: 3414 P2P, 3413 Foreign API, 3415 Owner API.") : "Umbrel app id: grin-node. Dashboard: http://umbrel.local/grin-node. Ports: 3414 P2P, 3413 Foreign API, 3415 Owner API."
+                        },
+                        {
+                            title: i18n ? i18n.tf("umbrel_testnet_app_title", "Grin Node Testnet") : "Grin Node Testnet",
+                            body: i18n ? i18n.tf("umbrel_testnet_app_body", "Separate testnet node for experiments, faucet work, and development. It runs isolated data directories so it can live next to your mainnet node without mixing chains.") : "Separate testnet node for experiments, faucet work, and development. It runs isolated data directories so it can live next to your mainnet node without mixing chains.",
+                            details: i18n ? i18n.tf("umbrel_testnet_app_details", "Umbrel app id: grin-node-testnet. Dashboard: http://umbrel.local/grin-node-testnet. Ports: 13414 P2P, 13413 Foreign API, 13415 Owner API.") : "Umbrel app id: grin-node-testnet. Dashboard: http://umbrel.local/grin-node-testnet. Ports: 13414 P2P, 13413 Foreign API, 13415 Owner API."
+                        }
+                    ]
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: appColumn.implicitHeight + 36
+                        radius: 24
+                        color: "#111318b0"
+                        border.color: "#6b738066"
+                        border.width: 1
+
+                        Column {
+                            id: appColumn
+                            anchors.fill: parent
+                            anchors.margins: 18
+                            spacing: 10
+
+                            Label {
+                                width: parent.width
+                                text: modelData.title
+                                color: "#ffffff"
+                                font.pixelSize: 22
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Label {
+                                width: parent.width
+                                text: modelData.body
+                                color: "#d8ddff"
+                                font.pixelSize: 15
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Label {
+                                width: parent.width
+                                text: modelData.details
+                                color: "#bfc8dd"
+                                font.pixelSize: 14
+                                wrapMode: Text.WrapAnywhere
+                            }
+                        }
                     }
                 }
             }
@@ -301,10 +411,11 @@ Item {
 
                     Repeater {
                         model: [
-                            i18n ? i18n.tf("umbrel_setup_step_1", "Open your Umbrel App Store.") : "Open your Umbrel App Store.",
-                            i18n ? i18n.tf("umbrel_setup_step_2", "Add the Grinffindor Community App Store via GitHub URL.") : "Add the Grinffindor Community App Store via GitHub URL.",
-                            i18n ? i18n.tf("umbrel_setup_step_3", "Install the desired apps with one click.") : "Install the desired apps with one click.",
-                            i18n ? i18n.tf("umbrel_setup_step_4", "Start using Grin instantly.") : "Start using Grin instantly."
+                            i18n ? i18n.tf("umbrel_setup_step_1", "Open Umbrel and go to App Store.") : "Open Umbrel and go to App Store.",
+                            i18n ? i18n.tf("umbrel_setup_step_2", "Click the three-dot menu and open Community App Stores.") : "Click the three-dot menu and open Community App Stores.",
+                            i18n ? i18n.tf("umbrel_setup_step_3", "Paste https://github.com/wiesche89/umbrel-community-app-store.git and click Add.") : "Paste https://github.com/wiesche89/umbrel-community-app-store.git and click Add.",
+                            i18n ? i18n.tf("umbrel_setup_step_4", "Open Grin Store and install Grin Node or Grin Node Testnet.") : "Open Grin Store and install Grin Node or Grin Node Testnet.",
+                            i18n ? i18n.tf("umbrel_setup_step_5", "Open the dashboard from Umbrel when installation is finished.") : "Open the dashboard from Umbrel when installation is finished."
                         ]
 
                         Label {

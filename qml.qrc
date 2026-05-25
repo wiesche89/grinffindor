@@ -13,6 +13,7 @@
         <file>qml/translation/en.json</file>
         <file>qml/translation/de.json</file>
         <file>qml/pages/TileExchange.qml</file>
+        <file>qml/pages/TileWallets.qml</file>
         <file>qml/pages/TileBrowserWallet.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletAuthPanel.qml</file>
         <file>qml/pages/browserwallet/BrowserWalletDeletePopup.qml</file>

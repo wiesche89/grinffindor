@@ -31,6 +31,7 @@ Rectangle {
     }
 
     signal menuRequested()
+    signal backRequested()
 
     height: walletRoot.veryPhoneMode ? 50 : (walletRoot.phoneMode ? 56 : 64)
     color: "#070e18"
@@ -43,6 +44,32 @@ Rectangle {
         anchors.leftMargin: walletRoot.pageMargin
         anchors.rightMargin: walletRoot.pageMargin
         spacing: walletRoot.veryPhoneMode ? 8 : 12
+
+        Rectangle {
+            implicitWidth: walletRoot.veryPhoneMode ? 76 : (walletRoot.phoneMode ? 88 : 108)
+            implicitHeight: walletRoot.veryPhoneMode ? 32 : (walletRoot.phoneMode ? 36 : 42)
+            Layout.alignment: Qt.AlignVCenter
+            radius: walletRoot.veryPhoneMode ? 12 : 14
+            color: backMa.pressed ? "#0e2030" : (backMa.containsMouse ? "#0a1a28" : "#0dffffff")
+            border.color: backMa.containsMouse ? "#1e3a50" : "#102030"
+            border.width: 1
+
+            Text {
+                anchors.centerIn: parent
+                text: walletRoot.tf("back", "Back")
+                color: "#f4f7ff"
+                font.pixelSize: walletRoot.veryPhoneMode ? 13 : 15
+                font.weight: Font.DemiBold
+            }
+
+            MouseArea {
+                id: backMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: topBar.backRequested()
+            }
+        }
 
         // Hamburger menu (compact / mobile)
         Item {

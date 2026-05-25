@@ -197,17 +197,28 @@ Item {
                         wrapMode: Text.WordWrap
                     }
 
-                    Text {
-                        width: parent.width
-                        text: "<a href=\"" + (i18n ? i18n.tf("explorer_link_url", "https://grincoin.org") : "https://grincoin.org") + "\">"
-                              + (i18n ? i18n.tf("explorer_link_label", "https://grincoin.org") : "https://grincoin.org")
-                              + "</a>"
-                        color: "#dfe5ff"
-                        font.pixelSize: 18
-                        font.bold: true
-                        linkColor: "#dfe5ff"
-                        wrapMode: Text.WordWrap
-                        onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                    Repeater {
+                        model: [
+                            {
+                                name: i18n ? i18n.tf("explorer_mainnet_label", "Mainnet") : "Mainnet",
+                                url: i18n ? i18n.tf("explorer_mainnet_url", "https://grincoin.org") : "https://grincoin.org"
+                            },
+                            {
+                                name: i18n ? i18n.tf("explorer_testnet_label", "Testnet") : "Testnet",
+                                url: i18n ? i18n.tf("explorer_testnet_url", "https://testnet.grincoin.org") : "https://testnet.grincoin.org"
+                            }
+                        ]
+
+                        Text {
+                            width: explorerColumn.width
+                            text: modelData.name + ": <a href=\"" + modelData.url + "\">" + modelData.url + "</a>"
+                            color: "#dfe5ff"
+                            font.pixelSize: 18
+                            font.bold: true
+                            linkColor: "#dfe5ff"
+                            wrapMode: Text.WordWrap
+                            onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                        }
                     }
                 }
             }

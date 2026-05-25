@@ -46,6 +46,13 @@ ApplicationWindow {
         tileModel.append({
             titleText: "",
             subtitleText: "",
+            buttonText: i18n.tf("tile_grinffindor", "Grinffindor"),
+            imageSource: root.assetPath("media/tiles/tile_grinffindor.PNG"),
+            pageFile: "TileGrinffindor.qml"
+        })
+        tileModel.append({
+            titleText: "",
+            subtitleText: "",
             buttonText: i18n.tf("tile_browser_wallet", "Browser Wallet"),
             imageSource: root.assetPath("media/tiles/tile_hardware_wallet.PNG"),
             pageFile: "TileBrowserWallet.qml"
@@ -53,9 +60,9 @@ ApplicationWindow {
         tileModel.append({
             titleText: "",
             subtitleText: "",
-            buttonText: i18n.tf("tile_grinffindor", "Grinffindor"),
-            imageSource: root.assetPath("media/tiles/tile_grinffindor.PNG"),
-            pageFile: "TileGrinffindor.qml"
+            buttonText: i18n.tf("tile_wallets", "Wallets"),
+            imageSource: root.assetPath("media/tiles/tile_login.PNG"),
+            pageFile: "TileWallets.qml"
         })
         tileModel.append({
             titleText: "",

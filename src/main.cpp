@@ -16,6 +16,9 @@
 #include "wallet/grinwalletcontroller.h"
 #include "wallet/walletsecurerandom.h"
 
+#define GRINFFINDOR_STRINGIFY_VALUE(value) #value
+#define GRINFFINDOR_STRINGIFY(value) GRINFFINDOR_STRINGIFY_VALUE(value)
+
 #ifdef Q_OS_WASM
 /**
  * @brief Resolves the base URL used to load static assets in a WebAssembly build.
@@ -52,7 +55,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("Grinffindor"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("grinffindor.org"));
-    QCoreApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
+    QCoreApplication::setApplicationVersion(QStringLiteral(GRINFFINDOR_STRINGIFY(APP_VERSION)));
     const QIcon appIcon(QStringLiteral(":/res/media/icons/IconGrinffindor.ico"));
     app.setWindowIcon(appIcon);
     qputenv("QML_XHR_ALLOW_FILE_READ", "1");

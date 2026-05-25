@@ -19,6 +19,7 @@ Item {
     property var runtimeData: ({ summary: {}, nodes: [] })
     property var benchmarkData: ({ summary: {}, runs: [] })
     property var notificationData: ({ summary: {}, notifications: [] })
+    readonly property int maxNotifications: 100
     property var setupData: ({ summary: {}, nodes: [], source: "prometheus" })
     property string errorText: ""
     property bool loading: false
@@ -303,18 +304,9 @@ Item {
     function buildNotifications() {
         requestQuery("grin_runtime_notification_info", function(rows) {
             var list = []
-            var active = 0
-            var warnings = 0
-            var errors = 0
             for (var i = 0; i < rows.length; i++) {
                 var labels = metricLabels(rows[i])
                 var isActive = labels.active === "1" || labels.active === "true"
-                if (isActive)
-                    active++
-                if (labels.severity === "warning")
-                    warnings++
-                if (labels.severity === "error")
-                    errors++
                 list.push({
                     id: labels.notification_id || "",
                     active: isActive,
@@ -333,14 +325,33 @@ Item {
                 })
             }
             list.sort(function(a, b) {
+                var timeA = Date.parse(a.created_at || a.updated_at || "")
+                var timeB = Date.parse(b.created_at || b.updated_at || "")
+                if (!isNaN(timeA) && !isNaN(timeB) && timeA !== timeB)
+                    return timeB - timeA
                 if (a.created_at !== b.created_at)
-                    return a.created_at < b.created_at ? 1 : -1
+                    return a.created_at > b.created_at ? -1 : 1
                 var nodeA = a.node_name || a.node_id || ""
                 var nodeB = b.node_name || b.node_id || ""
                 if (nodeA !== nodeB)
                     return nodeA > nodeB ? 1 : -1
                 return 0
             })
+            if (list.length > maxNotifications)
+                list = list.slice(0, maxNotifications)
+
+            var active = 0
+            var warnings = 0
+            var errors = 0
+            for (var j = 0; j < list.length; j++) {
+                if (list[j].active)
+                    active++
+                if (list[j].severity === "warning")
+                    warnings++
+                if (list[j].severity === "error")
+                    errors++
+            }
+
             notificationData = {
                 updated_at: Date.now() / 1000,
                 summary: {

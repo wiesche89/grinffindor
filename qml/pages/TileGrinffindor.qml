@@ -242,7 +242,7 @@ Item {
                     model: [
                         {
                             title: i18n ? i18n.tf("grinffindor_feature_wallet_title", "Browser Wallet") : "Browser Wallet",
-                            body:  i18n ? i18n.tf("grinffindor_feature_wallet_body", "A fully functional Grin wallet that runs directly in your browser — no installation, no app store. Powered by WebAssembly and built on the Slate V4 protocol.") : "A fully functional Grin wallet that runs directly in your browser — no installation, no app store. Powered by WebAssembly and built on the Slate V4 protocol."
+                            body:  i18n ? i18n.tf("grinffindor_feature_wallet_body", "An experimental Grin wallet that runs directly in your browser - no installation, no app store. It is still work in progress, so use it carefully and keep backups.") : "An experimental Grin wallet that runs directly in your browser - no installation, no app store. It is still work in progress, so use it carefully and keep backups."
                         },
                         {
                             title: i18n ? i18n.tf("grinffindor_feature_nodes_title", "Seed Nodes") : "Seed Nodes",

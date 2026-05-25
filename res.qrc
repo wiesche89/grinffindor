@@ -9,6 +9,7 @@
         <file>media/tiles/tile_grin_node.PNG</file>
         <file>media/tiles/tile_grinffindor.PNG</file>
         <file>media/tiles/tile_hardware_wallet.PNG</file>
+        <file>media/tiles/tile_login.PNG</file>
         <file>media/tiles/tile_mainnet_faucet.PNG</file>
         <file>media/tiles/tile_server.PNG</file>
         <file>media/tiles/tile_settings.PNG</file>
@@ -16,5 +17,7 @@
         <file>media/tiles/tile_testnet_faucet.PNG</file>
         <file>media/images/image_wallpaper_tile.png</file>
         <file>media/images/image_wallpaper.png</file>
+        <file>media/images/umbrel/galleryHome.png</file>
+        <file>media/images/umbrel/galleryMap.png</file>
     </qresource>
 </RCC>

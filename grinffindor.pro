@@ -102,7 +102,7 @@ INCLUDEPATH += $$PWD/3rdparty/secp256k1-zkp \
                $$PWD/src
 
 DEFINES += GRIN_HAS_SLATEPACK_CRYPTO
-DEFINES += APP_VERSION=\\\"$$VERSION\\\"
+DEFINES += APP_VERSION=$$VERSION
 
 DEFINES += USE_NUM_NONE \
            USE_FIELD_INV_BUILTIN \
@@ -136,6 +136,11 @@ ios {
 
 win32 {
     RC_FILE = $$PWD/windows/grinffindor.rc
+    CONFIG -= qtquickcompiler
+    QMAKE_CFLAGS_RELEASE += -ffunction-sections -fdata-sections
+    QMAKE_CXXFLAGS_RELEASE += -ffunction-sections -fdata-sections
+    QMAKE_LFLAGS_RELEASE += -Wl,--gc-sections
+    QMAKE_LFLAGS_RELEASE -= -Wl,-s
 }
 
 

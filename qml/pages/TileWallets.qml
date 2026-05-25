@@ -6,21 +6,18 @@ Item {
     id: root
     property var i18n: null
     signal backRequested()
+
     function assetPath(path) {
         return (typeof assetBaseUrl === "string" ? assetBaseUrl : "qrc:/res/") + path
     }
+
     anchors.fill: parent
     readonly property bool compact: width < 760
     readonly property bool singleColumn: width < 980
     readonly property int pageGutter: compact ? 16 : 28
-    readonly property color glassPanel: "#d9101722"
-    readonly property color glassPanelSoft: "#cc131c28"
     readonly property color glassBorder: "#1fd8e1f0"
 
-    Rectangle {
-        anchors.fill: parent
-        color: "#05070b"
-    }
+    Rectangle { anchors.fill: parent; color: "#05070b" }
 
     Image {
         anchors.fill: parent
@@ -28,46 +25,16 @@ Item {
         fillMode: Image.PreserveAspectCrop
         smooth: true
         asynchronous: true
-        z: 0
     }
 
-    Rectangle {
-        anchors.fill: parent
-        color: "#660a0e14"
-    }
+    Rectangle { anchors.fill: parent; color: "#730a0e14" }
 
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
             GradientStop { position: 0.0; color: "#a00b1017" }
-            GradientStop { position: 0.32; color: "#780e141d" }
-            GradientStop { position: 0.68; color: "#880b1017" }
+            GradientStop { position: 0.42; color: "#780e141d" }
             GradientStop { position: 1.0; color: "#b0090d14" }
-        }
-    }
-
-    Rectangle {
-        anchors.fill: parent
-        color: "transparent"
-
-        Rectangle {
-            width: parent.width * 0.56
-            height: width
-            radius: width / 2
-            x: parent.width - width * 0.72
-            y: -height * 0.24
-            color: "#5b7cff"
-            opacity: 0.035
-        }
-
-        Rectangle {
-            width: parent.width * 0.42
-            height: width
-            radius: width / 2
-            x: -width * 0.18
-            y: parent.height * 0.30
-            color: "#55d6ff"
-            opacity: 0.03
         }
     }
 
@@ -123,9 +90,7 @@ Item {
         contentWidth: width
         contentHeight: contentColumn.implicitHeight + 56
 
-        ScrollBar.vertical: ScrollBar {
-            policy: ScrollBar.AsNeeded
-        }
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
         Column {
             id: contentColumn
@@ -149,7 +114,7 @@ Item {
                     spacing: 12
 
                     Label {
-                        text: i18n ? i18n.tf("exchange_page_eyebrow", "Trading Access") : "Trading Access"
+                        text: i18n ? i18n.tf("wallets_page_eyebrow", "Wallets and node software") : "Wallets and node software"
                         color: "#b8becf"
                         font.pixelSize: 14
                         font.bold: true
@@ -157,7 +122,7 @@ Item {
 
                     Label {
                         width: parent.width
-                        text: i18n ? i18n.tf("exchange_page_title", "Exchange") : "Exchange"
+                        text: i18n ? i18n.tf("wallets_page_title", "Wallets") : "Wallets"
                         font.pixelSize: scrollView.width < 700 ? 30 : 42
                         font.bold: true
                         color: "#ffffff"
@@ -166,7 +131,7 @@ Item {
 
                     Label {
                         width: parent.width * 0.9
-                        text: i18n ? i18n.tf("exchange_page_intro", "Do you want to trade or acquire GRIN? Here you will find a selection of exchanges where GRIN is currently available:") : "Do you want to trade or acquire GRIN? Here you will find a selection of exchanges where GRIN is currently available:"
+                        text: i18n ? i18n.tf("wallets_page_intro", "Choose the official Grin command-line tools or a community GUI wallet. The official grin and grin-wallet downloads do not include a graphical interface.") : "Choose the official Grin command-line tools or a community GUI wallet. The official grin and grin-wallet downloads do not include a graphical interface."
                         color: "#e8ebff"
                         font.pixelSize: 18
                         wrapMode: Text.WordWrap
@@ -183,32 +148,35 @@ Item {
                 Repeater {
                     model: [
                         {
-                            title: "nonlogs.io",
-                            url: "https://nonlogs.io",
-                            body: i18n ? i18n.tf("exchange_nonlogs_body", "Access the platform directly and review its available GRIN markets, trading flow, and account requirements.") : "Access the platform directly and review its available GRIN markets, trading flow, and account requirements."
+                            title: i18n ? i18n.tf("wallets_rust_title", "Grin Rust Node + CLI Wallet") : "Grin Rust Node + CLI Wallet",
+                            url: "https://grin.mw/download",
+                            body: i18n ? i18n.tf("wallets_rust_body", "Official Grin downloads for the Rust node and command-line grin-wallet. Use this when you want the reference tools and are comfortable with terminal-based setup.") : "Official Grin downloads for the Rust node and command-line grin-wallet. Use this when you want the reference tools and are comfortable with terminal-based setup.",
+                            platforms: i18n ? i18n.tf("wallets_rust_platforms", "Windows, macOS, Linux. Homebrew and Snap options are listed on the official download page.") : "Windows, macOS, Linux. Homebrew and Snap options are listed on the official download page."
                         },
                         {
-                            title: "gate.io",
-                            url: "https://gate.io",
-                            body: i18n ? i18n.tf("exchange_gate_body", "Check the exchange for GRIN availability, market depth, and the specific trading options offered on the platform.") : "Check the exchange for GRIN availability, market depth, and the specific trading options offered on the platform."
+                            title: "Grim",
+                            url: "https://getgrin.github.io",
+                            body: i18n ? i18n.tf("wallets_grim_body", "Community GUI node and wallet for Grin. It is listed by the Grin project for users who want a graphical wallet and node experience.") : "Community GUI node and wallet for Grin. It is listed by the Grin project for users who want a graphical wallet and node experience.",
+                            platforms: i18n ? i18n.tf("wallets_grim_platforms", "Windows, Linux, macOS, Android, and iOS.") : "Windows, Linux, macOS, Android, and iOS."
                         },
                         {
-                            title: "noirtrade.com",
-                            url: "https://noirtrade.com",
-                            body: i18n ? i18n.tf("exchange_noirtrade_body", "Review the service details, supported GRIN access paths, and the platform conditions before using it.") : "Review the service details, supported GRIN access paths, and the platform conditions before using it."
+                            title: "Grin++",
+                            url: "https://grinplusplus.github.io",
+                            body: i18n ? i18n.tf("wallets_grinpp_body", "Community Grin GUI node and wallet written in C++. It is listed as a community project on the official Grin download page.") : "Community Grin GUI node and wallet written in C++. It is listed as a community project on the official Grin download page.",
+                            platforms: i18n ? i18n.tf("wallets_grinpp_platforms", "Windows, Linux, macOS, and Android.") : "Windows, Linux, macOS, and Android."
                         }
                     ]
 
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: exchangeCardColumn.implicitHeight + 36
+                        implicitHeight: walletCardColumn.implicitHeight + 36
                         radius: 24
                         color: "#111318b0"
                         border.color: "#6b738066"
                         border.width: 1
 
                         Column {
-                            id: exchangeCardColumn
+                            id: walletCardColumn
                             anchors.fill: parent
                             anchors.margins: 18
                             spacing: 10
@@ -228,7 +196,7 @@ Item {
                                 color: "#dfe5ff"
                                 font.pixelSize: 16
                                 linkColor: "#dfe5ff"
-                                wrapMode: Text.WordWrap
+                                wrapMode: Text.WrapAnywhere
                                 onLinkActivated: function(link) { Qt.openUrlExternally(link) }
                             }
 
@@ -237,6 +205,14 @@ Item {
                                 text: modelData.body
                                 color: "#d8ddff"
                                 font.pixelSize: 15
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Label {
+                                width: parent.width
+                                text: modelData.platforms
+                                color: "#bfc8dd"
+                                font.pixelSize: 14
                                 wrapMode: Text.WordWrap
                             }
                         }
@@ -260,7 +236,7 @@ Item {
 
                     Label {
                         width: parent.width
-                        text: i18n ? i18n.tf("exchange_note_title", "Please Note") : "Please Note"
+                        text: i18n ? i18n.tf("wallets_note_title", "Use Carefully") : "Use Carefully"
                         color: "#ffffff"
                         font.pixelSize: 28
                         font.bold: true
@@ -269,7 +245,7 @@ Item {
 
                     Label {
                         width: parent.width
-                        text: i18n ? i18n.tf("exchange_note_body", "Please note that each platform offers different features, fee structures, and liquidity. Before using any exchange, review the relevant conditions and security measures carefully.") : "Please note that each platform offers different features, fee structures, and liquidity. Before using any exchange, review the relevant conditions and security measures carefully."
+                        text: i18n ? i18n.tf("wallets_note_body", "The Grin website lists community projects with a use-at-your-own-risk note. Always verify downloads, keep backups of your recovery phrase, and prefer official project links.") : "The Grin website lists community projects with a use-at-your-own-risk note. Always verify downloads, keep backups of your recovery phrase, and prefer official project links."
                         color: "#e8ebff"
                         font.pixelSize: 16
                         wrapMode: Text.WordWrap

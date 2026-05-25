@@ -302,6 +302,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         onMenuRequested: mobileSidebarDrawer.open()
+        onBackRequested: root.backRequested()
     }
 
     Column {
