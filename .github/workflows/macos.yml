@@ -15,7 +15,10 @@ env:
 jobs:
   build-macos:
     name: macOS
-    runs-on: macos-latest
+    # Qt 6.8.1 still links AGL, which newer macOS SDKs no longer ship.
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
 
     steps:
       - uses: actions/checkout@v4
