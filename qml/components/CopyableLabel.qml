@@ -5,6 +5,7 @@ Item {
     id: root
 
     property alias text: label.text
+    property alias textFormat: label.textFormat
     property string copiedValue: ""
     property bool copyEnabled: true
     property bool showFeedback: true

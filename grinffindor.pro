@@ -12,6 +12,7 @@ QMAKE_TARGET_DESCRIPTION = Grinffindor wallet and ecosystem client
 QT_WASM_INITIAL_MEMORY = 128MB
 
 SOURCES += src/main.cpp \
+           src/testnetblockprovider.cpp \
            src/nodefooterstatus.cpp \
            src/platformbridge.cpp \
            src/wallet/grinwalletstorage.cpp \
@@ -59,6 +60,7 @@ SOURCES += src/main.cpp \
            3rdparty/secp256k1-zkp/src/secp256k1.c
 
 HEADERS += src/nodefooterstatus.h \
+           src/testnetblockprovider.h \
            src/platformbridge.h \
            src/wallet/grinwalletstorage.h \
            src/wallet/grinwalletplatformhelpers.h \

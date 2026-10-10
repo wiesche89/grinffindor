@@ -45,14 +45,6 @@ ApplicationWindow {
         tileModel.append({
             titleText: "",
             subtitleText: "",
-            buttonText: "MWixnet · Testnet",
-            imageSource: root.assetPath("media/tiles/tile_mwixnet.PNG"),
-            pageFile: "TileMwixnet.qml"
-        })
-
-        tileModel.append({
-            titleText: "",
-            subtitleText: "",
             buttonText: i18n.tf("tile_grinffindor", "Grinffindor"),
             imageSource: root.assetPath("media/tiles/tile_grinffindor.PNG"),
             pageFile: "TileGrinffindor.qml"
@@ -63,6 +55,13 @@ ApplicationWindow {
             buttonText: i18n.tf("tile_browser_wallet", "Browser Wallet"),
             imageSource: root.assetPath("media/tiles/tile_hardware_wallet.PNG"),
             pageFile: "TileBrowserWallet.qml"
+        })
+        tileModel.append({
+            titleText: "",
+            subtitleText: "",
+            buttonText: "MWixnet Testnet",
+            imageSource: root.assetPath("media/tiles/tile_mwixnet.PNG"),
+            pageFile: "TileMwixnet.qml"
         })
         tileModel.append({
             titleText: "",
@@ -142,7 +141,6 @@ ApplicationWindow {
         category: "grinffindor"
 
         property string languageCode: "en"
-        property string mwixnetTestnetRpcUrl: ""
         property string runtimePrometheusUrl: "https://prometheus.grinffindor.org"
     }
 

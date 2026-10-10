@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "../components"
 
 Item {
     id: root
@@ -12,13 +13,61 @@ Item {
         return (typeof assetBaseUrl === "string" ? assetBaseUrl : "qrc:/res/") + path
     }
     property var i18n: null
-    property var settingsStore: null
     signal backRequested()
     anchors.fill: parent
 
-    property string endpoint: settingsStore ? settingsStore.mwixnetTestnetRpcUrl : ""
+    readonly property string endpoint: "https://mwixnet.grinffindor.org/v1"
     property var statusData: null
+    property var activityData: null
+    property var transactionData: null
+    property string selectedKernel: ""
+    property string kernelFilter: ""
+    property bool pollingEnabled: true
+    property var blockProvider: typeof testnetBlockProvider !== "undefined" ? testnetBlockProvider : null
+    property alias kernelModel: kernels
+    ListModel { id: kernels }
+
+    function updateTransactions(value) {
+        transactionData = value
+        var rows = value ? value.transactions.slice() : []
+        rows.sort(function(a, b) { return (b.block_height || 0) - (a.block_height || 0) || a.kernel.localeCompare(b.kernel) })
+        for (var i = 0; i < rows.length; ++i) {
+            var tx = rows[i]
+            var found = i
+            while (found < kernels.count && kernels.get(found).kernel !== tx.kernel) ++found
+            if (found === kernels.count) kernels.insert(i, {kernel: tx.kernel, blockHeight: -1, confirmations: -1, checkedAtHeight: -1})
+            else if (found !== i) kernels.move(found, i, 1)
+            kernels.set(i, {kernel: tx.kernel, blockHeight: tx.block_height === null ? -1 : tx.block_height,
+                confirmations: tx.confirmations === null ? -1 : tx.confirmations,
+                checkedAtHeight: tx.checked_at_height === null ? -1 : tx.checked_at_height})
+        }
+        if (kernels.count > rows.length) kernels.remove(rows.length, kernels.count - rows.length)
+        var selected = rows.some(function(tx) { return tx.kernel === selectedKernel })
+        if (!selected) selectedKernel = ""
+    }
     property var statsData: null
+    property var serverInfo: null
+    property var routeData: null
+    readonly property bool routeAvailable: routeData !== null
+    property bool routeExpanded: false
+    property bool usageExpanded: false
+    readonly property string usageExample: {
+        if (!fresh || !routeData || !serverInfo) return ""
+        var next = routeData.next
+        // Public onion key supplied for this Testnet mixer; get_route exposes only its identity key.
+        if (!next || next.onion_address !== "56bkem4ly7oebmtw7y5d25veoi4t47txqvxlptsy7kctsfid6ekgsuqd.onion"
+                || next.identity_key !== "ef82a2338bc7dc40b276fe3a3d76a472393e7e77856eb7ce58fa85391503f114") return ""
+        var wallet = "./target/release/grin-wallet --testnet"
+        return ["# Select an unspent output", wallet + " outputs", "",
+                "# Swap the selected output", wallet + " mwixnet \\",
+                "  <OUTPUT_COMMITMENT|MINIMUM_AMOUNT|max> \\",
+                "  --server " + routeData.server.onion_address + " \\",
+                "  --fee_per_hop " + Math.max(serverInfo.minimum_fee, 12500000) + " \\",
+                "  --key " + routeData.server.onion_key + " \\",
+                "  --key a6920c1ef8bd8bb14fe4940521eca294f797856baaa307eb51894dda157b1477",
+                "", "# Help", wallet + " mwixnet --help"].join("\n")
+    }
+
     property string errorText: ""
     property double receivedAt: 0
     property double now: Date.now()
@@ -28,7 +77,6 @@ Item {
     readonly property bool fresh: receivedAt > 0 && now - receivedAt < 45000 && errorText === ""
     readonly property string phase: fresh && statusData ? statusData.phase : "unavailable"
     readonly property bool active: visible && fresh && ["validating", "mixing", "submitting", "checking_confirmations"].indexOf(phase) >= 0
-    readonly property int stage: ["validating", "mixing", "submitting", "checking_confirmations"].indexOf(phase)
 
     function cancel() {
         requestId++
@@ -43,12 +91,17 @@ Item {
         errorText = message
         statusData = null
         statsData = null
+        activityData = null
+        updateTransactions(null)
+        selectedKernel = ""
+        serverInfo = null
+        routeData = null
         receivedAt = 0
     }
 
     function validStatus(value) {
         return value && value.network === "testnet"
-                && ["swap", "mixer"].indexOf(value.role) >= 0
+                && value.role === "swap"
                 && ["idle", "validating", "mixing", "submitting", "checking_confirmations", "failed"].indexOf(value.phase) >= 0
                 && typeof value.started_at === "number" && isFinite(value.started_at)
                 && typeof value.observed_at === "number" && isFinite(value.observed_at)
@@ -56,55 +109,133 @@ Item {
     }
 
     function counter(value) {
-        return typeof value === "number" && isFinite(value) && value >= 0 && Math.floor(value) === value
+        return typeof value === "number" && isFinite(value) && value >= 0 && value <= 9007199254740991 && Math.floor(value) === value
+    }
+
+    function validStats(value, status) {
+        if (!value || !status || value.started_at !== status.started_at
+                || !counter(value.completed) || !counter(value.failed)
+                || !counter(value.published_through_uptime_s) || value.window_s !== 300)
+            return false
+        var names = ["last_success_window_end_uptime_s", "last_failure_window_end_uptime_s"]
+        for (var i = 0; i < names.length; i++) {
+            var end = value[names[i]]
+            if (end !== undefined && end !== null
+                    && (!counter(end) || end % 300 !== 0 || end > value.published_through_uptime_s))
+                return false
+        }
+        return true
+    }
+
+    function validInfo(value) {
+        return value && value.network === "testnet" && value.role === "swap"
+                && typeof value.version === "string" && value.version.length > 0 && value.version.length <= 80
+                && counter(value.minimum_fee)
+                && (counter(value.round_interval_s) && value.round_interval_s > 0)
+    }
+
+    function validPeer(value) {
+        return value && /^[a-z2-7]{56}\.onion$/.test(value.onion_address)
+                && /^[0-9a-f]{64}$/.test(value.identity_key)
+    }
+
+    function validRoute(value) {
+        return value && value.network === "testnet" && validPeer(value.server)
+                && value.server.role === "swap"
+                && /^[0-9a-f]{64}$/.test(value.server.onion_key)
+                && (value.next === null || validPeer(value.next))
+    }
+
+    function validActivity(value, status) {
+        return value && validStatus(value.status) && value.status.started_at === status.started_at
+                && (value.unprocessed === null || counter(value.unprocessed)) && counter(value.round_inputs)
+                && (value.awaiting_confirmation === undefined || value.awaiting_confirmation === null || counter(value.awaiting_confirmation))
+                && (value.completed_phases === undefined || (Array.isArray(value.completed_phases)
+                    && value.completed_phases.length <= 4 && value.completed_phases.every(function(phase) {
+                        return ["validating", "mixing", "submitting", "checking_confirmations"].indexOf(phase) >= 0
+                    })))
+    }
+
+    function validTransactions(value, status) {
+        if (!value || value.network !== "testnet" || value.started_at !== status.started_at
+                || !Array.isArray(value.transactions) || value.transactions.length > 32) return false
+        var seen = {}
+        for (var i = 0; i < value.transactions.length; i++) {
+            var tx = value.transactions[i]
+            if (!tx || !/^[0-9a-f]{66}$/.test(tx.kernel) || seen[tx.kernel]) return false
+            seen[tx.kernel] = true
+            var unknown = tx.block_height === null && tx.confirmations === null && tx.checked_at_height === null
+            if (!unknown && (!counter(tx.block_height) || !counter(tx.checked_at_height)
+                    || !counter(tx.confirmations) || tx.checked_at_height < tx.block_height
+                    || tx.confirmations !== tx.checked_at_height - tx.block_height + 1)) return false
+        }
+        return true
     }
 
     function applyResponses(payload) {
-        if (!Array.isArray(payload) || payload.length !== 2) {
+        if (!Array.isArray(payload) || payload.length < 2 || payload.length > 9) {
             fail(qsTr("Invalid RPC response."))
             return
         }
-        var status = null
-        var stats = null
+        var results = {}
+        var seen = {}
         for (var i = 0; i < payload.length; i++) {
             var response = payload[i]
-            if (!response || response.jsonrpc !== "2.0" || response.error) {
-                fail(qsTr("MWixnet status API unavailable."))
+            if (!response || response.jsonrpc !== "2.0" || !counter(response.id)
+                    || response.id < 1 || response.id > 9 || seen[response.id]) {
+                fail(qsTr("Invalid RPC response."))
                 return
             }
-            if (response.id === 1 && !status) status = response.result
-            else if (response.id === 2 && !stats) stats = response.result
-            else { fail(qsTr("Invalid RPC response.")); return }
+            seen[response.id] = true
+            results[response.id] = response.error ? null : response.result
         }
-        if (!validStatus(status)) {
-            fail(qsTr("Expected a MWixnet Testnet status response."))
+        var status = validStatus(results[1]) ? results[1] : null
+        var stats = validStats(results[2], status) ? results[2] : null
+        if (!status || !stats) {
+            fail(qsTr("MWixnet status is temporarily unavailable."))
             return
         }
-        if (!stats || stats.started_at !== status.started_at || !counter(stats.completed)
-                || !counter(stats.failed) || !counter(stats.published_through_uptime_s)
-                || stats.window_s !== 300) {
-            fail(qsTr("Invalid round statistics."))
-            return
+        if (statusData && statusData.started_at !== status.started_at) {
+            selectedKernel = ""
         }
+        activityData = validActivity(results[8], status) ? results[8] : null
+        var transactions = validTransactions(results[9], status) ? results[9] : null
+        updateTransactions(transactions)
+        if (activityData) status = activityData.status
         statusData = status
         statsData = stats
+        serverInfo = validInfo(results[3]) ? results[3] : null
+        routeData = validRoute(results[4]) ? results[4] : null
         errorText = ""
         receivedAt = Date.now()
         now = receivedAt
     }
 
-    function validEndpoint(url) {
-        return /^https:\/\/[^\s\/@?#]+(?:\/[^\s?#]*)?$/.test(url)
-                || /^http:\/\/(?:127\.0\.0\.1|localhost)(?::[0-9]+)?\/[^\s?#]*$/.test(url)
+    function phaseLabel(status) {
+        if (!fresh || !status) return qsTr("Unavailable")
+        if (status.phase === "failed" && activityData && activityData.unprocessed > 0)
+            return qsTr("Retry next round")
+        var labels = {idle: qsTr("Idle"), validating: qsTr("Validating"), mixing: qsTr("Mixing"),
+            submitting: qsTr("Submitting"), checking_confirmations: qsTr("Checking chain"), failed: qsTr("Attempt failed")}
+        return labels[status.phase]
+    }
+
+    function uptime(status) {
+        if (!fresh || !status) return "—"
+        var seconds = status.observed_at - status.started_at
+        return Math.floor(seconds / 3600) + "h " + Math.floor(seconds % 3600 / 60) + "m"
+    }
+
+    function lastSuccess(stats) {
+        if (!fresh || !stats || stats.last_success_window_end_uptime_s === undefined
+                || stats.last_success_window_end_uptime_s === null) return "—"
+        var end = stats.started_at + stats.last_success_window_end_uptime_s
+        return Qt.formatDateTime(new Date((end - 300) * 1000), "dd MMM hh:mm") + "–"
+                + Qt.formatDateTime(new Date(end * 1000), "hh:mm")
     }
 
     function refresh() {
-        if (!visible || loading || endpoint.trim() === "") return
-        // Keep credentials out of the persisted endpoint and public RPC requests.
-        if (!validEndpoint(endpoint)) {
-            fail(qsTr("Use an HTTPS RPC URL, or HTTP on localhost for development."))
-            return
-        }
+        if (!pollingEnabled || !visible || loading) return
         loading = true
         var generation = ++requestId
         var xhr = new XMLHttpRequest()
@@ -114,39 +245,26 @@ Item {
             timeout.stop()
             pending = null
             loading = false
-            if (xhr.status !== 200) { fail(qsTr("RPC unreachable. Check the endpoint and browser access policy.")); return }
+            if (xhr.status !== 200) { fail(qsTr("MWixnet status is temporarily unavailable.")); return }
             try { applyResponses(JSON.parse(xhr.responseText)) }
             catch (e) { fail(qsTr("Invalid RPC response.")) }
         }
         try {
-            xhr.open("POST", endpoint)
-            xhr.setRequestHeader("Content-Type", "application/json")
-            xhr.setRequestHeader("Cache-Control", "no-cache")
+            xhr.open("GET", endpoint)
             timeout.start()
-            xhr.send(JSON.stringify([
-                {jsonrpc: "2.0", method: "get_status", params: [], id: 1},
-                {jsonrpc: "2.0", method: "get_round_stats", params: [], id: 2}
-            ]))
+            xhr.send()
         } catch (e) {
             cancel()
             fail(qsTr("RPC request failed."))
         }
     }
 
-    onEndpointChanged: {
-        cancel()
-        statusData = null
-        statsData = null
-        receivedAt = 0
-        errorText = ""
-        refresh()
-    }
     onVisibleChanged: { if (visible) refresh(); else cancel() }
     Component.onCompleted: refresh()
     Component.onDestruction: cancel()
 
     Timer { id: timeout; interval: 10000; onTriggered: { root.cancel(); root.fail(qsTr("RPC request timed out.")) } }
-    Timer { interval: 15000; running: root.visible && root.endpoint !== ""; repeat: true; onTriggered: root.refresh() }
+    Timer { interval: 5000; running: root.visible && root.pollingEnabled; repeat: true; onTriggered: root.refresh() }
     Timer { interval: 1000; running: root.visible; repeat: true; onTriggered: root.now = Date.now() }
 
     Rectangle { anchors.fill: parent; color: "#05070b" }
@@ -192,7 +310,7 @@ Item {
                 onClicked: root.backRequested()
             }
             Label {
-                text: "MWixnet · Testnet"
+                text: "MWixnet Testnet"
                 color: "#ffffff"
                 font.pixelSize: root.compact ? 20 : 26
                 font.bold: true
@@ -208,114 +326,342 @@ Item {
         contentWidth: availableWidth
         clip: true
         ColumnLayout {
-            width: scroll.availableWidth
-            spacing: 22
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("Live server activity on Grin Testnet")
-                color: "#a9b4c2"; font.pixelSize: 16; wrapMode: Text.Wrap
-            }
+            width: Math.min(scroll.availableWidth, 1040)
+            x: (scroll.availableWidth - width) / 2
+            spacing: 18
+
             Pane {
+                id: serverCard
+                readonly property bool online: root.fresh && !!root.statusData
                 Layout.fillWidth: true
-                padding: 20
-                background: Rectangle { color: root.panel; radius: 14; border.color: root.border }
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+                padding: root.compact ? 20 : 28
+                background: Rectangle { color: root.panel; radius: 20; border.color: root.border }
                 contentItem: ColumnLayout {
-                    spacing: 24
-                    Label {
+                    spacing: 22
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: !root.fresh ? qsTr("No current data")
-                              : root.phase === "failed" ? qsTr("Last operation failed")
-                              : root.phase === "idle" ? qsTr("Idle · waiting for work")
-                              : root.phase === "validating" ? qsTr("Checking eligible inputs")
-                              : root.phase === "mixing" ? qsTr("Mixing")
-                              : root.phase === "submitting" ? qsTr("Submitting transaction")
-                              : qsTr("Checking pending transactions")
-                        color: root.phase === "failed" ? "#f4aa80" : "#f4f6f8"
-                        font.pixelSize: 21; wrapMode: Text.Wrap
+                        Label { text: qsTr("Swap server"); color: "#a9b4c2"; font.pixelSize: 14; Layout.fillWidth: true }
+                        Rectangle {
+                            width: 7; height: 7; radius: 4
+                            color: serverCard.online ? "#94c9a2" : "#8794a6"
+                        }
+                        Label { text: serverCard.online ? qsTr("Online") : qsTr("Unavailable"); color: "#a9b4c2"; font.pixelSize: 12 }
+                    }
+                    Label {
+                        text: root.phaseLabel(root.statusData)
+                        color: "#f4f7ff"
+                        font.pixelSize: 30
+                        font.weight: Font.DemiBold
+                    }
+                    Row {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Repeater {
+                            model: [
+                                {phase: "validating", label: qsTr("Validate"), hint: qsTr("Checks incoming swap requests.")},
+                                {phase: "mixing", label: qsTr("Mix"), hint: qsTr("Combines inputs for the round.")},
+                                {phase: "submitting", label: qsTr("Submit"), hint: qsTr("Sends the transaction to the network. Confirmation is still pending.")},
+                                {phase: "checking_confirmations", label: qsTr("Check chain"), hint: qsTr("Checks for blockchain confirmations. A completed check does not mean every transaction is confirmed.")}
+                            ]
+                            Column {
+                                id: phaseStep
+                                required property var modelData
+                                width: (parent.width - 3 * 6) / 4
+                                spacing: 10
+                                readonly property bool selected: root.active && root.statusData.phase === modelData.phase
+                                readonly property bool completed: root.fresh && root.activityData && (root.activityData.completed_phases || []).indexOf(modelData.phase) >= 0
+                                Rectangle {
+                                    objectName: "phaseBar_" + phaseStep.modelData.phase
+                                    property real pulse: 1
+                                    opacity: phaseStep.selected ? pulse : 1
+                                    width: parent.width; height: 5; radius: 3
+                                    color: phaseStep.selected ? "#FEF102" : phaseStep.completed ? "#94c9a2" : "#344356"
+                                    SequentialAnimation on pulse {
+                                        running: phaseStep.selected
+                                        loops: Animation.Infinite
+                                        NumberAnimation { from: 0.45; to: 1; duration: 800 }
+                                        NumberAnimation { to: 0.45; duration: 800 }
+                                    }
+                                }
+                                HoverHandler { id: phaseHover }
+                                TapHandler { id: phaseTap }
+                                ToolTip.visible: phaseHover.hovered || phaseTap.pressed
+                                ToolTip.text: phaseStep.modelData.hint + (phaseStep.selected ? "\n" + qsTr("Running now.") : phaseStep.completed ? "\n" + qsTr("✓ This step completed within the last 20 seconds.") : "")
+                                Label { text: phaseStep.modelData.label + (phaseStep.completed && !phaseStep.selected ? " ✓" : ""); color: phaseStep.selected ? "#FEF102" : "#a9b4c2"; font.pixelSize: 11 }
+                            }
+                        }
+                    }
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: root.compact ? 2 : 4
+                        columnSpacing: 12
+                        rowSpacing: 12
+                        Repeater {
+                            model: [
+                                {name: qsTr("Unprocessed"), value: root.fresh && root.activityData && root.activityData.unprocessed !== null ? String(root.activityData.unprocessed) : "—", lit: root.fresh && root.activityData && root.activityData.unprocessed > 0},
+                                {name: qsTr("In round"), value: root.fresh && root.activityData ? String(root.activityData.round_inputs) : "—", lit: root.fresh && root.activityData && root.activityData.round_inputs > 0},
+                                {name: qsTr("Awaiting confirmation"), value: root.fresh && root.activityData && root.counter(root.activityData.awaiting_confirmation) ? String(root.activityData.awaiting_confirmation) : "—", lit: root.fresh && root.activityData && root.activityData.awaiting_confirmation > 0},
+                                {name: qsTr("Uptime"), value: root.uptime(root.statusData), lit: false}
+                            ]
+                            Rectangle {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                implicitHeight: 90
+                                radius: 12
+                                color: modelData.lit ? "#18fef102" : "#0affffff"
+                                border.color: modelData.lit ? "#70fef102" : "#254f5b6b"
+                                ColumnLayout {
+                                    anchors.fill: parent; anchors.margins: 14; spacing: 6
+                                    Label { text: modelData.value; color: modelData.lit ? "#FEF102" : "#f4f7ff"; font.pixelSize: 28; font.weight: Font.DemiBold }
+                                    Label { text: modelData.name; color: "#a9b4c2"; font.pixelSize: 12 }
+                                }
+                            }
+                        }
                     }
                     RowLayout {
                         Layout.fillWidth: true
                         Repeater {
-                            model: [qsTr("Validate"), qsTr("Mix"), qsTr("Submit"), qsTr("Check chain")]
+                            model: [
+                                {label: qsTr("Rounds submitted"), value: serverCard.online && root.statsData ? String(root.statsData.completed) : "—"},
+                                {label: qsTr("Failed attempts"), value: serverCard.online && root.statsData ? String(root.statsData.failed) : "—"},
+                                {label: qsTr("Published through"), value: root.fresh && root.statsData ? Qt.formatDateTime(new Date((root.statsData.started_at + root.statsData.published_through_uptime_s) * 1000), "hh:mm") : "—"}
+                            ]
                             ColumnLayout {
-                                id: step
+                                id: statistic
                                 required property int index
-                                required property string modelData
+                                required property var modelData
+                                readonly property int textAlignment: index === 0 ? Text.AlignLeft : index === 1 ? Text.AlignHCenter : Text.AlignRight
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 1
-                                readonly property bool selected: root.active && root.stage === index
-                                Rectangle {
-                                    id: dot
-                                    Layout.alignment: Qt.AlignHCenter
-                                    width: 26; height: 26; radius: 13
-                                    color: step.selected ? "#FEF102" : "#344356"
-                                    SequentialAnimation on opacity {
-                                        running: step.selected; loops: Animation.Infinite
-                                        NumberAnimation { to: 0.35; duration: 650 }
-                                        NumberAnimation { to: 1; duration: 650 }
-                                        onRunningChanged: if (!running) dot.opacity = 1
+                                spacing: 8
+                                Label { text: modelData.value; color: "#f4f7ff"; font.pixelSize: 22; font.weight: Font.DemiBold; Layout.fillWidth: true; horizontalAlignment: statistic.textAlignment }
+                                Label { text: modelData.label; color: "#a9b4c2"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.Wrap; horizontalAlignment: statistic.textAlignment }
+                            }
+                        }
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: root.border }
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2
+                        rowSpacing: 10
+                        Label { text: qsTr("Last success window"); Layout.fillWidth: true; color: "#a9b4c2"; font.pixelSize: 12 }
+                        Label { text: root.lastSuccess(root.statsData); color: "#f4f7ff"; font.pixelSize: 12; Layout.alignment: Qt.AlignRight }
+                        Label { text: qsTr("Round interval"); color: "#a9b4c2"; font.pixelSize: 12 }
+                        Label { text: root.fresh && root.serverInfo && root.serverInfo.round_interval_s !== null ? root.serverInfo.round_interval_s + " s" : "—"; color: "#f4f7ff"; font.pixelSize: 12; Layout.alignment: Qt.AlignRight }
+                        Label { text: qsTr("Minimum fee"); color: "#a9b4c2"; font.pixelSize: 12 }
+                        Label { text: root.fresh && root.serverInfo ? (root.serverInfo.minimum_fee / 1000000000).toFixed(9).replace(/0+$/, "").replace(/\.$/, "") + " Testnet GRIN" : "—"; color: "#f4f7ff"; font.pixelSize: 12; Layout.alignment: Qt.AlignRight }
+                        Label { text: qsTr("Version"); color: "#a9b4c2"; font.pixelSize: 12 }
+                        Label { text: root.fresh && root.serverInfo ? root.serverInfo.version : "—"; color: "#f4f7ff"; font.pixelSize: 12; Layout.alignment: Qt.AlignRight; Layout.maximumWidth: 150; elide: Text.ElideRight; textFormat: Text.PlainText }
+                    }
+                }
+            }
+            Pane {
+                Layout.fillWidth: true
+                padding: root.compact ? 20 : 28
+                background: Rectangle { color: root.panel; radius: 20; border.color: root.border }
+                contentItem: ColumnLayout {
+                    spacing: 18
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { text: qsTr("Server connections"); color: "#f4f7ff"; font.pixelSize: 18; Layout.fillWidth: true }
+                        Label { visible: !root.fresh || !root.routeAvailable; text: qsTr("Unavailable"); color: "#a9b4c2"; font.pixelSize: 12 }
+                        AppButton {
+                            text: root.routeExpanded ? qsTr("Hide") : qsTr("Details")
+                            enabled: root.fresh && !!root.routeData
+                            onClicked: root.routeExpanded = !root.routeExpanded
+                        }
+                    }
+                    Repeater {
+                        model: root.routeExpanded && root.fresh && root.routeData ? [{name: qsTr("This server"), peer: root.routeData.server}, {name: qsTr("Next mixer"), peer: root.routeData.next}] : []
+                        ColumnLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label { text: modelData.name; color: "#f4f7ff"; font.pixelSize: 13 }
+                            Label { visible: !modelData.peer; text: qsTr("None configured"); color: "#a9b4c2"; font.pixelSize: 12 }
+                            Repeater {
+                                model: !modelData.peer ? [] : [
+                                    {label: qsTr("Onion address"), value: modelData.peer.onion_address},
+                                    {label: qsTr("Identity key"), value: modelData.peer.identity_key}
+                                ].concat(modelData.peer.onion_key ? [{label: qsTr("Onion key"), value: modelData.peer.onion_key}] : [])
+                                ColumnLayout {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: 3
+                                    Label { text: modelData.label; color: "#94a1b2"; font.pixelSize: 11 }
+                                    TextEdit {
+                                        text: modelData.value
+                                        Layout.fillWidth: true
+                                        readOnly: true
+                                        selectByMouse: true
+                                        wrapMode: TextEdit.WrapAnywhere
+                                        color: "#c8d2e0"
+                                        selectedTextColor: "#ffffff"
+                                        font.family: "monospace"
+                                        font.pixelSize: 12
+                                        textFormat: TextEdit.PlainText
                                     }
                                 }
-                                Label { text: step.modelData; color: step.selected ? "#FEF102" : "#a9b4c2"; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; font.pixelSize: 13 }
+                            }
+                        }
+                    }
+                }
+            }
+            Pane {
+                Layout.fillWidth: true
+                padding: root.compact ? 20 : 28
+                background: Rectangle { color: root.panel; radius: 20; border.color: root.border }
+                contentItem: ColumnLayout {
+                    spacing: 14
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { text: qsTr("Usage"); color: "#f4f7ff"; font.pixelSize: 18; Layout.fillWidth: true }
+                        AppButton {
+                            text: root.usageExpanded ? qsTr("Hide") : qsTr("Details")
+                            onClicked: root.usageExpanded = !root.usageExpanded
+                        }
+                    }
+                    Label {
+                        visible: root.usageExpanded
+                        text: root.usageExample.length > 0 ? qsTr("Try a swap with grin-wallet on Testnet.") : qsTr("No CLI example available for these connections.")
+                        color: "#a9b4c2"; font.pixelSize: 13
+                        Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
+                    Rectangle {
+                        visible: root.usageExpanded && root.usageExample.length > 0
+                        Layout.fillWidth: true
+                        implicitHeight: usageCode.implicitHeight + 28
+                        color: "#0bffffff"; radius: 10; border.color: root.border
+                        TextEdit {
+                            id: usageCode
+                            width: parent.width - 28
+                            x: 14; y: 14
+                            text: root.usageExample
+                            readOnly: true; selectByMouse: true
+                            wrapMode: TextEdit.WrapAnywhere
+                            textFormat: TextEdit.PlainText
+                            color: "#c8d2e0"; font.family: "monospace"; font.pixelSize: 12
+                        }
+                    }
+                    Label {
+                        visible: root.usageExpanded && root.usageExample.length > 0
+                        text: qsTr("Commitment: choose an output. Amount: choose the smallest eligible output at or above it. max: choose the largest.\nThe CLI prints the selected commitment and its full value before sending.")
+                        color: "#a9b4c2"; font.pixelSize: 12
+                        Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
+                    Label {
+                        visible: root.usageExpanded && root.usageExample.length > 0
+                        text: qsTr("The second onion key is verified for this Testnet mixer and is not supplied by the connections API.")
+                        color: "#94a1b2"; font.pixelSize: 11
+                        Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
+                }
+            }
+            Pane {
+                Layout.fillWidth: true
+                padding: root.compact ? 20 : 28
+                background: Rectangle { color: root.panel; radius: 20; border.color: root.border }
+                contentItem: ColumnLayout {
+                    spacing: 16
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { text: qsTr("On-chain kernels"); color: "#f4f7ff"; font.pixelSize: 20; Layout.fillWidth: true }
+                        Label { text: root.fresh && root.transactionData ? String(root.transactionData.transactions.length) : "—"; color: "#FEF102"; font.pixelSize: 20 }
+                    }
+                    TextField {
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("Find a kernel…")
+                        text: root.kernelFilter
+                        onTextEdited: root.kernelFilter = text
+                        color: "#f4f7ff"; placeholderTextColor: "#8794a6"
+                        selectByMouse: true
+                        background: Rectangle { color: "#0bffffff"; radius: 10; border.color: root.border }
+                    }
+                    Label {
+                        visible: !root.fresh || !root.transactionData || !root.transactionData.transactions.some(function(tx) { return tx.kernel.indexOf(root.kernelFilter.trim().toLowerCase()) >= 0 })
+                        text: !root.fresh || !root.transactionData ? qsTr("Kernel data unavailable") : root.kernelFilter.length > 0 ? qsTr("No matching kernel") : qsTr("No kernels observed on-chain yet")
+                        color: "#a9b4c2"; font.pixelSize: 14
+                        Layout.fillWidth: true; wrapMode: Text.Wrap
+                    }
+                    Repeater {
+                        model: kernels
+                        ColumnLayout {
+                            id: kernelEntry
+                            objectName: "kernel_" + kernel
+                            required property string kernel
+                            required property double blockHeight
+                            required property double confirmations
+                            required property double checkedAtHeight
+                            visible: root.fresh && kernel.indexOf(root.kernelFilter.trim().toLowerCase()) >= 0
+                            Layout.fillWidth: true
+                            spacing: 10
+                            Button {
+                                id: kernelRow
+                                Layout.fillWidth: true
+                                implicitHeight: 58
+                                onClicked: root.selectedKernel = root.selectedKernel === kernelEntry.kernel ? "" : kernelEntry.kernel
+                                background: Rectangle {
+                                    color: root.selectedKernel === kernelEntry.kernel ? "#18fef102" : kernelRow.hovered ? "#12ffffff" : "#07ffffff"
+                                    radius: 10
+                                    border.color: root.selectedKernel === kernelEntry.kernel ? "#80fef102" : "#254f5b6b"
+                                }
+                                contentItem: RowLayout {
+                                    spacing: 10
+                                    ColumnLayout {
+                                        Layout.fillWidth: true; spacing: 3
+                                        Label { text: kernelEntry.kernel.slice(0, root.compact ? 12 : 22) + "…" + kernelEntry.kernel.slice(-8); color: "#e8edf5"; font.family: "monospace"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideMiddle }
+                                        Label { text: kernelEntry.blockHeight < 0 ? qsTr("Confirmation unknown") : qsTr("Block ") + kernelEntry.blockHeight; color: "#94a1b2"; font.pixelSize: 11 }
+                                    }
+                                    Label { text: kernelEntry.confirmations < 0 ? "—" : kernelEntry.confirmations + qsTr(" conf."); color: kernelEntry.confirmations < 0 ? "#94a1b2" : "#94c9a2"; font.pixelSize: 12 }
+                                    Label { text: root.selectedKernel === kernelEntry.kernel ? "−" : "+"; color: "#FEF102"; font.pixelSize: 18 }
+                                }
+                            }
+                            ColumnLayout {
+                                visible: root.selectedKernel === kernelEntry.kernel
+                                Layout.fillWidth: true; spacing: 8
+                                Label { text: qsTr("Kernel excess"); color: "#94a1b2"; font.pixelSize: 12 }
+                                TextEdit {
+                                    Layout.fillWidth: true
+                                    text: kernelEntry.kernel
+                                    readOnly: true; selectByMouse: true; wrapMode: TextEdit.WrapAnywhere
+                                    color: "#f4f7ff"; font.family: "monospace"; font.pixelSize: 13
+                                    textFormat: TextEdit.PlainText
+                                }
+                                Label { text: kernelEntry.checkedAtHeight >= 0 ? qsTr("Checked at block ") + kernelEntry.checkedAtHeight : qsTr("Awaiting chain verification"); color: "#94a1b2"; font.pixelSize: 12 }
+                                Loader {
+                                    Layout.fillWidth: true
+                                    active: root.selectedKernel === kernelEntry.kernel
+                                    sourceComponent: MwixnetBlockDetails {
+                                        objectName: "blockDetails"
+                                        kernel: kernelEntry.kernel
+                                        provider: root.blockProvider
+                                        expectedHeight: kernelEntry.blockHeight
+                                        checkedAtHeight: kernelEntry.checkedAtHeight
+                                    }
+                                }
                             }
                         }
                     }
                     Label {
-                        Layout.fillWidth: true
-                        text: qsTr("Animation shows the sampled server phase, not individual swaps or confirmation progress.")
-                        color: "#a9b4c2"; wrapMode: Text.Wrap
+                        text: qsTr("Up to 32 on-chain observations. No link to individual requests.")
+                        color: "#94a1b2"; font.pixelSize: 11
+                        Layout.fillWidth: true; wrapMode: Text.Wrap
                     }
                 }
-            }
-            Label {
-                Layout.fillWidth: true
-                text: root.fresh && root.statusData && root.statsData
-                      ? (root.statusData.role === "swap" ? qsTr("Rounds submitted: %1").arg(root.statsData.completed) : qsTr("Mix requests completed: %1").arg(root.statsData.completed))
-                        + "  ·  " + qsTr("Failed: %1").arg(root.statsData.failed)
-                      : qsTr("Statistics unavailable")
-                color: "#f4f6f8"; font.pixelSize: 17; wrapMode: Text.Wrap
-            }
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("Totals since server start, published in completed five-minute windows. Submission does not mean blockchain confirmation.")
-                      + (root.fresh && root.statusData ? "\n" + qsTr("Server started: %1").arg(new Date(root.statusData.started_at * 1000).toLocaleString())
-                         + "\n" + qsTr("Received %1 s ago").arg(Math.max(0, Math.floor((root.now - root.receivedAt) / 1000))) : "")
-                color: "#a9b4c2"; wrapMode: Text.Wrap
-            }
-            Label { Layout.fillWidth: true; visible: root.errorText !== ""; text: root.errorText; color: "#f4aa80"; wrapMode: Text.Wrap }
-            Label { text: qsTr("Testnet RPC endpoint (/v1)"); color: "#f4f6f8" }
-            TextField {
-                id: endpointField
-                Layout.fillWidth: true
-                text: root.endpoint
-                placeholderText: "https://…/v1"
-                selectByMouse: true
-                color: "#f4f7ff"
-                placeholderTextColor: "#8794a6"
-                background: Rectangle { radius: 10; color: "#cc131c28"; border.color: root.border }
-                onAccepted: connectButton.clicked()
             }
             RowLayout {
-                Button {
-                    id: connectButton
-                    palette.button: "#131c28"
-                    palette.buttonText: "#f4f7ff"
-                    text: qsTr("Connect")
-                    onClicked: {
-                        var url = endpointField.text.trim()
-                        if (url !== "" && !root.validEndpoint(url)) {
-                            root.cancel()
-                            root.fail(qsTr("Use an HTTPS RPC URL without credentials, or localhost for development."))
-                            return
-                        }
-                        if (root.settingsStore) root.settingsStore.mwixnetTestnetRpcUrl = url
-                        else root.endpoint = url
-                        root.refresh()
-                    }
+                Layout.fillWidth: true
+                Label {
+                    Layout.fillWidth: true
+                    text: root.fresh ? qsTr("Totals since restart · 5-minute windows · times shown locally") : qsTr("Reconnecting automatically")
+                    color: "#94a1b2"
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
                 }
-                Button { palette.button: "#131c28"; palette.buttonText: "#f4f7ff"; text: root.loading ? qsTr("Loading…") : qsTr("Refresh"); enabled: !root.loading && root.endpoint !== ""; onClicked: root.refresh() }
             }
-            Label { Layout.fillWidth: true; visible: root.endpoint === ""; text: qsTr("Configure a public read-only Testnet RPC endpoint to see live activity."); color: "#a9b4c2"; wrapMode: Text.Wrap }
         }
     }
 }
