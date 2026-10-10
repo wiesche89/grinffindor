@@ -129,9 +129,13 @@ ios {
     QMAKE_INFO_PLIST = $$PWD/ios/Info.plist
     QMAKE_ASSET_CATALOGS = $$PWD/ios/Assets.xcassets
     QMAKE_ASSET_CATALOGS_APP_ICON = "AppIcon"
-    DEFINES += __yield=__builtin_arm_yield
     # Qt provides a compatible LaunchScreen.storyboard automatically;
     # do NOT set QMAKE_IOS_LAUNCH_SCREEN to avoid ibtool version conflicts.
+}
+
+# Qt 6.8.1 calls __yield on ARM; recent Apple Clang exposes the builtin instead.
+macx {
+    DEFINES += __yield=__builtin_arm_yield
 }
 
 win32 {
