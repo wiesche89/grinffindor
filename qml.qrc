@@ -38,6 +38,7 @@
         <file>qml/pages/TileGrinffindor.qml</file>
         <file>qml/pages/TileGrinNode.qml</file>
         <file>qml/pages/TileRuntimeMonitor.qml</file>
+        <file>qml/pages/TileMwixnet.qml</file>
         <file>qml/pages/runtime/RuntimeMonitorBenchmarksView.qml</file>
         <file>qml/pages/runtime/RuntimeMonitorMetricGrid.qml</file>
         <file>qml/pages/runtime/RuntimeMonitorNotificationsView.qml</file>

@@ -42,6 +42,13 @@ ApplicationWindow {
 
     function populateTiles() {
         tileModel.clear()
+        tileModel.append({
+            titleText: "",
+            subtitleText: "",
+            buttonText: "MWixnet · Testnet",
+            imageSource: root.assetPath("media/tiles/tile_mwixnet.PNG"),
+            pageFile: "TileMwixnet.qml"
+        })
 
         tileModel.append({
             titleText: "",
@@ -135,6 +142,7 @@ ApplicationWindow {
         category: "grinffindor"
 
         property string languageCode: "en"
+        property string mwixnetTestnetRpcUrl: ""
         property string runtimePrometheusUrl: "https://prometheus.grinffindor.org"
     }
 

@@ -153,6 +153,12 @@ jobs:
           qmake ../grinffindor.pro CONFIG+=release
           make -j$(nproc)
 
+      - name: Test QML pages
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: '"${{ env.QT_ROOT_DIR }}/bin/qmltestrunner" -input tests/qml'
+
       - name: Create AppImage
         run: |
           wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
@@ -427,7 +433,7 @@ jobs:
   testflight:
     name: TestFlight
     runs-on: macos-26
-    needs: [read-version]
+    needs: [read-version, build-macos, build-android, build-linux, build-windows, build-ios, build-wasm]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     env:
       IOS_BUNDLE_ID: org.wiesche89.grinffindor
@@ -609,22 +615,23 @@ jobs:
         run: |
           mkdir -p build-wasm && cd build-wasm
           "${{ env.QT_ROOT_DIR }}/../wasm_singlethread/bin/qmake" ../grinffindor.pro \
-            -spec wasm-emscripten CONFIG+=release CONFIG+=sdk_no_version_check
+            -spec wasm-emscripten CONFIG+=release
           make -j$(nproc)
 
       - name: Collect artifacts
         run: |
           mkdir -p wasm-dist
           cd build-wasm
-          cp grinffindor.html grinffindor.js grinffindor.wasm qtloader.js qtlogo.svg \
-             ../wasm-dist/ 2>/dev/null || true
-          [ -d media ] && cp -r media ../wasm-dist/ || true
+          for artifact in grinffindor.html grinffindor.js grinffindor.wasm qtloader.js qtlogo.svg; do
+            test -s "$artifact"
+            cp "$artifact" ../wasm-dist/
+          done
 
       - uses: actions/upload-artifact@v4
         with:
           name: grinffindor-wasm-${{ needs.read-version.outputs.app_version }}
           path: wasm-dist/
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Prepare image tags
         id: image-vars

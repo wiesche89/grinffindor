@@ -16,6 +16,29 @@ Qt Quick / QML application for desktop and WebAssembly, including a containerize
 
 The GitHub Actions Windows job now publishes both the deployed app directory and a `.msi` installer artifact built from that deployment tree.
 
+## MWixnet Testnet
+
+The MWixnet tile polls `get_status` and `get_round_stats` as a JSON-RPC batch
+on `/v1` every 15 seconds. Set its endpoint in the tile; the URL is saved in
+`mwixnetTestnetRpcUrl`. No endpoint is configured by default. HTTPS is required,
+except for localhost development. Credentials and query parameters are rejected.
+
+The animation follows the sampled server phase. Idle, failures and unavailable
+or stale responses stop it. Short phases between polls may not be visible.
+Requests time out after 10 seconds; samples expire after 45 seconds. Only Testnet
+responses are accepted. Counts cover completed five-minute windows since server
+start, not individual swaps or confirmed transactions.
+
+For WebAssembly, serve the RPC through an HTTPS endpoint permitted by
+`nginx.conf.template`'s `connect-src` policy, with appropriate CORS headers when
+using another origin. A same-origin proxy needs no CSP expansion. Restrict a
+public dashboard proxy to the two read methods, including batch requests;
+forwarding all of `/v1` also exposes the existing `swap` or `mix` method.
+Deployment and proxy configuration are separate from this local UI change.
+
+Run the tile tests with `qmltestrunner -input tests/qml` (a software backend can
+be selected with `QT_QUICK_BACKEND=software`).
+
 ## Android Build
 The project now includes an Android package template with network permissions and cleartext support for custom node endpoints.
 
@@ -45,7 +68,9 @@ Notes:
 - For App Store delivery, replace placeholder bundle identifiers, versioning, icons, and launch assets with production values.
 
 ## WebAssembly + Docker
-The Docker setup expects a prebuilt Qt WebAssembly output directory, analogous to `grin-node-docker`.
+GitHub Actions builds WebAssembly from source using pinned Qt and Emscripten versions, then packages those artifacts into the Docker image. Deployment does not require a local Qt build. The Dockerfile is the packaging stage, not the compiler.
+
+For local development only:
 
 1. Build the project with the Qt WebAssembly single-threaded kit.
 2. Ensure the generated output exists at `build/WebAssembly_Qt_6_10_1_single_threaded-Release`.
@@ -57,35 +82,20 @@ docker compose up --build -d
 
 4. Open `http://localhost:8084`.
 
-On GitHub Actions, the `WebAssembly` job now also builds the container from `Dockerfile`. Pull requests validate the image build, and pushes to `main` publish:
+On GitHub Actions, the `WebAssembly` job builds the container from `Dockerfile`. Pull requests validate the image build, and pushes to `main` publish:
 - `ghcr.io/<owner>/grinffindor:latest`
 - `ghcr.io/<owner>/grinffindor:sha-<commit>`
 - optionally `docker.io/<DOCKERHUB_USERNAME>/grinffindor:*` when `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are configured as repository secrets
 
+The TestFlight job runs only after all platform builds, including WebAssembly, succeed. Missing required WASM artifacts fail the job.
+
 ## Docker Hub Image Build
-Before building the container image, create the Qt WebAssembly output locally.
 
-1. Build the project with the Qt WebAssembly single-threaded kit.
-2. Ensure the generated output exists at `build/WebAssembly_Qt_6_10_1_single_threaded-Release`.
-3. Log in to Docker Hub:
-
-```sh
-docker login
-```
-
-4. Build and push the multi-architecture image:
-
-```sh
-docker buildx build --no-cache --platform linux/amd64,linux/arm64 ^
-  -t wiesche89/grinffindor:0.1.0 ^
-  -f Dockerfile ^
-  . ^
-  --push
-```
-
-Notes:
-- Adjust the tag, for example `0.1.1`, for new releases.
-- The image contains the prebuilt WASM assets and is ready to run behind `nginx`.
+Set `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` as repository secrets to publish
+Docker Hub images from the same CI-built WASM artifacts as GHCR. Deploy an image
+from a successful workflow by immutable digest; no local build or upload is
+required. See the WebAssembly job's image tags and revision labels to identify
+the source commit.
 
 ## VM Installation on Proxmox
 The recommended target is a small Ubuntu VM on Proxmox.
