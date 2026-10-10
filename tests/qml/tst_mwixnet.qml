@@ -16,7 +16,7 @@ TestCase {
         property int calls: 0
         property int serial: 0
         function nextRequestId() { return ++serial }
-        signal finished(int id, var block, string error)
+        signal finished(int id, string blockJson, string error)
         function lookup(kernel, id) { calls++ }
         function cancel(id) {}
     }

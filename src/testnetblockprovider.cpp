@@ -1,7 +1,7 @@
 #include "testnetblockprovider.h"
 #include "nodeforeignapi.h"
 #include <QRegularExpression>
-#include <limits>
+#include <QJsonDocument>
 
 TestnetBlockProvider::TestnetBlockProvider(QObject *parent) : QObject(parent)
 {
@@ -24,27 +24,27 @@ void TestnetBlockProvider::cancel(int id)
     }
 }
 
-void TestnetBlockProvider::complete(const QVariantMap &block, const QString &error)
+void TestnetBlockProvider::complete(const QJsonObject &block, const QString &error)
 {
     const int id = m_id;
     cancel(id);
-    emit finished(id, block, error);
+    emit finished(id, QString::fromUtf8(QJsonDocument(block).toJson(QJsonDocument::Compact)), error);
 }
 
-void TestnetBlockProvider::lookup(const QString &kernel, int id)
+void TestnetBlockProvider::lookup(const QString &kernel, int id, int height)
 {
     cancel(m_id);
     m_id = id;
     static const QRegularExpression excess(QStringLiteral("^[0-9a-f]{66}$"));
-    if (!excess.match(kernel).hasMatch()) {
+    if (!excess.match(kernel).hasMatch() || height < 0) {
         complete({}, QStringLiteral("Invalid kernel"));
         return;
     }
     m_api = new NodeForeignApi(QStringLiteral("https://testnet.grinffindor.org/v2/foreign"), {});
     m_api->setParent(this);
     connect(m_api, &NodeForeignApi::getKernelFinished, this,
-            [this, kernel](const Result<LocatedTxKernel> &result) {
-        if (result.hasError() || result.value().height() > quint64(std::numeric_limits<int>::max())
+            [this, kernel, height](const Result<LocatedTxKernel> &result) {
+        if (result.hasError() || result.value().height() != quint64(height)
                 || result.value().txKernel().excess() != kernel) {
             complete({}, QStringLiteral("Kernel not found"));
             return;
@@ -53,8 +53,8 @@ void TestnetBlockProvider::lookup(const QString &kernel, int id)
     });
     connect(m_api, &NodeForeignApi::blockForDisplayFinished, this,
             [this](const QJsonObject &block, const QString &error) {
-        complete(block.toVariantMap(), error);
+        complete(block, error);
     });
     m_timeout.start();
-    m_api->getKernelAsync(kernel, 0, std::numeric_limits<int>::max());
+    m_api->getKernelAsync(kernel, height, height);
 }

@@ -7,11 +7,12 @@ TestCase {
     QtObject {
         id: provider
         property int lastId: -1
+        property int lastHeight: -1
         property int calls: 0
         property int serial: 0
         function nextRequestId() { return ++serial }
-        signal finished(int id, var block, string error)
-        function lookup(kernel, id) { lastId = id; calls++ }
+        signal finished(int id, string blockJson, string error)
+        function lookup(kernel, id, height) { lastId = id; lastHeight = height; calls++ }
         function cancel(id) {}
     }
     Components.MwixnetBlockDetails { id: details; kernel: ""; provider: provider }
@@ -28,15 +29,17 @@ TestCase {
         details.expectedHeight = 42
         details.checkedAtHeight = 43
         wait(1)
+        compare(provider.lastHeight, 42)
         var oldId = provider.lastId
-        provider.finished(oldId, sampleBlock(42), "")
+        provider.finished(oldId, JSON.stringify(sampleBlock(42)), "")
         compare(details.block.header.height, 42)
         details.expectedHeight = 43
         wait(1)
         compare(details.block, null)
-        provider.finished(oldId, sampleBlock(42), "")
+        provider.finished(oldId, JSON.stringify(sampleBlock(42)), "")
         compare(details.block, null)
-        provider.finished(provider.lastId, sampleBlock(43), "")
+        compare(provider.lastHeight, 43)
+        provider.finished(provider.lastId, JSON.stringify(sampleBlock(43)), "")
         compare(details.block.header.height, 43)
         details.expectedHeight = -1
         wait(1)
@@ -47,14 +50,14 @@ TestCase {
         details.expectedHeight = 42
         details.checkedAtHeight = 43
         wait(1)
-        provider.finished(provider.lastId, sampleBlock(42), "")
+        provider.finished(provider.lastId, JSON.stringify(sampleBlock(42)), "")
         details.checkedAtHeight = 44
         wait(1)
-        provider.finished(provider.lastId, sampleBlock(42, "d".repeat(64)), "")
+        provider.finished(provider.lastId, JSON.stringify(sampleBlock(42, "d".repeat(64))), "")
         compare(details.block.header.hash, "d".repeat(64))
         details.checkedAtHeight = 45
         wait(1)
-        provider.finished(provider.lastId, {}, "timeout")
+        provider.finished(provider.lastId, JSON.stringify({}), "timeout")
         verify(!details.loading)
         verify(details.error !== "")
         compare(details.block, null)

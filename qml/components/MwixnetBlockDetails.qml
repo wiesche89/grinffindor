@@ -44,16 +44,20 @@ ColumnLayout {
         if (!ready || !provider || expectedHeight < 0 || !/^[0-9a-f]{66}$/.test(kernel)) return
         generation = provider.nextRequestId()
         loading = true
-        provider.lookup(kernel, generation)
+        provider.lookup(kernel, generation, expectedHeight)
     }
 
     Connections {
         target: root.provider
-        function onFinished(id, value, message) {
+        function onFinished(id, blockJson, message) {
             if (id !== root.generation) return
             root.loading = false
-            if (message !== "" || !root.acceptBlock(value, root.expectedHeight))
+            try {
+                if (message !== "" || !root.acceptBlock(JSON.parse(blockJson), root.expectedHeight))
+                    root.error = qsTr("Block data unavailable. Reopen to retry.")
+            } catch (e) {
                 root.error = qsTr("Block data unavailable. Reopen to retry.")
+            }
         }
     }
     onExpectedHeightChanged: refresh.restart()
