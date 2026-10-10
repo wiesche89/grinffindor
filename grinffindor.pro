@@ -134,7 +134,7 @@ ios {
 }
 
 # Qt 6.8.1 calls __yield on ARM; recent Apple Clang exposes the builtin instead.
-macx {
+macx|ios {
     DEFINES += __yield=__builtin_arm_yield
 }
 
