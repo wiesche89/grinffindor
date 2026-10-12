@@ -13,7 +13,6 @@
 
 #include "platformbridge.h"
 #include "nodefooterstatus.h"
-#include "testnetblockprovider.h"
 #include "wallet/grinwalletcontroller.h"
 #include "wallet/walletsecurerandom.h"
 
@@ -73,12 +72,10 @@ int main(int argc, char *argv[])
     // Wiring Backend Services To The QML Engine
     // -------------------------------------------------------------------------------------------------------
     NodeFooterStatus nodeFooterStatus;
-    TestnetBlockProvider testnetBlockProvider;
     PlatformBridge platformBridge;
     GrinWalletController grinWalletController;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("nodeFooterStatus", &nodeFooterStatus);
-    engine.rootContext()->setContextProperty("testnetBlockProvider", &testnetBlockProvider);
     engine.rootContext()->setContextProperty("PlatformBridge", &platformBridge);
     engine.rootContext()->setContextProperty("grinWalletController", &grinWalletController);
     engine.rootContext()->setContextProperty("assetBaseUrl", detectAssetBaseUrl());

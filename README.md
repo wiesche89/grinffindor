@@ -18,44 +18,20 @@ The GitHub Actions Windows job now publishes both the deployed app directory and
 
 ## MWixnet Testnet
 
-The MWixnet tile polls `https://mwixnet.grinffindor.org/v1` every 5 seconds.
-The fixed, read-only proxy response contains swap-server status, round statistics,
-server information, connections, live activity and up to 32 on-chain kernel observations.
-No endpoint configuration is needed in the app.
+The tile reads public server settings and routing information from
+`https://mwixnet.grinffindor.org/v1` every 30 seconds. The read-only proxy batch
+uses ID 3 for `get_server_info` and ID 4 for `get_route`. API reachability does
+not establish mixer health. The animation illustrates the protocol only.
+Network and server uptime are shown. No live activity, queue counts or transaction
+kernels are displayed.
 
-Live counters show unprocessed inputs, inputs in the current round and transactions
-awaiting confirmation. The phase bar highlights the current step and steps completed
-within the last 20 seconds. Aggregate round totals cover completed five-minute windows
-since server start. They are not individual swap counts.
+Connection details and a CLI example are collapsed by default. The example
+includes the separately verified onion key for the known Testnet mixer.
+Requests time out after 10 seconds; observations expire after 45 seconds.
+Only Testnet swap-server information is accepted.
 
-Connections describe this server and its configured next mixer, not a complete route
-or mixer health. The CLI example uses the returned server information and a verified
-public onion key for the known Testnet mixer.
+Proxy deployment is managed in the private infrastructure repository.
 
-Opening a kernel queries `get_kernel` and `get_block` through the existing node API at
-`https://testnet.grinffindor.org/v2/foreign`. Block details are rechecked when the chain
-observation changes. Click a field to copy its full value, including large integers.
-Block inputs and outputs are not attributed to individual swap requests.
-
-Status requests time out after 10 seconds and expire after 45 seconds. Block lookups
-have a 15-second timeout. Only Testnet status responses are accepted.
-
-For WebAssembly, the endpoint is allowed by `nginx.conf.template`. The proxy
-allows browser requests from `grinffindor.org` and `www.grinffindor.org`. The proxy permits only GET requests and returns a fixed
-status batch. It must never expose the existing `swap` or `mix` methods.
-Deployment configuration lives in the private infrastructure repository.
-
-Run the tile tests with `qmltestrunner -input tests/qml` (a software backend can
-be selected with `QT_QUICK_BACKEND=software`). These tests use a fake block provider
-and disable polling. The node response tests use only a loopback HTTP server:
-
-```sh
-mkdir -p build/nodeblock-tests
-cd build/nodeblock-tests
-qmake ../../tests/nodeblocktests.pro
-make
-./nodeblocktests
-```
 
 ## Android Build
 The project now includes an Android package template with network permissions and cleartext support for custom node endpoints.
